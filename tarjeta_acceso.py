@@ -13,8 +13,10 @@ class TarjetaAcceso(ft.Container):
         self.page_principal = page
         self.on_login_success = on_login_success 
         
-        self.width = 500
-        self.padding = 40
+        # --- TAMAÑO IDEAL PARA CELULARES ---
+        self.width = 360   # Entra perfecto en cualquier teléfono
+        self.padding = 20  # Margen más pequeño para dar espacio al contenido
+        
         self.bgcolor = Estilos.COLOR_FONDO_CARD
         self.border_radius = 20
         self.border = ft.border.all(2, Estilos.COLOR_BLANCO)
@@ -48,7 +50,7 @@ class TarjetaAcceso(ft.Container):
         # --- BOTONES ---
         self.btn_reg = ft.OutlinedButton(
             text="Verificar y Registrar", 
-            width=220, # <--- CAMBIADO DE 160 A 220
+            width=220, 
             disabled=True,
             style=ft.ButtonStyle(color={ft.ControlState.DISABLED: "grey", ft.ControlState.DEFAULT: Estilos.COLOR_BLANCO}, side={ft.ControlState.DISABLED: ft.BorderSide(2, "grey"), ft.ControlState.DEFAULT: ft.BorderSide(2, Estilos.COLOR_BLANCO)}), 
             on_click=self._iniciar_proceso_registro 
@@ -62,7 +64,8 @@ class TarjetaAcceso(ft.Container):
             on_click=self._ingresar
         )
 
-        row_btns = ft.Row([self.btn_reg, self.btn_ing], alignment=ft.MainAxisAlignment.CENTER, spacing=20)
+        # Se agregó wrap=True para que los botones se adapten al ancho del celular
+        row_btns = ft.Row([self.btn_reg, self.btn_ing], alignment=ft.MainAxisAlignment.CENTER, spacing=20, wrap=True)
 
         self.content = ft.Column(
             controls=[
@@ -77,7 +80,9 @@ class TarjetaAcceso(ft.Container):
                 ft.Container(height=10),
                 row_btns
             ],
-            spacing=15
+            spacing=15,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            scroll=ft.ScrollMode.AUTO  # ¡Activa el desplazamiento táctil!
         )
 
     # --- VALIDACIONES (Sin cambios) ---
