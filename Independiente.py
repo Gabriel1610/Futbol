@@ -926,8 +926,8 @@ El Sistema.
         f_up_pron, f_down_pron, scroll_v_pron = _crear_par_flechas("vertical", umbral=900)
         f_izq_pron, f_der_pron, scroll_h_pron = _crear_par_flechas("horizontal", offset_inicio=150, umbral=1050)
 
-        # Configuración (Poco contenido)
-        f_up_conf, f_down_conf, scroll_v_conf = _crear_par_flechas("vertical", umbral=600)
+        # Configuración (Si los cuadros se apilan ocupan más de 900px)
+        f_up_conf, f_down_conf, scroll_v_conf = _crear_par_flechas("vertical", umbral=1000)
 
         # Administración (La tabla de rivales mide ~550px)
         f_up_adm, f_down_adm, scroll_v_adm = _crear_par_flechas("vertical", umbral=700)
@@ -949,8 +949,12 @@ El Sistema.
                                 controls=[
                                     self.txt_titulo_ranking, self.loading,
                                     ft.Stack(controls=[
+                                        # RESTAURADO: Contenedor con altura fija (300px) y barra SIEMPRE visible
                                         ft.Row(scroll=ft.ScrollMode.AUTO, on_scroll=scroll_h_est, controls=[
-                                            ft.Column(spacing=0, controls=[self.tabla_estadisticas_header, ft.Container(height=240, content=ft.Column(scroll=ft.ScrollMode.AUTO, controls=[self.tabla_estadisticas]))])
+                                            ft.Column(spacing=0, controls=[
+                                                self.tabla_estadisticas_header, 
+                                                ft.Container(height=300, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_estadisticas]))
+                                            ])
                                         ]),
                                         f_izq_est, f_der_est
                                     ]),
@@ -958,9 +962,18 @@ El Sistema.
                                     ft.Row(wrap=True, alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.START, spacing=20, run_spacing=20, controls=[self.contenedor_filtro_torneo, self.contenedor_graficos, self.contenedor_graficos_torta, self.contenedor_graficos_barra, self.contenedor_indices]),
                                     ft.Container(height=20),
                                     ft.Row(wrap=True, alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.START, controls=[
-                                        ft.Column(controls=[self.txt_titulo_copas, self.loading_copas, ft.Container(height=310, content=ft.Row(scroll=ft.ScrollMode.ALWAYS, controls=[ft.Column(spacing=0, controls=[self.tabla_copas_header, ft.Container(height=240, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_copas]))])]))])
+                                        ft.Column(controls=[
+                                            self.txt_titulo_copas, self.loading_copas, 
+                                            ft.Row(scroll=ft.ScrollMode.AUTO, controls=[
+                                                ft.Column(spacing=0, controls=[
+                                                    self.tabla_copas_header, 
+                                                    # RESTAURADO
+                                                    ft.Container(height=240, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_copas]))
+                                                ])
+                                            ])
+                                        ])
                                     ]),
-                                    ft.Container(height=20) 
+                                    ft.Container(height=40) 
                                 ]
                             ),
                             f_up_est, f_down_est
@@ -981,16 +994,20 @@ El Sistema.
                                     self.txt_titulo_partidos, self.loading_partidos, 
                                     ft.Row(wrap=True, vertical_alignment=ft.CrossAxisAlignment.START, spacing=20, run_spacing=20, controls=[
                                         ft.Stack(controls=[
-                                            ft.Container(height=370, content=ft.Row(scroll=ft.ScrollMode.ALWAYS, on_scroll=scroll_h_part, controls=[
-                                                ft.Column(spacing=0, controls=[self.tabla_partidos_header, ft.Container(height=300, content=ft.Column(controls=[self.tabla_partidos], scroll=ft.ScrollMode.ALWAYS))])
-                                            ])),
+                                            ft.Row(scroll=ft.ScrollMode.AUTO, on_scroll=scroll_h_part, controls=[
+                                                ft.Column(spacing=0, controls=[
+                                                    self.tabla_partidos_header, 
+                                                    # RESTAURADO
+                                                    ft.Container(height=350, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_partidos]))
+                                                ])
+                                            ]),
                                             f_izq_part, f_der_part
                                         ]), 
                                         ft.Container(padding=10, border=ft.border.all(1, "white10"), border_radius=8, bgcolor="#1E1E1E", content=ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=15, controls=[ft.Text("Tu Pronóstico", size=16, weight=ft.FontWeight.BOLD), self.input_pred_cai, self.input_pred_rival, self.btn_pronosticar]))
                                     ]),
                                     ft.Container(height=10), 
                                     ft.Row(controls=[self.btn_todos, self.btn_jugados, self.btn_por_jugar, self.btn_por_torneo, self.btn_sin_pronosticar, self.btn_por_equipo], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, wrap=True),
-                                    ft.Container(height=20)
+                                    ft.Container(height=40)
                                 ]
                             ),
                             f_up_part, f_down_part
@@ -1010,14 +1027,18 @@ El Sistema.
                                 controls=[
                                     self.txt_titulo_pronosticos, self.loading_pronosticos, 
                                     ft.Stack(controls=[
-                                        ft.Row(scroll=ft.ScrollMode.ALWAYS, on_scroll=scroll_h_pron, controls=[
-                                            ft.Container(height=370, content=ft.Column(spacing=0, controls=[self.tabla_pronosticos_header, ft.Container(height=300, content=ft.Column(controls=[self.tabla_pronosticos], scroll=ft.ScrollMode.ALWAYS))]))
+                                        ft.Row(scroll=ft.ScrollMode.AUTO, on_scroll=scroll_h_pron, controls=[
+                                            ft.Column(spacing=0, controls=[
+                                                self.tabla_pronosticos_header, 
+                                                # RESTAURADO
+                                                ft.Container(height=350, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_pronosticos]))
+                                            ])
                                         ]),
                                         f_izq_pron, f_der_pron
                                     ]),
                                     ft.Container(height=10), 
                                     ft.Row(controls=[self.btn_pron_todos, self.btn_pron_por_jugar, self.btn_pron_jugados, self.btn_pron_por_torneo, self.btn_pron_por_equipo, self.btn_pron_por_usuario], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, wrap=True),
-                                    ft.Container(height=20)
+                                    ft.Container(height=40)
                                 ]
                             ),
                             f_up_pron, f_down_pron
@@ -1039,7 +1060,7 @@ El Sistema.
                                     contenedor_info_actual,
                                     ft.Container(height=20),
                                     ft.Row(wrap=True, spacing=20, run_spacing=20, controls=[self.frame_cambio_pass, self.frame_cambio_email, self.frame_cambio_usuario]),
-                                    ft.Container(height=20)
+                                    ft.Container(height=40)
                                 ]
                             ),
                             f_up_conf, f_down_conf
@@ -1067,15 +1088,19 @@ El Sistema.
                                             wrap=True, spacing=20, run_spacing=20, alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.START, 
                                             controls=[
                                                 ft.Stack(controls=[
-                                                    ft.Container(height=370, content=ft.Row(scroll=ft.ScrollMode.ALWAYS, on_scroll=scroll_h_adm, controls=[
-                                                        ft.Column(spacing=0, controls=[self.tabla_rivales_header, ft.Container(height=300, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_rivales]))])
-                                                    ])),
+                                                    ft.Row(scroll=ft.ScrollMode.AUTO, on_scroll=scroll_h_adm, controls=[
+                                                        ft.Column(spacing=0, controls=[
+                                                            self.tabla_rivales_header, 
+                                                            # RESTAURADO
+                                                            ft.Container(height=300, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_rivales]))
+                                                        ])
+                                                    ]),
                                                     f_izq_adm, f_der_adm
                                                 ]),
                                                 ft.Card(width=320, content=ft.Container(padding=15, content=ft.Column(controls=[ft.Text("Cambiar nombre", weight="bold", size=16), self.contenedor_admin_rivales])))
                                             ]
                                         ),
-                                        ft.Container(height=20)
+                                        ft.Container(height=40)
                                     ]
                                 ),
                                 f_up_adm, f_down_adm
