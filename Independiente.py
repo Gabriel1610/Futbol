@@ -629,9 +629,9 @@ El Sistema.
         )
 
         # --- CONTENEDOR 5: GRÁFICOS DE TORTA ---
-        self.btn_grafico_torta_estilo = ft.ElevatedButton("Resultados pronosticados", icon=ft.Icons.PIE_CHART, bgcolor="#333333", color="white", width=180, height=30, tooltip="Muestra el porcentaje histórico de victorias, empates y derrotas pronosticadas por un usuario.", style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_selector_grafico_torta)
-        self.btn_grafico_torta_tendencia = ft.ElevatedButton("Tendencia de pronóstico", icon=ft.Icons.PIE_CHART_OUTLINE, bgcolor="#333333", color="white", width=180, height=30, tooltip="Analiza si tus pronósticos suelen ser optimistas, neutrales o pesimistas respecto al resultado final.", style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_selector_grafico_torta_tendencia)
-        self.btn_grafico_torta_firmeza = ft.ElevatedButton("Grado de firmeza", icon=ft.Icons.SHIELD, bgcolor="#333333", color="white", width=180, height=30, tooltip="Analiza la cantidad de veces que cambiaste de opinión antes del partido.\n🧱 1 vez | 🤔 2 veces | 🔄 3+ veces", style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_selector_grafico_torta_firmeza)
+        self.btn_grafico_torta_estilo = ft.ElevatedButton("Resultados pronosticados", icon=ft.Icons.PIE_CHART, bgcolor="#333333", color="white", width=215, height=30, tooltip="Muestra el porcentaje histórico de victorias, empates y derrotas pronosticadas por un usuario.", style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_selector_grafico_torta)
+        self.btn_grafico_torta_tendencia = ft.ElevatedButton("Tendencia de pronóstico", icon=ft.Icons.PIE_CHART_OUTLINE, bgcolor="#333333", color="white", width=215, height=30, tooltip="Analiza si tus pronósticos suelen ser optimistas, neutrales o pesimistas respecto al resultado final.", style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_selector_grafico_torta_tendencia)
+        self.btn_grafico_torta_firmeza = ft.ElevatedButton("Grado de firmeza", icon=ft.Icons.SHIELD, bgcolor="#333333", color="white", width=215, height=30, tooltip="Analiza la cantidad de veces que cambiaste de opinión antes del partido.\n🧱 1 vez | 🤔 2 veces | 🔄 3+ veces", style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_selector_grafico_torta_firmeza)
 
         self.contenedor_graficos_torta = ft.Container(
             padding=ft.padding.all(10), border=ft.border.all(1, "white24"), border_radius=8, bgcolor="#1E1E1E", 
@@ -859,21 +859,41 @@ El Sistema.
         )
 
         # ==============================================================
-        # --- FÁBRICA MAESTRA DE FLECHAS CON MEMORIA ---
+        # --- FÁBRICA MAESTRA DE FLECHAS CON MEMORIA (VERSIÓN INTELIGENTE) ---
         # ==============================================================
-        def _crear_par_flechas(tipo="vertical", offset_inicio=0, offset_fin=0):
-            es_celular = self.page.width < 750 if self.page.width else False
-            
+        def _crear_par_flechas(tipo="vertical", offset_inicio=0, offset_fin=0, umbral=1000):
+            # 1. EVALUACIÓN MATEMÁTICA INICIAL
+            # Comparamos el tamaño de la ventana con el tamaño del contenido (umbral)
+            if tipo == "vertical":
+                pantalla_actual = self.page.height if self.page.height else 800
+            else:
+                pantalla_actual = self.page.width if self.page.width else 1200
+                
+            # Solo nace encendida si la pantalla es más chica que el contenido
+            necesita_scroll = pantalla_actual < umbral
+
+            # 2. CREACIÓN DE FLECHAS
             if tipo == "vertical":
                 f_inicio = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=offset_inicio, right=0, visible=False, ignore_interactions=True, data=False)
-                f_fin = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=offset_fin, right=0, visible=es_celular, ignore_interactions=True, data=False)
+                f_fin = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=offset_fin, right=0, visible=necesita_scroll, ignore_interactions=True, data=False)
             else:
                 f_inicio = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT, color="amber", size=35), left=0, top=offset_inicio, visible=False, ignore_interactions=True, data=False)
-                f_fin = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT, color="amber", size=35), right=0, top=offset_inicio, visible=es_celular, ignore_interactions=True, data=False)
+                f_fin = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT, color="amber", size=35), right=0, top=offset_inicio, visible=necesita_scroll, ignore_interactions=True, data=False)
 
+            # 3. SENSOR DE MOVIMIENTO
             def _on_scroll(e):
                 try:
                     pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
+                    
+                    # SEGURIDAD ABSOLUTA: Si el evento detecta que la barra no tiene recorrido (todo entra en pantalla), las mata.
+                    if max_pos <= 0:
+                        if not f_inicio.data or not f_fin.data:
+                            f_inicio.visible, f_inicio.data = False, True
+                            f_fin.visible, f_fin.data = False, True
+                            f_inicio.update()
+                            f_fin.update()
+                        return
+
                     if not f_inicio.data:
                         if pos <= 10 and f_inicio.visible:
                             f_inicio.visible, f_inicio.data = False, True
@@ -893,20 +913,25 @@ El Sistema.
                 
             return f_inicio, f_fin, _on_scroll
 
-        # --- GENERAMOS LOS MOTORES PARA CADA PESTAÑA ---
-        f_up_est, f_down_est, scroll_v_est = _crear_par_flechas("vertical")
-        f_izq_est, f_der_est, scroll_h_est = _crear_par_flechas("horizontal", offset_inicio=140)
+        # --- GENERAMOS LOS MOTORES CON MEDIDAS REALES PARA CADA PESTAÑA ---
+        # Estadísticas (La tabla mide 1050px + márgenes = ~1100px)
+        f_up_est, f_down_est, scroll_v_est = _crear_par_flechas("vertical", umbral=1200)
+        f_izq_est, f_der_est, scroll_h_est = _crear_par_flechas("horizontal", offset_inicio=140, umbral=1100)
 
-        f_up_part, f_down_part, scroll_v_part = _crear_par_flechas("vertical")
-        f_izq_part, f_der_part, scroll_h_part = _crear_par_flechas("horizontal", offset_inicio=150)
+        # Partidos (La tabla mide ~900px)
+        f_up_part, f_down_part, scroll_v_part = _crear_par_flechas("vertical", umbral=900)
+        f_izq_part, f_der_part, scroll_h_part = _crear_par_flechas("horizontal", offset_inicio=150, umbral=950)
 
-        f_up_pron, f_down_pron, scroll_v_pron = _crear_par_flechas("vertical")
-        f_izq_pron, f_der_pron, scroll_h_pron = _crear_par_flechas("horizontal", offset_inicio=150)
+        # Pronósticos (La tabla es ancha, mide ~1000px)
+        f_up_pron, f_down_pron, scroll_v_pron = _crear_par_flechas("vertical", umbral=900)
+        f_izq_pron, f_der_pron, scroll_h_pron = _crear_par_flechas("horizontal", offset_inicio=150, umbral=1050)
 
-        f_up_conf, f_down_conf, scroll_v_conf = _crear_par_flechas("vertical")
+        # Configuración (Poco contenido)
+        f_up_conf, f_down_conf, scroll_v_conf = _crear_par_flechas("vertical", umbral=600)
 
-        f_up_adm, f_down_adm, scroll_v_adm = _crear_par_flechas("vertical")
-        f_izq_adm, f_der_adm, scroll_h_adm = _crear_par_flechas("horizontal", offset_inicio=150)
+        # Administración (La tabla de rivales mide ~550px)
+        f_up_adm, f_down_adm, scroll_v_adm = _crear_par_flechas("vertical", umbral=700)
+        f_izq_adm, f_der_adm, scroll_h_adm = _crear_par_flechas("horizontal", offset_inicio=150, umbral=600)
 
         # ==============================================================
         # --- CREACIÓN DE PESTAÑAS (DISEÑO FLUIDO Y CON FLECHAS) ---
