@@ -5383,4 +5383,4 @@ if __name__ == "__main__":
         ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=int(puerto_nube), host="0.0.0.0")
     else:
         # MODO LOCAL (Tu PC): Usa el puerto 8000 y se abre normal en localhost
-        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8000)
+        ft.app(target=main)#, view=ft.AppView.WEB_BROWSER, port=8000)
