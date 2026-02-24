@@ -15,109 +15,85 @@ class TarjetaAcceso(ft.Container):
         
         self.expand = True  
         self.alignment = ft.alignment.center
-        
-        # --- LA MAGIA DEL FONDO DE PANTALLA ---
         self.image_src = "fondo_tarjeta_acceso.jpg" 
-        self.image_fit = ft.ImageFit.COVER  # COVER hace que se expanda sin deformarse
+        self.image_fit = ft.ImageFit.COVER  
         
         self.db = BaseDeDatos()
-        
-        # --- ESTADO DE RESPONSIVIDAD ---
-        # Memoria inteligente para saber en qué modo estamos
         self.es_modo_horizontal = None 
+
+        # --- MAGIA PARA LA TECLA TAB ---
+        self.foco_actual = None
+        self.page_principal.on_keyboard_event = self._gestionar_teclado
 
         self._crear_contenido()
 
         self.page_principal.on_resize = self._ajustar_dimensiones
         self._ajustar_dimensiones()
 
+    def _actualizar_foco(self, nombre):
+        """Guarda en la memoria en qué cuadro está escribiendo el usuario"""
+        self.foco_actual = nombre
+
+    def _gestionar_teclado(self, e: ft.KeyboardEvent):
+        """Intercepta la tecla Tab y fuerza el salto al siguiente cuadro"""
+        if e.key == "Tab":
+            if e.shift:
+                # --- TAB HACIA ATRÁS (Shift + Tab) ---
+                if self.foco_actual == "pass_ing": self.user_ing.focus()
+                elif self.foco_actual == "pass_rep": self.pass_reg.focus()
+                elif self.foco_actual == "pass_reg": self.email_reg.focus()
+                elif self.foco_actual == "email_reg": self.user_reg.focus()
+            else:
+                # --- TAB HACIA ADELANTE ---
+                if self.foco_actual == "user_ing": self.pass_ing.focus()
+                elif self.foco_actual == "pass_ing": self.btn_ing.focus() # Solo lo selecciona, no ingresa
+                elif self.foco_actual == "user_reg": self.email_reg.focus()
+                elif self.foco_actual == "email_reg": self.pass_reg.focus()
+                elif self.foco_actual == "pass_reg": self.pass_rep.focus()
+                elif self.foco_actual == "pass_rep": self.btn_reg.focus() # Solo lo selecciona, no registra
+                
+            self.page_principal.update()
+
     def _crear_contenido(self):
-        t_reg = ft.Text("NUEVO USUARIO", size=20, weight=ft.FontWeight.BOLD, color=Estilos.COLOR_BLANCO)
+        # --- 1. PRIMERO CREAMOS LO DE INGRESO ---
         t_ing = ft.Text("YA TENGO CUENTA", size=20, weight=ft.FontWeight.BOLD, color=Estilos.COLOR_BLANCO)
-
-        # --- CAMPOS REGISTRO ---
-        self.user_reg = ft.TextField(label="Nombre de usuario", on_change=self._validar_registro, on_submit=lambda e: self.email_reg.focus(), **Estilos.INPUT_CONFIG)
-        self.email_reg = ft.TextField(label="Correo Electrónico", on_change=self._validar_registro, on_submit=lambda e: self.pass_reg.focus(), **Estilos.INPUT_CONFIG)
-        self.pass_reg = ft.TextField(label="Contraseña", password=True, can_reveal_password=True, on_change=self._validar_registro, on_submit=lambda e: self.pass_rep.focus(), **Estilos.INPUT_CONFIG)
-        self.pass_rep = ft.TextField(label="Repetir contraseña", password=True, on_change=self._validar_registro, on_submit=self._iniciar_proceso_registro, **Estilos.INPUT_CONFIG)
-
-        # --- CAMPOS INGRESO ---
-        self.user_ing = ft.TextField(label="Nombre de usuario o correo electrónico", on_change=self._validar_ingreso, on_submit=lambda e: self.pass_ing.focus(), **Estilos.INPUT_CONFIG)
-        self.pass_ing = ft.TextField(label="Contraseña", password=True, can_reveal_password=True, on_change=self._validar_ingreso, on_submit=self._ingresar, **Estilos.INPUT_CONFIG)
-
+        
+        self.user_ing = ft.TextField(label="Nombre de usuario o correo electrónico", on_submit=lambda e: self.pass_ing.focus(), on_focus=lambda e: self._actualizar_foco("user_ing"), **Estilos.INPUT_CONFIG)
+        self.pass_ing = ft.TextField(label="Contraseña", password=True, can_reveal_password=True, on_submit=self._ingresar, on_focus=lambda e: self._actualizar_foco("pass_ing"), **Estilos.INPUT_CONFIG)
         self.btn_olvide = ft.TextButton("¿Olvidaste tu contraseña?", style=ft.ButtonStyle(color="white70"), on_click=self._iniciar_flujo_recuperacion)
-
-        # --- BOTONES ---
-        self.btn_reg = ft.OutlinedButton(
-            text="Verificar y Registrar", 
-            width=220, 
-            disabled=True,
-            style=ft.ButtonStyle(color={ft.ControlState.DISABLED: "grey", ft.ControlState.DEFAULT: Estilos.COLOR_BLANCO}, side={ft.ControlState.DISABLED: ft.BorderSide(2, "grey"), ft.ControlState.DEFAULT: ft.BorderSide(2, Estilos.COLOR_BLANCO)}), 
-            on_click=self._iniciar_proceso_registro 
-        )
         
         self.btn_ing = ft.ElevatedButton(
-            text="Ingresar", 
-            width=220, # Igualamos los anchos a 220px para que haya simetría horizontal
-            disabled=True,
-            style=ft.ButtonStyle(bgcolor={ft.ControlState.DISABLED: "grey", ft.ControlState.DEFAULT: Estilos.COLOR_BLANCO}, color={ft.ControlState.DISABLED: "black", ft.ControlState.DEFAULT: Estilos.COLOR_ROJO_CAI}),
+            text="Ingresar", width=220,
+            style=ft.ButtonStyle(bgcolor=Estilos.COLOR_BLANCO, color=Estilos.COLOR_ROJO_CAI),
             on_click=self._ingresar
+        )
+
+        # --- 2. LUEGO CREAMOS LO DE REGISTRO ---
+        t_reg = ft.Text("NUEVO USUARIO", size=20, weight=ft.FontWeight.BOLD, color=Estilos.COLOR_BLANCO)
+        
+        self.user_reg = ft.TextField(label="Nombre de usuario", on_submit=lambda e: self.email_reg.focus(), on_focus=lambda e: self._actualizar_foco("user_reg"), **Estilos.INPUT_CONFIG)
+        self.email_reg = ft.TextField(label="Correo Electrónico", on_submit=lambda e: self.pass_reg.focus(), on_focus=lambda e: self._actualizar_foco("email_reg"), **Estilos.INPUT_CONFIG)
+        self.pass_reg = ft.TextField(label="Contraseña", password=True, can_reveal_password=True, on_submit=lambda e: self.pass_rep.focus(), on_focus=lambda e: self._actualizar_foco("pass_reg"), **Estilos.INPUT_CONFIG)
+        self.pass_rep = ft.TextField(label="Repetir contraseña", password=True, on_submit=self._iniciar_proceso_registro, on_focus=lambda e: self._actualizar_foco("pass_rep"), **Estilos.INPUT_CONFIG)
+        
+        self.btn_reg = ft.OutlinedButton(
+            text="Verificar y Registrar", width=220,
+            style=ft.ButtonStyle(color=Estilos.COLOR_BLANCO, side=ft.BorderSide(2, Estilos.COLOR_BLANCO)), 
+            on_click=self._iniciar_proceso_registro 
         )
 
         # =========================================================
         # LA MAGIA ESTRUCTURAL: Agrupamos en bloques independientes
         # =========================================================
-        
-        # 1. Bloque Izquierdo (Registro)
-        self.col_registro = ft.Column(
-            controls=[
-                ft.Container(content=t_reg, alignment=ft.alignment.center),
-                self.user_reg, self.email_reg, self.pass_reg, self.pass_rep,
-                ft.Container(content=self.btn_reg, alignment=ft.alignment.center)
-            ],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            alignment=ft.MainAxisAlignment.SPACE_EVENLY,
-            expand=True
-        )
-
-        # 2. Bloque Derecho/Inferior (Ingreso)
-        self.col_ingreso = ft.Column(
-            controls=[
-                ft.Container(content=t_ing, alignment=ft.alignment.center),
-                self.user_ing, self.pass_ing,
-                ft.Container(content=self.btn_olvide, alignment=ft.alignment.center_right),
-                ft.Container(content=self.btn_ing, alignment=ft.alignment.center)
-            ],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            alignment=ft.MainAxisAlignment.SPACE_EVENLY,
-            expand=True
-        )
-
-        # 3. Separadores (Uno para cada modo)
+        self.col_ingreso = ft.Column(controls=[ft.Container(content=t_ing, alignment=ft.alignment.center), self.user_ing, self.pass_ing, ft.Container(content=self.btn_olvide, alignment=ft.alignment.center_right), ft.Container(content=self.btn_ing, alignment=ft.alignment.center)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.SPACE_EVENLY, expand=True)
+        self.col_registro = ft.Column(controls=[ft.Container(content=t_reg, alignment=ft.alignment.center), self.user_reg, self.email_reg, self.pass_reg, self.pass_rep, ft.Container(content=self.btn_reg, alignment=ft.alignment.center)], horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.SPACE_EVENLY, expand=True)
         self.div_horizontal = ft.Divider(height=20, thickness=2, color="white")
         self.div_vertical = ft.VerticalDivider(width=20, thickness=2, color="white")
-
-        # 4. Moldes contenedores (Arrancan invisibles y vacíos)
         self.molde_lado_a_lado = ft.Row(controls=[], vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=20, expand=True, visible=False)
         self.molde_apilado = ft.Column(controls=[], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=15, expand=True, visible=False)
 
-        # --- LA TARJETA ROJA ---
-        self.tarjeta_roja = ft.Container(
-            content=ft.Stack([self.molde_lado_a_lado, self.molde_apilado], expand=True),
-            padding=30,
-            bgcolor=Estilos.COLOR_FONDO_CARD,
-            border_radius=20,
-            border=ft.border.all(2, Estilos.COLOR_BLANCO),
-            shadow=ft.BoxShadow(spread_radius=1, blur_radius=20, color="#80000000")
-        )
-
-        self.content = ft.Column(
-            controls=[self.tarjeta_roja],
-            alignment=ft.MainAxisAlignment.CENTER,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            scroll=ft.ScrollMode.AUTO,
-            expand=True
-        )
+        self.tarjeta_roja = ft.Container(content=ft.Stack([self.molde_lado_a_lado, self.molde_apilado], expand=True), padding=30, bgcolor=Estilos.COLOR_FONDO_CARD, border_radius=20, border=ft.border.all(2, Estilos.COLOR_BLANCO), shadow=ft.BoxShadow(spread_radius=1, blur_radius=20, color="#80000000"))
+        self.content = ft.Column(controls=[self.tarjeta_roja], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, scroll=ft.ScrollMode.AUTO, expand=True)
 
     def _ajustar_dimensiones(self, e=None):
         alto = self.page_principal.height
@@ -172,36 +148,27 @@ class TarjetaAcceso(ft.Container):
             self.tarjeta_roja.update()
 
     # --- VALIDACIONES LIGERAS ---
+    # --- VALIDACIONES LIGERAS ---
     def _validar_registro(self, e):
         # Solo habilitamos el botón si todos los campos tienen texto
         if self.user_reg.value and self.email_reg.value and self.pass_reg.value and self.pass_rep.value:
             self.btn_reg.disabled = False
         else:
             self.btn_reg.disabled = True
-        self.update()
-
-    def _validar_ingreso(self, e):
-        # Solo habilitamos el botón si ambos campos de ingreso tienen texto
-        if self.user_ing.value and self.pass_ing.value:
-            self.btn_ing.disabled = False
-        else:
-            self.btn_ing.disabled = True
-        self.update()
-
-    def _desactivar_todo_registro(self):
-        """Helper para limpiar campos dependientes"""
-        self.pass_reg.value = ""
-        self.pass_reg.disabled = True
-        self.pass_rep.value = ""
-        self.pass_rep.disabled = True
-        self.btn_reg.disabled = True
+            
+        # ¡MAGIA AQUÍ! Solo actualizamos el botón, sin recargar toda la tarjeta
+        self.btn_reg.update() 
 
     def _iniciar_proceso_registro(self, e):
         """Paso 1: Valida disponibilidad, envía código y abre modal."""
-        usuario = self.user_reg.value.strip()
-        email = self.email_reg.value.strip()
+        usuario = self.user_reg.value.strip() if self.user_reg.value else ""
+        email = self.email_reg.value.strip() if self.email_reg.value else ""
         contra1 = self.pass_reg.value
         contra2 = self.pass_rep.value
+        
+        if not usuario or not email or not contra1 or not contra2:
+            GestorMensajes.mostrar(self.page_principal, "Atención", "Por favor, complete todos los campos de registro.", "error")
+            return
         
         if contra1 != contra2:
             GestorMensajes.mostrar(self.page_principal, "Error", "Las contraseñas no coinciden.", "error")
@@ -244,6 +211,7 @@ class TarjetaAcceso(ft.Container):
 
     def _mostrar_modal_codigo_registro(self, user, password, email, codigo_real):
         # Función interna para borrar el error apenas se escribe algo nuevo
+        self.foco_actual = None
         def _limpiar_error(e):
             if input_codigo.error_text:
                 input_codigo.error_text = None
@@ -325,6 +293,7 @@ class TarjetaAcceso(ft.Container):
     
     def _iniciar_flujo_recuperacion(self, e):
         """Paso 1: Pedir Usuario"""
+        self.foco_actual = None
         input_user = ft.TextField(label="Tu nombre de usuario", width=250)
         
         def _buscar_email(e):
@@ -380,7 +349,7 @@ class TarjetaAcceso(ft.Container):
 
     def _pedir_codigo_recuperacion(self, username, email):
         """Paso 3: Validar código ingresado contra la BD con animación de carga"""
-        
+        self.foco_actual = None
         def _limpiar_error(e):
             if input_code.error_text:
                 input_code.error_text = None
@@ -432,7 +401,7 @@ class TarjetaAcceso(ft.Container):
 
     def _pedir_nueva_contrasena(self, username):
         """Paso 4: Cambiar la contraseña con animación de carga"""
-        
+        self.foco_actual = None
         # Función interna para borrar el error apenas se escribe algo nuevo
         def _limpiar_error(e):
             if p1.error_text:
@@ -525,10 +494,13 @@ class TarjetaAcceso(ft.Container):
             VentanaCarga.cerrar(self.page_principal)
 
     def _ingresar(self, e):
-        usuario_input = self.user_ing.value.strip()
+        # Usamos un if inline por si el valor llega a ser None por defecto
+        usuario_input = self.user_ing.value.strip() if self.user_ing.value else ""
         password = self.pass_ing.value
         
-        if not usuario_input or not password: return
+        if not usuario_input or not password: 
+            GestorMensajes.mostrar(self.page_principal, "Atención", "Por favor, complete su usuario y contraseña.", "error")
+            return
 
         try:
             # 1. MOSTRAR CARGA
@@ -540,9 +512,9 @@ class TarjetaAcceso(ft.Container):
             nombre_real_usuario = self.db.validar_usuario(usuario_input, password)
             
             # 3. CAMBIO DE PANTALLA
-            # Llamamos a la función de éxito MIENTRAS la ventana de carga sigue abierta.
-            # Esto construirá el menú principal por detrás del mensaje de carga.
             if self.on_login_success:
+                # ¡DESACTIVAR EL RASTREO DEL TECLADO PARA NO INTERFERIR CON EL MENÚ PRINCIPAL!
+                self.page_principal.on_keyboard_event = None 
                 self.on_login_success(nombre_real_usuario)
 
             # 4. CERRAR CARGA
