@@ -5375,9 +5375,17 @@ if __name__ == "__main__":
     
     puerto_nube = os.getenv("PORT")
     
+    # --- RUTA ABSOLUTA BLINDADA ---
+    directorio_actual = os.path.dirname(os.path.abspath(__file__))
+    ruta_assets = os.path.join(directorio_actual, "assets")
+    
+    # Si Git ignoró la carpeta assets y no viajó a Render, la creamos en la nube para que Flet no colapse
+    if not os.path.exists(ruta_assets):
+        os.makedirs(ruta_assets)
+    
     if puerto_nube:
-        # MODO NUBE (Render) - Usamos ft.WEB_BROWSER para Flet 0.25.2
-        ft.app(target=main, view=ft.WEB_BROWSER, port=int(puerto_nube), host="0.0.0.0", assets_dir="assets")
+        # MODO NUBE (Render) - Usamos ft.AppView.WEB_BROWSER (El oficial de la versión 0.25.2)
+        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=int(puerto_nube), host="0.0.0.0", assets_dir=ruta_assets)
     else:
         # MODO LOCAL (Tu PC)
-        ft.app(target=main, view=ft.WEB_BROWSER, port=8555, assets_dir="assets")
+        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir=ruta_assets)
