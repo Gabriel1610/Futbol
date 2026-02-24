@@ -859,18 +859,37 @@ El Sistema.
         )
 
         # ==============================================================
-        # --- FÁBRICA MAESTRA DE FLECHAS CON MEMORIA (VERSIÓN INTELIGENTE) ---
+        # --- FÁBRICA MAESTRA DE FLECHAS (VERSIÓN TRIPLE RESPONSIVA) ---
         # ==============================================================
-        def _crear_par_flechas(tipo="vertical", offset_inicio=0, offset_fin=0, umbral=1000):
-            # 1. EVALUACIÓN MATEMÁTICA INICIAL
-            # Comparamos el tamaño de la ventana con el tamaño del contenido (umbral)
+        def _crear_par_flechas(tipo="vertical", offset_inicio=0, offset_fin=0, 
+                               umbral_pc_ancho=800, umbral_pc_angosto=800, umbral_movil=1000, 
+                               breakpoint_wrap=1150, umbral_h=1000):
+            
+            # 1. EVALUACIÓN INTELIGENTE DE RESOLUCIÓN Y SALTOS DE LÍNEA
+            ancho_total = self.page.width if self.page.width else 1200
+            alto_total = self.page.height if self.page.height else 800
+            
+            es_celular = ancho_total < 750
+            es_pc_angosta = 750 <= ancho_total < breakpoint_wrap
+
             if tipo == "vertical":
-                pantalla_actual = self.page.height if self.page.height else 800
+                # Descontamos menús superiores (AppBar ~60px, Tabs ~50px) y márgenes Flet (~40px)
+                espacio_util = alto_total - 150 
+                if es_celular:
+                    umbral_real = umbral_movil
+                elif es_pc_angosta:
+                    # Cuando la pantalla de la PC no es tan ancha, las cajas "saltan" abajo y ocupan más alto
+                    umbral_real = umbral_pc_angosto
+                else:
+                    # Pantalla súper ancha, todo entra en un solo renglón
+                    umbral_real = umbral_pc_ancho
             else:
-                pantalla_actual = self.page.width if self.page.width else 1200
+                # Eje horizontal
+                espacio_util = ancho_total - 40
+                umbral_real = umbral_h
                 
-            # Solo nace encendida si la pantalla es más chica que el contenido
-            necesita_scroll = pantalla_actual < umbral
+            # Solo nace encendida si el espacio útil es menor a lo que realmente va a ocupar el contenido
+            necesita_scroll = espacio_util < umbral_real
 
             # 2. CREACIÓN DE FLECHAS
             if tipo == "vertical":
@@ -885,7 +904,7 @@ El Sistema.
                 try:
                     pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
                     
-                    # SEGURIDAD ABSOLUTA: Si el evento detecta que la barra no tiene recorrido (todo entra en pantalla), las mata.
+                    # SEGURIDAD: Si no hay barra de desplazamiento, las fulmina
                     if max_pos <= 0:
                         if not f_inicio.data or not f_fin.data:
                             f_inicio.visible, f_inicio.data = False, True
@@ -913,25 +932,27 @@ El Sistema.
                 
             return f_inicio, f_fin, _on_scroll
 
-        # --- GENERAMOS LOS MOTORES CON MEDIDAS REALES PARA CADA PESTAÑA ---
-        # Estadísticas (La tabla mide 1050px + márgenes = ~1100px)
-        f_up_est, f_down_est, scroll_v_est = _crear_par_flechas("vertical", umbral=1200)
-        f_izq_est, f_der_est, scroll_h_est = _crear_par_flechas("horizontal", offset_inicio=140, umbral=1100)
+        # --- GENERAMOS LOS MOTORES CON MEDIDAS EXACTAS (RECALCULADAS MILIMÉTRICAMENTE) ---
+        
+        # Estadísticas (Contenido alto siempre)
+        f_up_est, f_down_est, scroll_v_est = _crear_par_flechas("vertical", umbral_pc_ancho=1000, umbral_pc_angosto=1100, umbral_movil=1300)
+        f_izq_est, f_der_est, scroll_h_est = _crear_par_flechas("horizontal", offset_inicio=140, umbral_h=1100)
+        f_izq_copas, f_der_copas, scroll_h_copas = _crear_par_flechas("horizontal", offset_inicio=100, umbral_h=450)
 
-        # Partidos (La tabla mide ~900px)
-        f_up_part, f_down_part, scroll_v_part = _crear_par_flechas("vertical", umbral=900)
-        f_izq_part, f_der_part, scroll_h_part = _crear_par_flechas("horizontal", offset_inicio=150, umbral=950)
+        # Partidos (Tabla 420px + Título 40px + Botones 50px + Espacios = ~580px reales)
+        f_up_part, f_down_part, scroll_v_part = _crear_par_flechas("vertical", umbral_pc_ancho=630, umbral_pc_angosto=850, umbral_movil=1000, breakpoint_wrap=1150)
+        f_izq_part, f_der_part, scroll_h_part = _crear_par_flechas("horizontal", offset_inicio=150, umbral_h=950)
 
-        # Pronósticos (La tabla es ancha, mide ~1000px)
-        f_up_pron, f_down_pron, scroll_v_pron = _crear_par_flechas("vertical", umbral=900)
-        f_izq_pron, f_der_pron, scroll_h_pron = _crear_par_flechas("horizontal", offset_inicio=150, umbral=1050)
+        # Pronósticos (Tabla 420px + Título 40px + Botones 50px = ~580px reales)
+        f_up_pron, f_down_pron, scroll_v_pron = _crear_par_flechas("vertical", umbral_pc_ancho=630, umbral_pc_angosto=750, umbral_movil=1000, breakpoint_wrap=900)
+        f_izq_pron, f_der_pron, scroll_h_pron = _crear_par_flechas("horizontal", offset_inicio=150, umbral_h=1050)
 
-        # Configuración (Si los cuadros se apilan ocupan más de 900px)
-        f_up_conf, f_down_conf, scroll_v_conf = _crear_par_flechas("vertical", umbral=1000)
+        # Configuración (Títulos 100px + Cajas 300px + Espacios = ~450px reales)
+        f_up_conf, f_down_conf, scroll_v_conf = _crear_par_flechas("vertical", umbral_pc_ancho=510, umbral_pc_angosto=800, umbral_movil=1100, breakpoint_wrap=1150)
 
-        # Administración (La tabla de rivales mide ~550px)
-        f_up_adm, f_down_adm, scroll_v_adm = _crear_par_flechas("vertical", umbral=700)
-        f_izq_adm, f_der_adm, scroll_h_adm = _crear_par_flechas("horizontal", offset_inicio=150, umbral=600)
+        # Administración (Título + Tabla 360px + Espacios = ~430px reales)
+        f_up_adm, f_down_adm, scroll_v_adm = _crear_par_flechas("vertical", umbral_pc_ancho=510, umbral_pc_angosto=750, umbral_movil=800)
+        f_izq_adm, f_der_adm, scroll_h_adm = _crear_par_flechas("horizontal", offset_inicio=150, umbral_h=600)
 
         # ==============================================================
         # --- CREACIÓN DE PESTAÑAS (DISEÑO FLUIDO Y CON FLECHAS) ---
@@ -964,13 +985,19 @@ El Sistema.
                                     ft.Row(wrap=True, alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.START, controls=[
                                         ft.Column(controls=[
                                             self.txt_titulo_copas, self.loading_copas, 
-                                            ft.Row(scroll=ft.ScrollMode.AUTO, controls=[
-                                                ft.Column(spacing=0, controls=[
-                                                    self.tabla_copas_header, 
-                                                    # RESTAURADO
-                                                    ft.Container(height=240, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_copas]))
-                                                ])
+                                            
+                                            # === MAGIA AGREGADA: STACK Y FLECHAS DE COPAS ===
+                                            ft.Stack(controls=[
+                                                ft.Row(scroll=ft.ScrollMode.AUTO, on_scroll=scroll_h_copas, controls=[
+                                                    ft.Column(spacing=0, controls=[
+                                                        self.tabla_copas_header, 
+                                                        ft.Container(height=240, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_copas]))
+                                                    ])
+                                                ]),
+                                                f_izq_copas, f_der_copas
                                             ])
+                                            # ================================================
+                                            
                                         ])
                                     ]),
                                     ft.Container(height=40) 
@@ -1488,7 +1515,7 @@ El Sistema.
         # 4. Recargamos datos aplicando el orden lógico
         self._recargar_datos(actualizar_pronosticos=True)
 
-# --- FUNCIONES GRÁFICO DE BARRAS (PUNTOS) ---
+    # --- FUNCIONES GRÁFICO DE BARRAS (PUNTOS) ---
 
     def _abrir_selector_grafico_barras(self, e):
         """Abre el modal para configurar el gráfico de barras de puntos."""
@@ -1531,11 +1558,65 @@ El Sistema.
             self.lv_torneos_barra.update()
             self.lv_usuarios_barra.update()
 
-        col_tor = ft.Column(expand=1, controls=[ft.Text("1. Torneo", weight="bold"), ft.Container(content=self.lv_torneos_barra, border=ft.border.all(1, "white24"), border_radius=5)])
-        col_anio = ft.Column(expand=1, controls=[ft.Text("2. Año", weight="bold"), ft.Container(content=self.lv_anios_barra, border=ft.border.all(1, "white24"), border_radius=5)])
-        col_usu = ft.Column(expand=1, controls=[ft.Text("3. Un Usuario", weight="bold"), ft.Container(content=self.lv_usuarios_barra, border=ft.border.all(1, "white24"), border_radius=5)])
+        # --- DISEÑO RESPONSIVO CON FLECHAS (GRÁFICO DE BARRAS) ---
+        col_tor = ft.Container(width=200, content=ft.Column(controls=[ft.Text("1. Torneo (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_torneos_barra, border=ft.border.all(1, "white24"), border_radius=5)]))
+        col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("2. Año (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_anios_barra, border=ft.border.all(1, "white24"), border_radius=5)]))
+        col_usu = ft.Container(width=200, content=ft.Column(controls=[ft.Text("3. Usuario (Obligatorio)", weight="bold", size=12, color="cyan"), ft.Container(content=self.lv_usuarios_barra, border=ft.border.all(1, "white24"), border_radius=5)]))
 
-        contenido = ft.Container(width=700, height=300, content=ft.Row(controls=[col_tor, col_anio, col_usu], spacing=20))
+        es_celular = self.page.width < 750 if self.page.width else False
+        
+        flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=0, right=10, visible=False, ignore_interactions=True, data=False)
+        flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=0, right=10, visible=es_celular, ignore_interactions=True, data=False)
+
+        def _on_scroll_modal(e):
+            try:
+                pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
+                
+                # SEGURIDAD ABSOLUTA: Si no hay barra de scroll (PC), mata ambas flechas al instante
+                if max_pos <= 0:
+                    if not flecha_arriba.data or not flecha_abajo.data:
+                        flecha_arriba.visible, flecha_arriba.data = False, True
+                        flecha_abajo.visible, flecha_abajo.data = False, True
+                        flecha_arriba.update()
+                        flecha_abajo.update()
+                    return
+
+                if not flecha_arriba.data:
+                    if pos <= 10 and flecha_arriba.visible:
+                        flecha_arriba.visible, flecha_arriba.data = False, True
+                        flecha_arriba.update()
+                    elif pos > 10 and not flecha_arriba.visible:
+                        flecha_arriba.visible = True
+                        flecha_arriba.update()
+                        
+                if not flecha_abajo.data:
+                    if pos >= (max_pos - 10) and flecha_abajo.visible:
+                        flecha_abajo.visible, flecha_abajo.data = False, True
+                        flecha_abajo.update()
+                    elif pos < (max_pos - 10) and not flecha_abajo.visible:
+                        flecha_abajo.visible = True
+                        flecha_abajo.update()
+            except: pass
+
+        # === AQUÍ ESTÁ LA VARIABLE QUE FALTABA ===
+        contenido = ft.Container(
+            width=750, height=300, 
+            content=ft.Stack(
+                expand=True,
+                controls=[
+                    ft.Column(
+                        scroll=ft.ScrollMode.AUTO,
+                        on_scroll=_on_scroll_modal,
+                        controls=[
+                            ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
+                            ft.Container(height=40) # Margen fantasma inferior
+                        ]
+                    ),
+                    flecha_arriba,
+                    flecha_abajo
+                ]
+            )
+        )
 
         self.dlg_grafico_barras = ft.AlertDialog(modal=True, title=ft.Text("Configurar Gráfico de Puntos"), content=contenido, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_barras)), self.btn_generar_grafico_barras])
         self.page.open(self.dlg_grafico_barras)
@@ -1576,15 +1657,70 @@ El Sistema.
                 controles_usu.append(chk)
             self.lv_usuarios_graf_lp.controls = controles_usu
             
-            self.lv_torneos_graf_lp.update()
+            if self.lv_torneos_graf_lp.page:
+                self.lv_torneos_graf_lp.update()
             self.lv_usuarios_graf_lp.update()
 
-        col_tor = ft.Column(expand=1, controls=[ft.Text("1. Torneo", weight="bold"), ft.Container(content=self.lv_torneos_graf_lp, border=ft.border.all(1, "white24"), border_radius=5)])
-        col_anio = ft.Column(expand=1, controls=[ft.Text("2. Año", weight="bold"), ft.Container(content=self.lv_anios_graf_lp, border=ft.border.all(1, "white24"), border_radius=5)])
-        # CAMBIO: Texto actualizado a Max 4
-        col_usu = ft.Column(expand=1, controls=[ft.Text("3. Usuarios (Max 4)", weight="bold"), ft.Container(content=self.lv_usuarios_graf_lp, border=ft.border.all(1, "white24"), border_radius=5)])
+        # --- DISEÑO RESPONSIVO CON FLECHAS (ARRIBA Y ABAJO) ---
+        col_tor = ft.Container(width=200, content=ft.Column(controls=[ft.Text("1. Torneo", weight="bold"), ft.Container(content=self.lv_torneos_graf_lp, border=ft.border.all(1, "white24"), border_radius=5)]))
+        col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("2. Año", weight="bold"), ft.Container(content=self.lv_anios_graf_lp, border=ft.border.all(1, "white24"), border_radius=5)]))
+        col_usu = ft.Container(width=200, content=ft.Column(controls=[ft.Text("3. Usuarios (Max 4)", weight="bold"), ft.Container(content=self.lv_usuarios_graf_lp, border=ft.border.all(1, "white24"), border_radius=5)]))
 
-        contenido = ft.Container(width=700, height=300, content=ft.Row(controls=[col_tor, col_anio, col_usu], spacing=20))
+        es_celular = self.page.width < 750 if self.page.width else False
+        
+        flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=0, right=10, visible=False, ignore_interactions=True, data=False)
+        flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=0, right=10, visible=es_celular, ignore_interactions=True, data=False)
+
+        def _on_scroll_modal(e):
+            try:
+                pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
+                
+                # SEGURIDAD ABSOLUTA: Si no hay barra de scroll (PC), mata ambas flechas al instante
+                if max_pos <= 0:
+                    if not flecha_arriba.data or not flecha_abajo.data:
+                        flecha_arriba.visible, flecha_arriba.data = False, True
+                        flecha_abajo.visible, flecha_abajo.data = False, True
+                        flecha_arriba.update()
+                        flecha_abajo.update()
+                    return
+
+                # Lógica Flecha Arriba
+                if not flecha_arriba.data:
+                    if pos <= 10 and flecha_arriba.visible:
+                        flecha_arriba.visible, flecha_arriba.data = False, True
+                        flecha_arriba.update()
+                    elif pos > 10 and not flecha_arriba.visible:
+                        flecha_arriba.visible = True
+                        flecha_arriba.update()
+                        
+                # Lógica Flecha Abajo
+                if not flecha_abajo.data:
+                    if pos >= (max_pos - 10) and flecha_abajo.visible:
+                        flecha_abajo.visible, flecha_abajo.data = False, True
+                        flecha_abajo.update()
+                    elif pos < (max_pos - 10) and not flecha_abajo.visible:
+                        flecha_abajo.visible = True
+                        flecha_abajo.update()
+            except: pass
+
+        contenido = ft.Container(
+            width=700, height=300, 
+            content=ft.Stack(
+                expand=True,
+                controls=[
+                    ft.Column(
+                        scroll=ft.ScrollMode.AUTO,
+                        on_scroll=_on_scroll_modal,
+                        controls=[
+                            ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
+                            ft.Container(height=40) # Margen fantasma inferior
+                        ]
+                    ),
+                    flecha_arriba,
+                    flecha_abajo
+                ]
+            )
+        )
 
         self.dlg_grafico_lp = ft.AlertDialog(modal=True, title=ft.Text("Configurar Gráfico de Puntos (Línea)"), content=contenido, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_lp)), self.btn_generar_grafico_lp])
         self.page.open(self.dlg_grafico_lp)
@@ -1595,7 +1731,8 @@ El Sistema.
         self.temp_camp_graf_lp = nombre
         
         for c in self.lv_torneos_graf_lp.controls: c.bgcolor = "blue" if c.data == nombre else "#2D2D2D"
-        self.lv_torneos_graf_lp.update()
+        if self.lv_torneos_graf_lp.page:
+            self.lv_torneos_graf_lp.update()
         
         anios = sorted([ed[2] for ed in self.cache_ediciones_modal if ed[1] == nombre], reverse=True)
         ctls = []
@@ -1628,7 +1765,7 @@ El Sistema.
         self.btn_generar_grafico_lp.update()
 
     def _generar_grafico_linea_puntos(self, e):
-        """Genera y muestra el gráfico de líneas de puntos acumulados."""
+        """Genera y muestra el gráfico de líneas de puntos acumulados (VERSIÓN RESPONSIVA)."""
         usuarios_sel = [c.label for c in self.chk_usuarios_grafico_lp if c.value]
         
         edicion_id = None
@@ -1639,15 +1776,26 @@ El Sistema.
         
         if not edicion_id: return
 
+        # Ponemos el diálogo selector en estado de carga (opcional pero recomendado)
+        if hasattr(self, 'dlg_grafico_lp') and self.dlg_grafico_lp:
+            loading = ft.ProgressBar(width=200, color="red")
+            self.dlg_grafico_lp.content = ft.Column(
+                [ft.Text("Calculando puntos...", color="white"), loading], 
+                height=100, alignment=ft.MainAxisAlignment.CENTER
+            )
+            self.dlg_grafico_lp.actions = []
+            self.dlg_grafico_lp.update()
+
         def _tarea():
             bd = BaseDeDatos()
             cant_partidos, _, historial = bd.obtener_datos_evolucion_puntos(edicion_id, usuarios_sel)
             
             if cant_partidos == 0:
+                self.page.close(self.dlg_grafico_lp)
                 GestorMensajes.mostrar(self.page, "Info", "No hay partidos jugados.", "info")
                 return
 
-            # Calcular máximo puntaje alcanzado para escalar eje Y
+            # 1. Calcular máximo puntaje alcanzado para escalar eje Y
             max_puntos_alcanzado = 0
             for puntos in historial.values():
                 if puntos:
@@ -1658,18 +1806,19 @@ El Sistema.
             colores = [ft.Colors.CYAN, ft.Colors.AMBER, ft.Colors.PINK, ft.Colors.GREEN]
             data_series = []
             
+            # 2. Construir líneas de datos
             for i, user in enumerate(usuarios_sel):
                 puntos_acum = historial.get(user, [])
                 
                 # Inicio en 0
-                puntos_grafico = [ft.LineChartDataPoint(0, 0, tooltip="Inicio")]
+                puntos_grafico = [ft.LineChartDataPoint(0, 0, tooltip=f"{user}: Inicio")]
                 
                 for idx_partido, pts in enumerate(puntos_acum):
                     puntos_grafico.append(
                         ft.LineChartDataPoint(
                             x=idx_partido + 1, 
                             y=pts,
-                            tooltip=f"{pts} pts"
+                            tooltip=f"{user}: {pts} pts"
                         )
                     )
                 
@@ -1684,10 +1833,9 @@ El Sistema.
                     )
                 )
 
-            # Eje Y Normal (0 abajo, Max arriba)
+            # 3. Etiquetas Eje Y (0 abajo, Max arriba)
             labels_y = [ft.ChartAxisLabel(value=0, label=ft.Text("0", size=10, weight="bold"))]
             
-            # Etiquetas cada 5 puntos o 3 si son pocos
             intervalo_y = 5 if altura_eje > 20 else 3
             for p in range(intervalo_y, int(altura_eje), intervalo_y):
                 labels_y.append(
@@ -1697,11 +1845,19 @@ El Sistema.
                     )
                 )
 
-            # Intervalo X dinámico
+            # 4. Intervalo Eje X (De 1 en 1 siempre, porque ahora habrá scroll horizontal)
             intervalo_x = 1
-            if cant_partidos > 15: intervalo_x = 2
-            if cant_partidos > 30: intervalo_x = 5
 
+            # --- PANTALLA COMPLETA ---
+            ancho = self.page.width - 50 if self.page.width else 900
+            alto = self.page.height - 50 if self.page.height else 600
+
+            # --- EL SECRETO DEL ESPACIADO ---
+            # Le damos 60px de espacio a cada partido. 
+            ancho_grafico_dinamico = max((ancho - 100), cant_partidos * 60)
+            necesita_scroll_h = (cant_partidos * 60) > (ancho - 100)
+
+            # 5. Configurar Gráfico (Sin expand=True)
             chart = ft.LineChart(
                 data_series=data_series,
                 border=ft.border.all(1, ft.Colors.WHITE10),
@@ -1716,49 +1872,138 @@ El Sistema.
                     title=ft.Text("Partido N°", size=14, italic=True),
                     labels_size=40,
                 ),
-                tooltip_bgcolor=ft.Colors.with_opacity(0.8, ft.Colors.BLACK),
+                tooltip_bgcolor=ft.Colors.with_opacity(0.9, "#1E1E1E"),
                 min_y=0,
                 max_y=altura_eje,
                 min_x=0,
                 max_x=cant_partidos, 
                 horizontal_grid_lines=ft.ChartGridLines(interval=intervalo_y, color=ft.Colors.WHITE10, width=1),
-                expand=True,
+                vertical_grid_lines=ft.ChartGridLines(interval=1, color=ft.Colors.WHITE10, width=1),
             )
             
+            # Leyenda Personalizada
             items_leyenda = []
             for i, user in enumerate(usuarios_sel):
                 items_leyenda.append(
                     ft.Row([
-                        # CORRECCIÓN AQUÍ: Usar len(colores) en lugar de número fijo '3'
                         ft.Container(width=15, height=15, bgcolor=colores[i % len(colores)], border_radius=3),
-                        ft.Text(user, weight="bold", size=16)
+                        ft.Text(user, weight="bold", size=14, color="white")
                     ], spacing=5)
                 )
 
-            ancho = self.page.width - 50
-            alto = self.page.height - 50
+            # ==========================================
+            # MAGIA 1: FLECHAS VERTICALES (CON MEMORIA)
+            # ==========================================
+            es_celular = self.page.width < 750 if self.page.width else False
+            
+            flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=60, right=10, visible=False, ignore_interactions=True, data=False)
+            flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=10, right=10, visible=es_celular, ignore_interactions=True, data=False)
+
+            def _on_scroll_vertical(e):
+                try:
+                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
+                    if not flecha_arriba.data:
+                        if pos <= 10 and flecha_arriba.visible:
+                            flecha_arriba.visible, flecha_arriba.data = False, True
+                            flecha_arriba.update()
+                        elif pos > 10 and not flecha_arriba.visible:
+                            flecha_arriba.visible = True
+                            flecha_arriba.update()
+                            
+                    if not flecha_abajo.data:
+                        if pos >= (max_pos - 10) and flecha_abajo.visible:
+                            flecha_abajo.visible, flecha_abajo.data = False, True
+                            flecha_abajo.update()
+                        elif pos < (max_pos - 10) and not flecha_abajo.visible:
+                            flecha_abajo.visible = True
+                            flecha_abajo.update()
+                except: pass
+
+            # ==========================================
+            # MAGIA 2: FLECHAS HORIZONTALES (CON MEMORIA)
+            # ==========================================
+            flecha_izq = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT, color="amber", size=35), left=0, top=150, visible=False, ignore_interactions=True, data=False)
+            flecha_der = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT, color="amber", size=35), right=0, top=150, visible=necesita_scroll_h, ignore_interactions=True, data=False)
+
+            def _on_scroll_horizontal(e):
+                try:
+                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
+                    if not flecha_izq.data:
+                        if pos <= 10 and flecha_izq.visible:
+                            flecha_izq.visible, flecha_izq.data = False, True
+                            flecha_izq.update()
+                        elif pos > 10 and not flecha_izq.visible:
+                            flecha_izq.visible = True
+                            flecha_izq.update()
+                            
+                    if not flecha_der.data:
+                        if pos >= (max_pos - 10) and flecha_der.visible:
+                            flecha_der.visible, flecha_der.data = False, True
+                            flecha_der.update()
+                        elif pos < (max_pos - 10) and not flecha_der.visible:
+                            flecha_der.visible = True
+                            flecha_der.update()
+                except: pass
+
+            # --- CONTENEDOR GRÁFICO (ROW SCROLL + STACK FLECHAS) ---
+            fila_grafico = ft.Row(
+                controls=[
+                    ft.Container(
+                        content=chart, 
+                        width=ancho_grafico_dinamico, 
+                        height=350, 
+                        padding=ft.padding.only(top=20, right=20)
+                    )
+                ],
+                scroll=ft.ScrollMode.AUTO,
+                on_scroll=_on_scroll_horizontal
+            )
+
+            contenedor_scroll_horizontal_y_flechas = ft.Stack(
+                controls=[fila_grafico, flecha_izq, flecha_der],
+                height=350
+            )
+
+            # --- ENSAMBLE GENERAL ---
+            columna_principal = ft.Column([
+                ft.Row(
+                    controls=[
+                        # El secreto para que la X no se escape: expand=True en el título
+                        ft.Container(content=ft.Text(f"Evolución Puntos: {self.temp_camp_graf_lp} {self.temp_anio_graf_lp}", size=20, weight="bold"), expand=True),
+                        ft.IconButton(icon=ft.Icons.CLOSE, on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_lp_full))
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                ),
+                ft.Text("Acumulación de puntos fecha a fecha", size=12, color="white54"),
+                ft.Divider(),
+                
+                # Inyectamos el componente compuesto
+                contenedor_scroll_horizontal_y_flechas,
+                
+                ft.Divider(),
+                ft.Row(items_leyenda, alignment="center", wrap=True),
+                ft.Container(height=30)
+            ], scroll=ft.ScrollMode.AUTO, on_scroll=_on_scroll_vertical, expand=True)
 
             contenido_final = ft.Container(
                 width=ancho, height=alto,
-                padding=20, bgcolor="#1E1E1E",
-                content=ft.Column([
-                    ft.Row(
-                        controls=[
-                            ft.Text(f"Evolución Puntos: {self.temp_camp_graf_lp} {self.temp_anio_graf_lp}", size=24, weight="bold"),
-                            ft.IconButton(icon=ft.Icons.CLOSE, on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_lp_full))
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN
-                    ),
-                    ft.Container(content=chart, expand=True, padding=ft.padding.all(20)),
-                    ft.Row(items_leyenda, alignment="center")
-                ])
+                padding=20, bgcolor="#1E1E1E", border_radius=10,
+                content=ft.Stack(
+                    controls=[
+                        columna_principal,
+                        flecha_arriba,
+                        flecha_abajo
+                    ],
+                    expand=True
+                )
             )
             
+            # Cierre y apertura final
             self.page.close(self.dlg_grafico_lp)
-            self.dlg_grafico_lp_full = ft.AlertDialog(content=contenido_final, modal=True, inset_padding=10)
+            self.dlg_grafico_lp_full = ft.AlertDialog(content=contenido_final, modal=True, content_padding=0, bgcolor=ft.Colors.TRANSPARENT)
             self.page.open(self.dlg_grafico_lp_full)
 
-        threading.Thread(target=_tarea, daemon=True).start()    
+        threading.Thread(target=_tarea, daemon=True).start()
 
     def _sel_torneo_barra_modal(self, e):
         nombre = e.control.data
@@ -2198,8 +2443,40 @@ El Sistema.
             except Exception as ex:
                 self._mostrar_mensaje_admin("Error cargando modal", f"{ex}", "error")
 
-        contenido_modal = ft.Container(width=500, height=300, content=ft.Row(controls=[ft.Column(expand=1, controls=[ft.Text("Torneo", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_torneos, border=ft.border.all(1, "white24"), border_radius=5, padding=5)]), ft.VerticalDivider(width=20, color="white24"), ft.Column(expand=1, controls=[ft.Text("Año", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_anios, border=ft.border.all(1, "white24"), border_radius=5, padding=5)])]))
+        # --- DISEÑO RESPONSIVO CON FLECHA ---
+        col_torneo = ft.Container(width=200, content=ft.Column(controls=[ft.Text("Torneo", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_torneos, border=ft.border.all(1, "white24"), border_radius=5, padding=5)]))
+        col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("Año", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_anios, border=ft.border.all(1, "white24"), border_radius=5, padding=5)]))
 
+        es_celular = self.page.width < 750 if self.page.width else False
+        flecha_modal = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=0, right=10, visible=es_celular, ignore_interactions=True, data=False)
+
+        def _on_scroll_modal(e):
+            try:
+                if not flecha_modal.data:
+                    if float(e.pixels) >= (float(e.max_scroll_extent) - 10) and flecha_modal.visible:
+                        flecha_modal.visible = False
+                        flecha_modal.data = True # Muerte permanente
+                        flecha_modal.update()
+            except: pass
+
+        contenido_modal = ft.Container(
+            width=500, height=300, 
+            content=ft.Stack(
+                expand=True,
+                controls=[
+                    ft.Column(
+                        scroll=ft.ScrollMode.AUTO,
+                        on_scroll=_on_scroll_modal,
+                        controls=[
+                            ft.Row(controls=[col_torneo, col_anio], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
+                            ft.Container(height=40) # Margen fantasma inferior
+                        ]
+                    ),
+                    flecha_modal
+                ]
+            )
+        )
+        
         self.dlg_modal = ft.AlertDialog(modal=True, title=ft.Text("Filtrar por Torneo"), content=contenido_modal, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_modal)), self.btn_ver_torneo], actions_alignment=ft.MainAxisAlignment.END)
         self.page.open(self.dlg_modal)
         threading.Thread(target=_cargar_datos_modal, daemon=True).start()
@@ -3510,7 +3787,39 @@ El Sistema.
                 except Exception as ex:
                     self._mostrar_mensaje_general("Error cargando modal", f"No se pudieron cargar los torneos: {ex}", "error")
 
-            contenido_modal = ft.Container(width=500, height=300, content=ft.Row(controls=[ft.Column(expand=1, controls=[ft.Text("Torneo", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_torneos, border=ft.border.all(1, "white24"), border_radius=5, padding=5)]), ft.VerticalDivider(width=20, color="white24"), ft.Column(expand=1, controls=[ft.Text("Año", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_anios, border=ft.border.all(1, "white24"), border_radius=5, padding=5)])]))
+            # --- DISEÑO RESPONSIVO CON FLECHA ---
+            col_torneo = ft.Container(width=200, content=ft.Column(controls=[ft.Text("Torneo", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_torneos, border=ft.border.all(1, "white24"), border_radius=5, padding=5)]))
+            col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("Año", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_anios, border=ft.border.all(1, "white24"), border_radius=5, padding=5)]))
+
+            es_celular = self.page.width < 750 if self.page.width else False
+            flecha_modal = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=0, right=10, visible=es_celular, ignore_interactions=True, data=False)
+
+            def _on_scroll_modal(e):
+                try:
+                    if not flecha_modal.data:
+                        if float(e.pixels) >= (float(e.max_scroll_extent) - 10) and flecha_modal.visible:
+                            flecha_modal.visible = False
+                            flecha_modal.data = True # Muerte permanente
+                            flecha_modal.update()
+                except: pass
+
+            contenido_modal = ft.Container(
+                width=500, height=300, 
+                content=ft.Stack(
+                    expand=True,
+                    controls=[
+                        ft.Column(
+                            scroll=ft.ScrollMode.AUTO,
+                            on_scroll=_on_scroll_modal,
+                            controls=[
+                                ft.Row(controls=[col_torneo, col_anio], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
+                                ft.Container(height=40) # Margen fantasma inferior
+                            ]
+                        ),
+                        flecha_modal
+                    ]
+                )
+            )
             self.dlg_modal = ft.AlertDialog(modal=True, title=ft.Text("Filtrar Partidos por Torneo"), content=contenido_modal, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_modal)), self.btn_ver_torneo], actions_alignment=ft.MainAxisAlignment.END)
             self.page.open(self.dlg_modal)
             threading.Thread(target=_cargar_datos_modal, daemon=True).start()
@@ -4111,8 +4420,39 @@ El Sistema.
                 print(f"Error cargando modal: {ex}")
                 self._mostrar_mensaje_general("Error cargando modal", f"No se pudieron cargar los torneos: {ex}", "error")
 
-        contenido_modal = ft.Container(width=500, height=300, content=ft.Row(controls=[ft.Column(expand=1, controls=[ft.Text("Torneo", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_torneos, border=ft.border.all(1, "white24"), border_radius=5, padding=5)]), ft.VerticalDivider(width=20, color="white24"), ft.Column(expand=1, controls=[ft.Text("Año", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_anios, border=ft.border.all(1, "white24"), border_radius=5, padding=5)])]))
+        # --- DISEÑO RESPONSIVO CON FLECHA ---
+        col_torneo = ft.Container(width=200, content=ft.Column(controls=[ft.Text("Torneo", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_torneos, border=ft.border.all(1, "white24"), border_radius=5, padding=5)]))
+        col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("Año", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_anios, border=ft.border.all(1, "white24"), border_radius=5, padding=5)]))
 
+        es_celular = self.page.width < 750 if self.page.width else False
+        flecha_modal = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=0, right=10, visible=es_celular, ignore_interactions=True, data=False)
+
+        def _on_scroll_modal(e):
+            try:
+                if not flecha_modal.data:
+                    if float(e.pixels) >= (float(e.max_scroll_extent) - 10) and flecha_modal.visible:
+                        flecha_modal.visible = False
+                        flecha_modal.data = True # Muerte permanente
+                        flecha_modal.update()
+            except: pass
+
+        contenido_modal = ft.Container(
+            width=500, height=300, 
+            content=ft.Stack(
+                expand=True,
+                controls=[
+                    ft.Column(
+                        scroll=ft.ScrollMode.AUTO,
+                        on_scroll=_on_scroll_modal,
+                        controls=[
+                            ft.Row(controls=[col_torneo, col_anio], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
+                            ft.Container(height=40) # Margen fantasma inferior
+                        ]
+                    ),
+                    flecha_modal
+                ]
+            )
+        )
         self.dlg_modal = ft.AlertDialog(modal=True, title=ft.Text("Filtrar Ranking por Torneo"), content=contenido_modal, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_modal)), self.btn_ver_torneo], actions_alignment=ft.MainAxisAlignment.END)
         self.page.open(self.dlg_modal)
         threading.Thread(target=_cargar_datos_modal, daemon=True).start()
@@ -4386,12 +4726,64 @@ El Sistema.
                 )
             self.lv_usuarios_torta.controls = controles_usu
             
-            # Construir estructura del modal final
-            col_tor = ft.Column(expand=1, controls=[ft.Text("1. Torneo (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_torneos_torta, border=ft.border.all(1, "white24"), border_radius=5)])
-            col_anio = ft.Column(expand=1, controls=[ft.Text("2. Año (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_anios_torta, border=ft.border.all(1, "white24"), border_radius=5)])
-            col_usu = ft.Column(expand=1, controls=[ft.Text("3. Usuario (Obligatorio)", weight="bold", size=12, color="cyan"), ft.Container(content=self.lv_usuarios_torta, border=ft.border.all(1, "white24"), border_radius=5)])
+            # --- DISEÑO RESPONSIVO CON FLECHAS (ARRIBA Y ABAJO) ---
+            col_tor = ft.Container(width=200, content=ft.Column(controls=[ft.Text("1. Torneo (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_torneos_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("2. Año (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_anios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_usu = ft.Container(width=200, content=ft.Column(controls=[ft.Text("3. Usuario (Obligatorio)", weight="bold", size=12, color="cyan"), ft.Container(content=self.lv_usuarios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
 
-            contenido = ft.Container(width=750, height=300, content=ft.Row(controls=[col_tor, col_anio, col_usu], spacing=20))
+            es_celular = self.page.width < 750 if self.page.width else False
+            
+            flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=0, right=10, visible=False, ignore_interactions=True, data=False)
+            flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=0, right=10, visible=es_celular, ignore_interactions=True, data=False)
+
+            def _on_scroll_modal(e):
+                try:
+                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
+                    
+                    # SEGURIDAD ABSOLUTA: Si no hay barra de scroll (PC), mata ambas flechas al instante
+                    if max_pos <= 0:
+                        if not flecha_arriba.data or not flecha_abajo.data:
+                            flecha_arriba.visible, flecha_arriba.data = False, True
+                            flecha_abajo.visible, flecha_abajo.data = False, True
+                            flecha_arriba.update()
+                            flecha_abajo.update()
+                        return
+
+                    if not flecha_arriba.data:
+                        if pos <= 10 and flecha_arriba.visible:
+                            flecha_arriba.visible, flecha_arriba.data = False, True
+                            flecha_arriba.update()
+                        elif pos > 10 and not flecha_arriba.visible:
+                            flecha_arriba.visible = True
+                            flecha_arriba.update()
+                            
+                    if not flecha_abajo.data:
+                        if pos >= (max_pos - 10) and flecha_abajo.visible:
+                            flecha_abajo.visible, flecha_abajo.data = False, True
+                            flecha_abajo.update()
+                        elif pos < (max_pos - 10) and not flecha_abajo.visible:
+                            flecha_abajo.visible = True
+                            flecha_abajo.update()
+                except: pass
+
+            contenido = ft.Container(
+                width=750, height=300, 
+                content=ft.Stack(
+                    expand=True,
+                    controls=[
+                        ft.Column(
+                            scroll=ft.ScrollMode.AUTO,
+                            on_scroll=_on_scroll_modal,
+                            controls=[
+                                ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
+                                ft.Container(height=40) # Margen fantasma inferior
+                            ]
+                        ),
+                        flecha_arriba,
+                        flecha_abajo
+                    ]
+                )
+            )
 
             self.dlg_grafico_torta = ft.AlertDialog(
                 modal=True, 
@@ -4410,9 +4802,8 @@ El Sistema.
         threading.Thread(target=_cargar_datos_torta, daemon=True).start()
 
     def _generar_grafico_torta(self, e):
-        """Genera el PieChart con animación de carga."""
+        """Genera el PieChart con animación de carga y diseño responsivo."""
         
-        # 1. Crear y mostrar diálogo de carga
         loading_content = ft.Column(
             controls=[
                 ft.Text("Analizando pronósticos...", size=16, weight="bold", color="white"),
@@ -4420,18 +4811,13 @@ El Sistema.
                 ft.ProgressBar(width=200, color="amber", bgcolor="#222222"),
                 ft.Text("Calculando porcentajes...", size=12, color="white70")
             ],
-            height=100,
-            width=300,
-            alignment=ft.MainAxisAlignment.CENTER,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            height=100, width=300, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
         )
         self.dlg_carga_grafico = ft.AlertDialog(content=loading_content, modal=True)
         self.page.open(self.dlg_carga_grafico)
 
-        # Determinar IDs para la consulta (Variables locales para el thread)
         edicion_id = None
         anio_filtro = None
-        
         if self.temp_camp_torta and self.temp_anio_torta:
             for ed in self.cache_ediciones_modal:
                 if ed[1] == self.temp_camp_torta and ed[2] == self.temp_anio_torta:
@@ -4441,13 +4827,10 @@ El Sistema.
             anio_filtro = self.temp_anio_torta
 
         def _tarea():
-            # Pausa estética
             time.sleep(0.8)
-            
             bd = BaseDeDatos()
             stats = bd.obtener_estadisticas_estilo_pronostico(self.temp_usuario_torta, edicion_id, anio_filtro)
             
-            # Si no hay datos, cerramos carga y mostramos aviso
             if not stats or stats[0] == 0:
                 self.page.close(self.dlg_carga_grafico)
                 GestorMensajes.mostrar(self.page, "Info", "No hay datos históricos para generar el gráfico.", "info")
@@ -4459,124 +4842,88 @@ El Sistema.
             empates = stats[3]
             derrotas = stats[4]
 
-            # Calcular porcentajes
-            def calc_pct(val):
-                return (val / total_partidos) * 100 if total_partidos > 0 else 0
+            def calc_pct(val): return (val / total_partidos) * 100 if total_partidos > 0 else 0
 
-            # Definición de Secciones
             secciones = []
-            
-            # 1. Victorias (Verde)
-            if victorias > 0:
-                secciones.append(
-                    ft.PieChartSection(
-                        value=victorias,
-                        title=f"{calc_pct(victorias):.0f}%",
-                        color=ft.Colors.GREEN,
-                        radius=100,
-                        title_style=ft.TextStyle(size=14, weight=ft.FontWeight.BOLD, color="white")
-                    )
-                )
-            
-            # 2. Empates (Amarillo)
-            if empates > 0:
-                secciones.append(
-                    ft.PieChartSection(
-                        value=empates,
-                        title=f"{calc_pct(empates):.0f}%",
-                        color=ft.Colors.YELLOW,
-                        radius=100,
-                        title_style=ft.TextStyle(size=14, weight=ft.FontWeight.BOLD, color="black")
-                    )
-                )
-            
-            # 3. Derrotas (Rojo)
-            if derrotas > 0:
-                secciones.append(
-                    ft.PieChartSection(
-                        value=derrotas,
-                        title=f"{calc_pct(derrotas):.0f}%",
-                        color=ft.Colors.RED,
-                        radius=100,
-                        title_style=ft.TextStyle(size=14, weight=ft.FontWeight.BOLD, color="white")
-                    )
-                )
-                
-            # 4. Sin Pronóstico (Transparente con borde)
-            if sin_pron > 0:
-                secciones.append(
-                    ft.PieChartSection(
-                        value=sin_pron,
-                        title=f"{calc_pct(sin_pron):.0f}%",
-                        color=ft.Colors.TRANSPARENT,
-                        radius=98,
-                        border_side=ft.BorderSide(2, "white54"),
-                        title_style=ft.TextStyle(size=12, color="white70")
-                    )
-                )
+            if victorias > 0: secciones.append(ft.PieChartSection(value=victorias, title=f"{calc_pct(victorias):.0f}%", color=ft.Colors.GREEN, radius=100, title_style=ft.TextStyle(size=14, weight=ft.FontWeight.BOLD, color="white")))
+            if empates > 0: secciones.append(ft.PieChartSection(value=empates, title=f"{calc_pct(empates):.0f}%", color=ft.Colors.YELLOW, radius=100, title_style=ft.TextStyle(size=14, weight=ft.FontWeight.BOLD, color="black")))
+            if derrotas > 0: secciones.append(ft.PieChartSection(value=derrotas, title=f"{calc_pct(derrotas):.0f}%", color=ft.Colors.RED, radius=100, title_style=ft.TextStyle(size=14, weight=ft.FontWeight.BOLD, color="white")))
+            if sin_pron > 0: secciones.append(ft.PieChartSection(value=sin_pron, title=f"{calc_pct(sin_pron):.0f}%", color=ft.Colors.TRANSPARENT, radius=98, border_side=ft.BorderSide(2, "white54"), title_style=ft.TextStyle(size=12, color="white70")))
 
-            chart = ft.PieChart(
-                sections=secciones,
-                sections_space=2,
-                center_space_radius=0, 
-                expand=True
-            )
+            chart = ft.PieChart(sections=secciones, sections_space=2, center_space_radius=0, expand=True)
 
-            # Leyenda personalizada
             leyenda = ft.Column(
                 controls=[
                     ft.Row([ft.Container(width=15, height=15, bgcolor=ft.Colors.GREEN, shape=ft.BoxShape.CIRCLE), ft.Text("Victorias", weight="bold")], spacing=5),
                     ft.Row([ft.Container(width=15, height=15, bgcolor=ft.Colors.YELLOW, shape=ft.BoxShape.CIRCLE), ft.Text("Empates", weight="bold")], spacing=5),
                     ft.Row([ft.Container(width=15, height=15, bgcolor=ft.Colors.RED, shape=ft.BoxShape.CIRCLE), ft.Text("Derrotas", weight="bold")], spacing=5),
-                    # Círculo hueco inventado para leyenda
-                    ft.Row([
-                        ft.Container(width=15, height=15, bgcolor=ft.Colors.TRANSPARENT, border=ft.border.all(2, "white"), shape=ft.BoxShape.CIRCLE), 
-                        ft.Text("Sin pronóstico", color="white70")
-                    ], spacing=5),
+                    ft.Row([ft.Container(width=15, height=15, bgcolor=ft.Colors.TRANSPARENT, border=ft.border.all(2, "white"), shape=ft.BoxShape.CIRCLE), ft.Text("Sin pronóstico", color="white70")], spacing=5),
                 ],
-                alignment=ft.MainAxisAlignment.CENTER
+                alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.START
             )
 
-            # Título del Gráfico
             titulo_txt = f"Estilo: {self.temp_usuario_torta}"
-            subtitulo_txt = "Histórico completo"
-            if self.temp_camp_torta: subtitulo_txt = f"{self.temp_camp_torta} {self.temp_anio_torta}"
-            elif self.temp_anio_torta: subtitulo_txt = f"Año {self.temp_anio_torta}"
+            subtitulo_txt = f"{self.temp_camp_torta} {self.temp_anio_torta}" if self.temp_camp_torta else (f"Año {self.temp_anio_torta}" if self.temp_anio_torta else "Histórico completo")
 
-            ancho = 600
-            alto = 500
+            # --- ESTRUCTURA RESPONSIVA CON SCROLL Y FLECHAS ---
+            ancho_dialogo = self.page.width - 50 if self.page.width else 700
+            alto_dialogo = self.page.height - 50 if self.page.height else 600
+            es_celular = self.page.width < 750 if self.page.width else False
+
+            flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=60, right=10, visible=False, ignore_interactions=True, data=False)
+            flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=10, right=10, visible=es_celular, ignore_interactions=True, data=False)
+
+            def _on_scroll_grafico(e):
+                try:
+                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
+                    if max_pos <= 0:
+                        if not flecha_arriba.data or not flecha_abajo.data:
+                            flecha_arriba.visible, flecha_arriba.data = False, True
+                            flecha_abajo.visible, flecha_abajo.data = False, True
+                            flecha_arriba.update(); flecha_abajo.update()
+                        return
+                    if not flecha_arriba.data:
+                        if pos <= 10 and flecha_arriba.visible:
+                            flecha_arriba.visible, flecha_arriba.data = False, True
+                            flecha_arriba.update()
+                        elif pos > 10 and not flecha_arriba.visible:
+                            flecha_arriba.visible = True; flecha_arriba.update()
+                    if not flecha_abajo.data:
+                        if pos >= (max_pos - 10) and flecha_abajo.visible:
+                            flecha_abajo.visible, flecha_abajo.data = False, True
+                            flecha_abajo.update()
+                        elif pos < (max_pos - 10) and not flecha_abajo.visible:
+                            flecha_abajo.visible = True; flecha_abajo.update()
+                except: pass
+
+            columna_principal = ft.Column([
+                ft.Row(
+                    controls=[
+                        ft.Column([ft.Text(titulo_txt, size=22, weight="bold"), ft.Text(subtitulo_txt, size=14, color="white54")], expand=True),
+                        ft.IconButton(icon=ft.Icons.CLOSE, on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_torta_full))
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                ),
+                ft.Divider(),
+                ft.Row(
+                    controls=[
+                        ft.Container(content=chart, width=280, height=280),
+                        ft.Container(content=leyenda, width=200, padding=10)
+                    ],
+                    wrap=True, alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER
+                ),
+                ft.Container(height=20),
+                ft.Text(f"Total Partidos Jugados: {total_partidos}", size=12, italic=True, text_align=ft.TextAlign.CENTER),
+                ft.Container(height=40)
+            ], scroll=ft.ScrollMode.AUTO, on_scroll=_on_scroll_grafico, expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
             contenido_final = ft.Container(
-                width=ancho, height=alto,
-                padding=20, bgcolor="#1E1E1E",
-                content=ft.Column([
-                    ft.Row(
-                        controls=[
-                            ft.Column([
-                                ft.Text(titulo_txt, size=22, weight="bold"),
-                                ft.Text(subtitulo_txt, size=14, color="white54")
-                            ]),
-                            ft.IconButton(icon=ft.Icons.CLOSE, on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_torta_full))
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN
-                    ),
-                    ft.Divider(),
-                    ft.Row(
-                        controls=[
-                            ft.Container(content=chart, expand=True, height=300),
-                            ft.Container(content=leyenda, width=150)
-                        ],
-                        expand=True
-                    ),
-                    ft.Text(f"Total Partidos Jugados: {total_partidos}", size=12, italic=True, text_align=ft.TextAlign.CENTER)
-                ])
+                width=ancho_dialogo, height=alto_dialogo, padding=20, bgcolor="#1E1E1E", border_radius=10,
+                content=ft.Stack([columna_principal, flecha_arriba, flecha_abajo], expand=True)
             )
             
-            # Cerrar carga, cerrar selector y abrir resultado
             self.page.close(self.dlg_carga_grafico)
             self.page.close(self.dlg_grafico_torta)
-            
-            self.dlg_grafico_torta_full = ft.AlertDialog(content=contenido_final, modal=True, inset_padding=10)
+            self.dlg_grafico_torta_full = ft.AlertDialog(content=contenido_final, modal=True, content_padding=0, bgcolor=ft.Colors.TRANSPARENT)
             self.page.open(self.dlg_grafico_torta_full)
 
         threading.Thread(target=_tarea, daemon=True).start()
@@ -4729,11 +5076,64 @@ El Sistema.
                 )
             self.lv_usuarios_torta.controls = controles_usu
             
-            col_tor = ft.Column(expand=1, controls=[ft.Text("1. Torneo (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_torneos_torta, border=ft.border.all(1, "white24"), border_radius=5)])
-            col_anio = ft.Column(expand=1, controls=[ft.Text("2. Año (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_anios_torta, border=ft.border.all(1, "white24"), border_radius=5)])
-            col_usu = ft.Column(expand=1, controls=[ft.Text("3. Usuario (Obligatorio)", weight="bold", size=12, color="cyan"), ft.Container(content=self.lv_usuarios_torta, border=ft.border.all(1, "white24"), border_radius=5)])
+            # --- DISEÑO RESPONSIVO CON FLECHAS (ARRIBA Y ABAJO) ---
+            col_tor = ft.Container(width=200, content=ft.Column(controls=[ft.Text("1. Torneo (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_torneos_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("2. Año (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_anios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_usu = ft.Container(width=200, content=ft.Column(controls=[ft.Text("3. Usuario (Obligatorio)", weight="bold", size=12, color="cyan"), ft.Container(content=self.lv_usuarios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
 
-            contenido = ft.Container(width=750, height=300, content=ft.Row(controls=[col_tor, col_anio, col_usu], spacing=20))
+            es_celular = self.page.width < 750 if self.page.width else False
+            
+            flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=0, right=10, visible=False, ignore_interactions=True, data=False)
+            flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=0, right=10, visible=es_celular, ignore_interactions=True, data=False)
+
+            def _on_scroll_modal(e):
+                try:
+                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
+                    
+                    # SEGURIDAD ABSOLUTA: Si no hay barra de scroll (PC), mata ambas flechas al instante
+                    if max_pos <= 0:
+                        if not flecha_arriba.data or not flecha_abajo.data:
+                            flecha_arriba.visible, flecha_arriba.data = False, True
+                            flecha_abajo.visible, flecha_abajo.data = False, True
+                            flecha_arriba.update()
+                            flecha_abajo.update()
+                        return
+
+                    if not flecha_arriba.data:
+                        if pos <= 10 and flecha_arriba.visible:
+                            flecha_arriba.visible, flecha_arriba.data = False, True
+                            flecha_arriba.update()
+                        elif pos > 10 and not flecha_arriba.visible:
+                            flecha_arriba.visible = True
+                            flecha_arriba.update()
+                            
+                    if not flecha_abajo.data:
+                        if pos >= (max_pos - 10) and flecha_abajo.visible:
+                            flecha_abajo.visible, flecha_abajo.data = False, True
+                            flecha_abajo.update()
+                        elif pos < (max_pos - 10) and not flecha_abajo.visible:
+                            flecha_abajo.visible = True
+                            flecha_abajo.update()
+                except: pass
+
+            contenido = ft.Container(
+                width=750, height=300, 
+                content=ft.Stack(
+                    expand=True,
+                    controls=[
+                        ft.Column(
+                            scroll=ft.ScrollMode.AUTO,
+                            on_scroll=_on_scroll_modal,
+                            controls=[
+                                ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
+                                ft.Container(height=40) # Margen fantasma inferior
+                            ]
+                        ),
+                        flecha_arriba,
+                        flecha_abajo
+                    ]
+                )
+            )
 
             self.dlg_grafico_torta = ft.AlertDialog(
                 modal=True, 
@@ -4751,7 +5151,7 @@ El Sistema.
         threading.Thread(target=_cargar_datos_torta, daemon=True).start()
 
     def _generar_grafico_torta_tendencia(self, e):
-        """Genera el gráfico de torta de Tendencia (Muy Optimista, Neutral, etc)."""
+        """Genera el gráfico de torta de Tendencia con diseño responsivo."""
         
         loading_content = ft.Column(
             controls=[
@@ -4760,28 +5160,22 @@ El Sistema.
                 ft.ProgressBar(width=200, color="amber", bgcolor="#222222"),
                 ft.Text("Calculando tendencias...", size=12, color="white70")
             ],
-            height=100,
-            width=300,
-            alignment=ft.MainAxisAlignment.CENTER,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            height=100, width=300, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
         )
         self.dlg_carga_grafico = ft.AlertDialog(content=loading_content, modal=True)
         self.page.open(self.dlg_carga_grafico)
 
         edicion_id = None
         anio_filtro = None
-        
         if self.temp_camp_torta and self.temp_anio_torta:
             for ed in self.cache_ediciones_modal:
                 if ed[1] == self.temp_camp_torta and ed[2] == self.temp_anio_torta:
-                    edicion_id = ed[0]
-                    break
+                    edicion_id = ed[0]; break
         elif self.temp_anio_torta:
             anio_filtro = self.temp_anio_torta
 
         def _tarea():
             time.sleep(0.8)
-            
             bd = BaseDeDatos()
             stats = bd.obtener_estadisticas_tendencia_pronostico(self.temp_usuario_torta, edicion_id, anio_filtro)
             
@@ -4798,96 +5192,90 @@ El Sistema.
             pes = stats[5] or 0
             muy_pes = stats[6] or 0
 
-            def calc_pct(val):
-                return (val / total) * 100 if total > 0 else 0
+            def calc_pct(val): return (val / total) * 100 if total > 0 else 0
 
-            # Definición de Secciones y Colores (NUEVA PALETA)
-            # Rojo -> Naranja -> Verde -> Azul -> Violeta
             secciones = []
-            
-            if muy_opt > 0:
-                secciones.append(ft.PieChartSection(value=muy_opt, title=f"{calc_pct(muy_opt):.0f}%", color=ft.Colors.RED, radius=100, title_style=ft.TextStyle(size=12, weight="bold", color="white")))
-            if opt > 0:
-                secciones.append(ft.PieChartSection(value=opt, title=f"{calc_pct(opt):.0f}%", color=ft.Colors.ORANGE, radius=100, title_style=ft.TextStyle(size=12, weight="bold", color="white")))
-            if real > 0:
-                # CAMBIO: Cyan -> Green (Neutral es "bueno/preciso")
-                secciones.append(ft.PieChartSection(value=real, title=f"{calc_pct(real):.0f}%", color=ft.Colors.GREEN, radius=100, title_style=ft.TextStyle(size=12, weight="bold", color="white")))
-            if pes > 0:
-                # CAMBIO: Indigo -> Blue
-                secciones.append(ft.PieChartSection(value=pes, title=f"{calc_pct(pes):.0f}%", color=ft.Colors.BLUE, radius=100, title_style=ft.TextStyle(size=12, weight="bold", color="white")))
-            if muy_pes > 0:
-                # CAMBIO: Blue -> Purple (Para diferenciar del azul)
-                secciones.append(ft.PieChartSection(value=muy_pes, title=f"{calc_pct(muy_pes):.0f}%", color=ft.Colors.PURPLE, radius=100, title_style=ft.TextStyle(size=12, weight="bold", color="white")))
-            if sin_pron > 0:
-                secciones.append(ft.PieChartSection(value=sin_pron, title=f"{calc_pct(sin_pron):.0f}%", color=ft.Colors.TRANSPARENT, radius=98, border_side=ft.BorderSide(2, "white54"), title_style=ft.TextStyle(size=12, color="white70")))
+            if muy_opt > 0: secciones.append(ft.PieChartSection(value=muy_opt, title=f"{calc_pct(muy_opt):.0f}%", color=ft.Colors.RED, radius=100, title_style=ft.TextStyle(size=12, weight="bold", color="white")))
+            if opt > 0: secciones.append(ft.PieChartSection(value=opt, title=f"{calc_pct(opt):.0f}%", color=ft.Colors.ORANGE, radius=100, title_style=ft.TextStyle(size=12, weight="bold", color="white")))
+            if real > 0: secciones.append(ft.PieChartSection(value=real, title=f"{calc_pct(real):.0f}%", color=ft.Colors.GREEN, radius=100, title_style=ft.TextStyle(size=12, weight="bold", color="white")))
+            if pes > 0: secciones.append(ft.PieChartSection(value=pes, title=f"{calc_pct(pes):.0f}%", color=ft.Colors.BLUE, radius=100, title_style=ft.TextStyle(size=12, weight="bold", color="white")))
+            if muy_pes > 0: secciones.append(ft.PieChartSection(value=muy_pes, title=f"{calc_pct(muy_pes):.0f}%", color=ft.Colors.PURPLE, radius=100, title_style=ft.TextStyle(size=12, weight="bold", color="white")))
+            if sin_pron > 0: secciones.append(ft.PieChartSection(value=sin_pron, title=f"{calc_pct(sin_pron):.0f}%", color=ft.Colors.TRANSPARENT, radius=98, border_side=ft.BorderSide(2, "white54"), title_style=ft.TextStyle(size=12, color="white70")))
 
-            chart = ft.PieChart(
-                sections=secciones,
-                sections_space=2,
-                center_space_radius=0, 
-                expand=True
-            )
+            chart = ft.PieChart(sections=secciones, sections_space=2, center_space_radius=0, expand=True)
 
-            # Leyenda actualizada
-            items_leyenda = [
-                (ft.Colors.RED, "Muy optimista"),
-                (ft.Colors.ORANGE, "Optimista"),
-                (ft.Colors.GREEN, "Neutral"),     # Nuevo color
-                (ft.Colors.BLUE, "Pesimista"),     # Nuevo color
-                (ft.Colors.PURPLE, "Muy pesimista")# Nuevo color
-            ]
-            
-            controles_leyenda = []
-            for col, txt in items_leyenda:
-                controles_leyenda.append(ft.Row([ft.Container(width=15, height=15, bgcolor=col, shape=ft.BoxShape.CIRCLE), ft.Text(txt, weight="bold", size=12)], spacing=5))
-            
-            # Sin Pronóstico
+            items_leyenda = [(ft.Colors.RED, "Muy optimista"), (ft.Colors.ORANGE, "Optimista"), (ft.Colors.GREEN, "Neutral"), (ft.Colors.BLUE, "Pesimista"), (ft.Colors.PURPLE, "Muy pesimista")]
+            controles_leyenda = [ft.Row([ft.Container(width=15, height=15, bgcolor=col, shape=ft.BoxShape.CIRCLE), ft.Text(txt, weight="bold", size=12)], spacing=5) for col, txt in items_leyenda]
             controles_leyenda.append(ft.Row([ft.Container(width=15, height=15, bgcolor=ft.Colors.TRANSPARENT, border=ft.border.all(2, "white"), shape=ft.BoxShape.CIRCLE), ft.Text("No pronosticado", color="white70", size=12)], spacing=5))
-
-            leyenda = ft.Column(controls=controles_leyenda, alignment=ft.MainAxisAlignment.CENTER)
+            
+            leyenda = ft.Column(controls=controles_leyenda, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.START)
 
             titulo_txt = f"Tendencia: {self.temp_usuario_torta}"
-            subtitulo_txt = "Histórico completo"
-            if self.temp_camp_torta: subtitulo_txt = f"{self.temp_camp_torta} {self.temp_anio_torta}"
-            elif self.temp_anio_torta: subtitulo_txt = f"Año {self.temp_anio_torta}"
+            subtitulo_txt = f"{self.temp_camp_torta} {self.temp_anio_torta}" if self.temp_camp_torta else (f"Año {self.temp_anio_torta}" if self.temp_anio_torta else "Histórico completo")
 
-            ancho = 700
-            alto = 500
+            # --- ESTRUCTURA RESPONSIVA CON SCROLL Y FLECHAS ---
+            ancho_dialogo = self.page.width - 50 if self.page.width else 700
+            alto_dialogo = self.page.height - 50 if self.page.height else 600
+            es_celular = self.page.width < 750 if self.page.width else False
+
+            flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=60, right=10, visible=False, ignore_interactions=True, data=False)
+            flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=10, right=10, visible=es_celular, ignore_interactions=True, data=False)
+
+            def _on_scroll_grafico(e):
+                try:
+                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
+                    if max_pos <= 0:
+                        if not flecha_arriba.data or not flecha_abajo.data:
+                            flecha_arriba.visible, flecha_arriba.data = False, True
+                            flecha_abajo.visible, flecha_abajo.data = False, True
+                            flecha_arriba.update(); flecha_abajo.update()
+                        return
+                    if not flecha_arriba.data:
+                        if pos <= 10 and flecha_arriba.visible:
+                            flecha_arriba.visible, flecha_arriba.data = False, True
+                            flecha_arriba.update()
+                        elif pos > 10 and not flecha_arriba.visible:
+                            flecha_arriba.visible = True; flecha_arriba.update()
+                    if not flecha_abajo.data:
+                        if pos >= (max_pos - 10) and flecha_abajo.visible:
+                            flecha_abajo.visible, flecha_abajo.data = False, True
+                            flecha_abajo.update()
+                        elif pos < (max_pos - 10) and not flecha_abajo.visible:
+                            flecha_abajo.visible = True; flecha_abajo.update()
+                except: pass
+
+            columna_principal = ft.Column([
+                ft.Row(
+                    controls=[
+                        ft.Column([ft.Text(titulo_txt, size=22, weight="bold"), ft.Text(subtitulo_txt, size=14, color="white54")], expand=True),
+                        ft.IconButton(icon=ft.Icons.CLOSE, on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_torta_full))
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                ),
+                ft.Divider(),
+                ft.Row(
+                    controls=[
+                        ft.Container(content=chart, width=280, height=280),
+                        ft.Container(content=leyenda, width=200, padding=10)
+                    ],
+                    wrap=True, alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER
+                ),
+                ft.Container(height=20),
+                ft.Text(f"Total Partidos Jugados: {total}", size=12, italic=True, text_align=ft.TextAlign.CENTER),
+                ft.Container(height=40)
+            ], scroll=ft.ScrollMode.AUTO, on_scroll=_on_scroll_grafico, expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
             contenido_final = ft.Container(
-                width=ancho, height=alto,
-                padding=20, bgcolor="#1E1E1E",
-                content=ft.Column([
-                    ft.Row(
-                        controls=[
-                            ft.Column([
-                                ft.Text(titulo_txt, size=22, weight="bold"),
-                                ft.Text(subtitulo_txt, size=14, color="white54")
-                            ]),
-                            ft.IconButton(icon=ft.Icons.CLOSE, on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_torta_full))
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN
-                    ),
-                    ft.Divider(),
-                    ft.Row(
-                        controls=[
-                            ft.Container(content=chart, expand=True, height=300),
-                            ft.Container(content=leyenda, width=180)
-                        ],
-                        expand=True
-                    ),
-                    ft.Text(f"Total Partidos Jugados: {total}", size=12, italic=True, text_align=ft.TextAlign.CENTER)
-                ])
+                width=ancho_dialogo, height=alto_dialogo, padding=20, bgcolor="#1E1E1E", border_radius=10,
+                content=ft.Stack([columna_principal, flecha_arriba, flecha_abajo], expand=True)
             )
             
             self.page.close(self.dlg_carga_grafico)
             self.page.close(self.dlg_grafico_torta)
-            
-            self.dlg_grafico_torta_full = ft.AlertDialog(content=contenido_final, modal=True, inset_padding=10)
+            self.dlg_grafico_torta_full = ft.AlertDialog(content=contenido_final, modal=True, content_padding=0, bgcolor=ft.Colors.TRANSPARENT)
             self.page.open(self.dlg_grafico_torta_full)
 
         threading.Thread(target=_tarea, daemon=True).start()
-    
+
     def _abrir_selector_grafico_torta_firmeza(self, e):
         """Abre el modal para configurar el gráfico de Grado de Firmeza."""
         
@@ -4955,11 +5343,64 @@ El Sistema.
                 )
             self.lv_usuarios_torta.controls = controles_usu
             
-            col_tor = ft.Column(expand=1, controls=[ft.Text("1. Torneo (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_torneos_torta, border=ft.border.all(1, "white24"), border_radius=5)])
-            col_anio = ft.Column(expand=1, controls=[ft.Text("2. Año (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_anios_torta, border=ft.border.all(1, "white24"), border_radius=5)])
-            col_usu = ft.Column(expand=1, controls=[ft.Text("3. Usuario (Obligatorio)", weight="bold", size=12, color="cyan"), ft.Container(content=self.lv_usuarios_torta, border=ft.border.all(1, "white24"), border_radius=5)])
+            # --- DISEÑO RESPONSIVO CON FLECHAS (ARRIBA Y ABAJO) ---
+            col_tor = ft.Container(width=200, content=ft.Column(controls=[ft.Text("1. Torneo (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_torneos_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("2. Año (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_anios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_usu = ft.Container(width=200, content=ft.Column(controls=[ft.Text("3. Usuario (Obligatorio)", weight="bold", size=12, color="cyan"), ft.Container(content=self.lv_usuarios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
 
-            contenido = ft.Container(width=750, height=300, content=ft.Row(controls=[col_tor, col_anio, col_usu], spacing=20))
+            es_celular = self.page.width < 750 if self.page.width else False
+            
+            flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=0, right=10, visible=False, ignore_interactions=True, data=False)
+            flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=0, right=10, visible=es_celular, ignore_interactions=True, data=False)
+
+            def _on_scroll_modal(e):
+                try:
+                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
+                    
+                    # SEGURIDAD ABSOLUTA: Si no hay barra de scroll (PC), mata ambas flechas al instante
+                    if max_pos <= 0:
+                        if not flecha_arriba.data or not flecha_abajo.data:
+                            flecha_arriba.visible, flecha_arriba.data = False, True
+                            flecha_abajo.visible, flecha_abajo.data = False, True
+                            flecha_arriba.update()
+                            flecha_abajo.update()
+                        return
+
+                    if not flecha_arriba.data:
+                        if pos <= 10 and flecha_arriba.visible:
+                            flecha_arriba.visible, flecha_arriba.data = False, True
+                            flecha_arriba.update()
+                        elif pos > 10 and not flecha_arriba.visible:
+                            flecha_arriba.visible = True
+                            flecha_arriba.update()
+                            
+                    if not flecha_abajo.data:
+                        if pos >= (max_pos - 10) and flecha_abajo.visible:
+                            flecha_abajo.visible, flecha_abajo.data = False, True
+                            flecha_abajo.update()
+                        elif pos < (max_pos - 10) and not flecha_abajo.visible:
+                            flecha_abajo.visible = True
+                            flecha_abajo.update()
+                except: pass
+
+            contenido = ft.Container(
+                width=750, height=300, 
+                content=ft.Stack(
+                    expand=True,
+                    controls=[
+                        ft.Column(
+                            scroll=ft.ScrollMode.AUTO,
+                            on_scroll=_on_scroll_modal,
+                            controls=[
+                                ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
+                                ft.Container(height=40) # Margen fantasma inferior
+                            ]
+                        ),
+                        flecha_arriba,
+                        flecha_abajo
+                    ]
+                )
+            )
 
             self.dlg_grafico_torta = ft.AlertDialog(
                 modal=True, 
@@ -4977,7 +5418,7 @@ El Sistema.
         threading.Thread(target=_cargar_datos_torta, daemon=True).start()
 
     def _generar_grafico_torta_firmeza(self, e):
-        """Genera el gráfico de torta de Grado de Firmeza."""
+        """Genera el gráfico de torta de Grado de Firmeza con diseño responsivo."""
         
         loading_content = ft.Column(
             controls=[
@@ -4986,28 +5427,22 @@ El Sistema.
                 ft.ProgressBar(width=200, color="amber", bgcolor="#222222"),
                 ft.Text("Calculando historial de ediciones...", size=12, color="white70")
             ],
-            height=100,
-            width=300,
-            alignment=ft.MainAxisAlignment.CENTER,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            height=100, width=300, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
         )
         self.dlg_carga_grafico = ft.AlertDialog(content=loading_content, modal=True)
         self.page.open(self.dlg_carga_grafico)
 
         edicion_id = None
         anio_filtro = None
-        
         if self.temp_camp_torta and self.temp_anio_torta:
             for ed in self.cache_ediciones_modal:
                 if ed[1] == self.temp_camp_torta and ed[2] == self.temp_anio_torta:
-                    edicion_id = ed[0]
-                    break
+                    edicion_id = ed[0]; break
         elif self.temp_anio_torta:
             anio_filtro = self.temp_anio_torta
 
         def _tarea():
             time.sleep(0.8)
-            
             bd = BaseDeDatos()
             stats = bd.obtener_estadisticas_firmeza_pronostico(self.temp_usuario_torta, edicion_id, anio_filtro)
             
@@ -5022,139 +5457,88 @@ El Sistema.
             dudoso = stats[3] or 0
             cambiante = stats[4] or 0
 
-            def calc_pct(val):
-                return (val / total) * 100 if total > 0 else 0
+            def calc_pct(val): return (val / total) * 100 if total > 0 else 0
 
-            # Definición de Secciones
             secciones = []
-            
-            # 1. Firme (1 intento) - Verde
-            if firme > 0:
-                secciones.append(
-                    ft.PieChartSection(
-                        value=firme, 
-                        title=f"{calc_pct(firme):.0f}%", 
-                        color=ft.Colors.GREEN, 
-                        radius=100, 
-                        title_style=ft.TextStyle(size=14, weight="bold", color="white")
-                    )
-                )
-            
-            # 2. Dudoso (2 intentos) - Amarillo/Naranja
-            if dudoso > 0:
-                secciones.append(
-                    ft.PieChartSection(
-                        value=dudoso, 
-                        title=f"{calc_pct(dudoso):.0f}%", 
-                        color=ft.Colors.AMBER, 
-                        radius=100, 
-                        title_style=ft.TextStyle(size=14, weight="bold", color="black")
-                    )
-                )
-            
-            # 3. Cambiante (3+ intentos) - Rojo
-            if cambiante > 0:
-                secciones.append(
-                    ft.PieChartSection(
-                        value=cambiante, 
-                        title=f"{calc_pct(cambiante):.0f}%", 
-                        color=ft.Colors.RED, 
-                        radius=100, 
-                        title_style=ft.TextStyle(size=14, weight="bold", color="white")
-                    )
-                )
-            
-            # 4. No participativo - Transparente con borde
-            if sin_pron > 0:
-                secciones.append(
-                    ft.PieChartSection(
-                        value=sin_pron,
-                        title=f"{calc_pct(sin_pron):.0f}%",
-                        color=ft.Colors.TRANSPARENT,
-                        radius=98,
-                        border_side=ft.BorderSide(2, "white54"),
-                        title_style=ft.TextStyle(size=12, color="white70")
-                    )
-                )
+            if firme > 0: secciones.append(ft.PieChartSection(value=firme, title=f"{calc_pct(firme):.0f}%", color=ft.Colors.GREEN, radius=100, title_style=ft.TextStyle(size=14, weight="bold", color="white")))
+            if dudoso > 0: secciones.append(ft.PieChartSection(value=dudoso, title=f"{calc_pct(dudoso):.0f}%", color=ft.Colors.AMBER, radius=100, title_style=ft.TextStyle(size=14, weight="bold", color="black")))
+            if cambiante > 0: secciones.append(ft.PieChartSection(value=cambiante, title=f"{calc_pct(cambiante):.0f}%", color=ft.Colors.RED, radius=100, title_style=ft.TextStyle(size=14, weight="bold", color="white")))
+            if sin_pron > 0: secciones.append(ft.PieChartSection(value=sin_pron, title=f"{calc_pct(sin_pron):.0f}%", color=ft.Colors.TRANSPARENT, radius=98, border_side=ft.BorderSide(2, "white54"), title_style=ft.TextStyle(size=12, color="white70")))
 
-            chart = ft.PieChart(
-                sections=secciones,
-                sections_space=2,
-                center_space_radius=0, 
-                expand=True
-            )
+            chart = ft.PieChart(sections=secciones, sections_space=2, center_space_radius=0, expand=True)
 
-            # Leyenda
-            items_leyenda = [
-                (ft.Colors.GREEN, "🧱 Firme (1 intento)"),
-                (ft.Colors.AMBER, "🤔 Dudoso (2 intentos)"),
-                (ft.Colors.RED, "🔄 Cambiante (3+ intentos)")
-            ]
-            
-            controles_leyenda = []
-            for col, txt in items_leyenda:
-                controles_leyenda.append(
-                    ft.Row([
-                        # Aumenté el tamaño del círculo de 15 a 20 para balancear
-                        ft.Container(width=20, height=20, bgcolor=col, shape=ft.BoxShape.CIRCLE), 
-                        # CAMBIO AQUÍ: size=16 (antes 12)
-                        ft.Text(txt, weight="bold", size=16)
-                    ], spacing=10)
-                )
-            
-            # Sin Pronóstico
-            controles_leyenda.append(
-                ft.Row([
-                    ft.Container(width=20, height=20, bgcolor=ft.Colors.TRANSPARENT, border=ft.border.all(2, "white"), shape=ft.BoxShape.CIRCLE), 
-                    # CAMBIO AQUÍ: size=16 (antes 12)
-                    ft.Text("💤 No participativo", color="white70", size=16)
-                ], spacing=10)
-            )
+            items_leyenda = [(ft.Colors.GREEN, "🧱 Firme (1 intento)"), (ft.Colors.AMBER, "🤔 Dudoso (2 intentos)"), (ft.Colors.RED, "🔄 Cambiante (3+ intentos)")]
+            controles_leyenda = [ft.Row([ft.Container(width=18, height=18, bgcolor=col, shape=ft.BoxShape.CIRCLE), ft.Text(txt, weight="bold", size=14)], spacing=10) for col, txt in items_leyenda]
+            controles_leyenda.append(ft.Row([ft.Container(width=18, height=18, bgcolor=ft.Colors.TRANSPARENT, border=ft.border.all(2, "white"), shape=ft.BoxShape.CIRCLE), ft.Text("💤 No participativo", color="white70", size=14)], spacing=10))
 
-            leyenda = ft.Column(controls=controles_leyenda, alignment=ft.MainAxisAlignment.CENTER)
+            leyenda = ft.Column(controls=controles_leyenda, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.START)
 
             titulo_txt = f"Grado de firmeza: {self.temp_usuario_torta}"
-            subtitulo_txt = "Histórico completo"
-            if self.temp_camp_torta: subtitulo_txt = f"{self.temp_camp_torta} {self.temp_anio_torta}"
-            elif self.temp_anio_torta: subtitulo_txt = f"Año {self.temp_anio_torta}"
+            subtitulo_txt = f"{self.temp_camp_torta} {self.temp_anio_torta}" if self.temp_camp_torta else (f"Año {self.temp_anio_torta}" if self.temp_anio_torta else "Histórico completo")
 
-            ancho = 700
-            alto = 500
+            # --- ESTRUCTURA RESPONSIVA CON SCROLL Y FLECHAS ---
+            ancho_dialogo = self.page.width - 50 if self.page.width else 700
+            alto_dialogo = self.page.height - 50 if self.page.height else 600
+            es_celular = self.page.width < 750 if self.page.width else False
+
+            flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=60, right=10, visible=False, ignore_interactions=True, data=False)
+            flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=10, right=10, visible=es_celular, ignore_interactions=True, data=False)
+
+            def _on_scroll_grafico(e):
+                try:
+                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
+                    if max_pos <= 0:
+                        if not flecha_arriba.data or not flecha_abajo.data:
+                            flecha_arriba.visible, flecha_arriba.data = False, True
+                            flecha_abajo.visible, flecha_abajo.data = False, True
+                            flecha_arriba.update(); flecha_abajo.update()
+                        return
+                    if not flecha_arriba.data:
+                        if pos <= 10 and flecha_arriba.visible:
+                            flecha_arriba.visible, flecha_arriba.data = False, True
+                            flecha_arriba.update()
+                        elif pos > 10 and not flecha_arriba.visible:
+                            flecha_arriba.visible = True; flecha_arriba.update()
+                    if not flecha_abajo.data:
+                        if pos >= (max_pos - 10) and flecha_abajo.visible:
+                            flecha_abajo.visible, flecha_abajo.data = False, True
+                            flecha_abajo.update()
+                        elif pos < (max_pos - 10) and not flecha_abajo.visible:
+                            flecha_abajo.visible = True; flecha_abajo.update()
+                except: pass
+
+            columna_principal = ft.Column([
+                ft.Row(
+                    controls=[
+                        ft.Column([ft.Text(titulo_txt, size=22, weight="bold"), ft.Text(subtitulo_txt, size=14, color="white54")], expand=True),
+                        ft.IconButton(icon=ft.Icons.CLOSE, on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_torta_full))
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                ),
+                ft.Divider(),
+                ft.Row(
+                    controls=[
+                        ft.Container(content=chart, width=280, height=280),
+                        ft.Container(content=leyenda, width=220, padding=10) # Leyenda al lado o abajo
+                    ],
+                    wrap=True, alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER
+                ),
+                ft.Container(height=20),
+                ft.Text(f"Total Partidos Jugados: {total}", size=12, italic=True, text_align=ft.TextAlign.CENTER),
+                ft.Container(height=40)
+            ], scroll=ft.ScrollMode.AUTO, on_scroll=_on_scroll_grafico, expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
             contenido_final = ft.Container(
-                width=ancho, height=alto,
-                padding=20, bgcolor="#1E1E1E",
-                content=ft.Column([
-                    ft.Row(
-                        controls=[
-                            ft.Column([
-                                ft.Text(titulo_txt, size=22, weight="bold"),
-                                ft.Text(subtitulo_txt, size=14, color="white54")
-                            ]),
-                            ft.IconButton(icon=ft.Icons.CLOSE, on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_torta_full))
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN
-                    ),
-                    ft.Divider(),
-                    ft.Row(
-                        controls=[
-                            ft.Container(content=chart, expand=True, height=300),
-                            ft.Container(content=leyenda, width=250) # Aumenté un poco el ancho del contenedor de leyenda
-                        ],
-                        expand=True
-                    ),
-                    ft.Text(f"Total Partidos Jugados: {total}", size=12, italic=True, text_align=ft.TextAlign.CENTER)
-                ])
+                width=ancho_dialogo, height=alto_dialogo, padding=20, bgcolor="#1E1E1E", border_radius=10,
+                content=ft.Stack([columna_principal, flecha_arriba, flecha_abajo], expand=True)
             )
             
             self.page.close(self.dlg_carga_grafico)
             self.page.close(self.dlg_grafico_torta)
-            
-            self.dlg_grafico_torta_full = ft.AlertDialog(content=contenido_final, modal=True, inset_padding=10)
+            self.dlg_grafico_torta_full = ft.AlertDialog(content=contenido_final, modal=True, content_padding=0, bgcolor=ft.Colors.TRANSPARENT)
             self.page.open(self.dlg_grafico_torta_full)
 
         threading.Thread(target=_tarea, daemon=True).start()
-    
+
     # --- FUNCIONES MAYORES ERRORES ---
 
     def _abrir_selector_mayores_errores(self, e):
