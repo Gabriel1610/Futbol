@@ -3,7 +3,6 @@ import logging
 from datetime import datetime, timedelta
 import sys
 import os # IMPORTANTE: Para encontrar el certificado
-# Importamos Argon2 para el hashing moderno
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 
