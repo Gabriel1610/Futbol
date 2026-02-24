@@ -13,17 +13,23 @@ class TarjetaAcceso(ft.Container):
         self.page_principal = page
         self.on_login_success = on_login_success 
         
-        # --- TAMAÑO IDEAL PARA CELULARES ---
-        self.width = 360   # Entra perfecto en cualquier teléfono
-        self.padding = 20  # Margen más pequeño para dar espacio al contenido
+        self.expand = True  
+        self.alignment = ft.alignment.center
         
-        self.bgcolor = Estilos.COLOR_FONDO_CARD
-        self.border_radius = 20
-        self.border = ft.border.all(2, Estilos.COLOR_BLANCO)
-        self.shadow = ft.BoxShadow(spread_radius=1, blur_radius=20, color="#80000000")
+        # --- LA MAGIA DEL FONDO DE PANTALLA ---
+        self.image_src = "fondo_tarjeta_acceso.jpg" 
+        self.image_fit = ft.ImageFit.COVER  # COVER hace que se expanda sin deformarse
         
         self.db = BaseDeDatos()
+        
+        # --- ESTADO DE RESPONSIVIDAD ---
+        # Memoria inteligente para saber en qué modo estamos
+        self.es_modo_horizontal = None 
+
         self._crear_contenido()
+
+        self.page_principal.on_resize = self._ajustar_dimensiones
+        self._ajustar_dimensiones()
 
     def _crear_contenido(self):
         t_reg = ft.Text("NUEVO USUARIO", size=20, weight=ft.FontWeight.BOLD, color=Estilos.COLOR_BLANCO)
@@ -31,20 +37,14 @@ class TarjetaAcceso(ft.Container):
 
         # --- CAMPOS REGISTRO ---
         self.user_reg = ft.TextField(label="Nombre de usuario", on_change=self._validar_registro, **Estilos.INPUT_CONFIG)
-        
-        # NUEVO CAMPO EMAIL
         self.email_reg = ft.TextField(label="Correo Electrónico", on_change=self._validar_registro, **Estilos.INPUT_CONFIG)
-        
         self.pass_reg = ft.TextField(label="Contraseña", password=True, can_reveal_password=True, disabled=True, on_change=self._validar_registro, **Estilos.INPUT_CONFIG)
         self.pass_rep = ft.TextField(label="Repetir contraseña", password=True, disabled=True, on_change=self._validar_registro, **Estilos.INPUT_CONFIG)
-        
-        sep = ft.Divider(height=40, thickness=2, color="white")
 
         # --- CAMPOS INGRESO ---
         self.user_ing = ft.TextField(label="Nombre de usuario o correo electrónico", on_change=self._validar_ingreso, **Estilos.INPUT_CONFIG)
         self.pass_ing = ft.TextField(label="Contraseña", password=True, can_reveal_password=True, disabled=True, on_change=self._validar_ingreso, **Estilos.INPUT_CONFIG)
 
-        # NUEVO LINK RECUPERAR
         self.btn_olvide = ft.TextButton("¿Olvidaste tu contraseña?", style=ft.ButtonStyle(color="white70"), on_click=self._iniciar_flujo_recuperacion)
 
         # --- BOTONES ---
@@ -58,32 +58,118 @@ class TarjetaAcceso(ft.Container):
         
         self.btn_ing = ft.ElevatedButton(
             text="Ingresar", 
-            width=140, 
+            width=220, # Igualamos los anchos a 220px para que haya simetría horizontal
             disabled=True,
             style=ft.ButtonStyle(bgcolor={ft.ControlState.DISABLED: "grey", ft.ControlState.DEFAULT: Estilos.COLOR_BLANCO}, color={ft.ControlState.DISABLED: "black", ft.ControlState.DEFAULT: Estilos.COLOR_ROJO_CAI}),
             on_click=self._ingresar
         )
 
-        # Se agregó wrap=True para que los botones se adapten al ancho del celular
-        row_btns = ft.Row([self.btn_reg, self.btn_ing], alignment=ft.MainAxisAlignment.CENTER, spacing=20, wrap=True)
-
-        self.content = ft.Column(
+        # =========================================================
+        # LA MAGIA ESTRUCTURAL: Agrupamos en bloques independientes
+        # =========================================================
+        
+        # 1. Bloque Izquierdo (Registro)
+        self.col_registro = ft.Column(
             controls=[
                 ft.Container(content=t_reg, alignment=ft.alignment.center),
-                self.user_reg, 
-                self.email_reg, 
-                self.pass_reg, self.pass_rep,
-                sep,
+                self.user_reg, self.email_reg, self.pass_reg, self.pass_rep,
+                ft.Container(content=self.btn_reg, alignment=ft.alignment.center)
+            ],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            alignment=ft.MainAxisAlignment.SPACE_EVENLY,
+            expand=True
+        )
+
+        # 2. Bloque Derecho/Inferior (Ingreso)
+        self.col_ingreso = ft.Column(
+            controls=[
                 ft.Container(content=t_ing, alignment=ft.alignment.center),
                 self.user_ing, self.pass_ing,
                 ft.Container(content=self.btn_olvide, alignment=ft.alignment.center_right),
-                ft.Container(height=10),
-                row_btns
+                ft.Container(content=self.btn_ing, alignment=ft.alignment.center)
             ],
-            spacing=15,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            scroll=ft.ScrollMode.AUTO  # ¡Activa el desplazamiento táctil!
+            alignment=ft.MainAxisAlignment.SPACE_EVENLY,
+            expand=True
         )
+
+        # 3. Separadores (Uno para cada modo)
+        self.div_horizontal = ft.Divider(height=20, thickness=2, color="white")
+        self.div_vertical = ft.VerticalDivider(width=20, thickness=2, color="white")
+
+        # 4. Moldes contenedores (Arrancan invisibles y vacíos)
+        self.molde_lado_a_lado = ft.Row(controls=[], vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=20, expand=True, visible=False)
+        self.molde_apilado = ft.Column(controls=[], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=15, expand=True, visible=False)
+
+        # --- LA TARJETA ROJA ---
+        self.tarjeta_roja = ft.Container(
+            content=ft.Stack([self.molde_lado_a_lado, self.molde_apilado], expand=True),
+            padding=30,
+            bgcolor=Estilos.COLOR_FONDO_CARD,
+            border_radius=20,
+            border=ft.border.all(2, Estilos.COLOR_BLANCO),
+            shadow=ft.BoxShadow(spread_radius=1, blur_radius=20, color="#80000000")
+        )
+
+        self.content = ft.Column(
+            controls=[self.tarjeta_roja],
+            alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            scroll=ft.ScrollMode.AUTO,
+            expand=True
+        )
+
+    def _ajustar_dimensiones(self, e=None):
+        alto = self.page_principal.height
+        ancho = self.page_principal.width
+        
+        if alto == 0 or ancho == 0:
+            return
+        
+        # El punto de quiebre (breakpoint). Si tiene más de 750px, cabe perfecto lado a lado
+        es_horizontal_ahora = ancho > 750
+        
+        # === 1. REORGANIZACIÓN INTERNA ===
+        if es_horizontal_ahora != self.es_modo_horizontal:
+            
+            if es_horizontal_ahora:
+                self.molde_apilado.controls.clear()
+                
+                # ¡CAMBIO AQUÍ! Ingreso a la izquierda, Registro a la derecha
+                self.molde_lado_a_lado.controls = [self.col_ingreso, self.div_vertical, self.col_registro]
+                
+                self.molde_apilado.visible = False
+                self.molde_lado_a_lado.visible = True
+            else:
+                self.molde_lado_a_lado.controls.clear()
+                
+                # ¡CAMBIO AQUÍ! Ingreso arriba, Registro abajo (modo celular)
+                self.molde_apilado.controls = [self.col_ingreso, self.div_horizontal, self.col_registro]
+                
+                self.molde_lado_a_lado.visible = False
+                self.molde_apilado.visible = True
+
+            # Actualizamos la memoria
+            self.es_modo_horizontal = es_horizontal_ahora
+
+        # === 2. REDIMENSIÓN DE LA TARJETA ROJA ===
+        if es_horizontal_ahora:
+            # MODO PC / WEB / CELULAR ACOSTADO 
+            ancho_deseado = ancho * 0.85
+            self.tarjeta_roja.width = ancho_deseado if ancho_deseado < 950 else 950
+            
+            alto_deseado = alto * 0.80
+            self.tarjeta_roja.height = 450 if alto_deseado < 450 else (550 if alto_deseado > 550 else alto_deseado)
+            
+        else:
+            # MODO CELULAR PARADO 
+            self.tarjeta_roja.width = 450 if ancho > 450 else (ancho * 0.95)
+            
+            alto_deseado = alto * 0.90
+            self.tarjeta_roja.height = 750 if alto_deseado < 750 else alto_deseado
+
+        if self.page:
+            self.tarjeta_roja.update()
 
     # --- VALIDACIONES (Sin cambios) ---
     def _validar_registro(self, e):

@@ -5375,12 +5375,12 @@ if __name__ == "__main__":
     def main(page: ft.Page):
         app = SistemaIndependiente(page)
     
-    # Buscamos si existe la variable "PORT" (Render la crea automáticamente)
+    # Buscamos si existe la variable "PORT" (Render la usa para la nube)
     puerto_nube = os.getenv("PORT")
-
+    
     if puerto_nube:
-        # MODO NUBE (Render): Usa el puerto dinámico y escucha en 0.0.0.0
-        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=int(puerto_nube), host="0.0.0.0")
+        # MODO NUBE (Render): Se ejecuta en el puerto que asigne el servidor
+        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=int(puerto_nube), host="0.0.0.0", assets_dir="assets")
     else:
-        # MODO LOCAL (Tu PC): Usa el puerto 8000 y se abre normal en localhost
-        ft.app(target=main)#, view=ft.AppView.WEB_BROWSER, port=8000)
+        # MODO PRUEBA WEB LOCAL: Usamos el puerto 8555 para evadir el "fantasma" de Chrome
+        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir="assets")
