@@ -289,15 +289,14 @@ El Sistema.
     def _configurar_ventana(self):
         self.page.title = "Sistema Club Atlético Independiente"
         
-        carpeta_actual = os.path.dirname(os.path.abspath(__file__))
-        ruta_icono = os.path.join(carpeta_actual, NOMBRE_ICONO)
-        self.page.window.icon = ruta_icono
+        # Protegemos los comandos de ventana para que no rompan la web
+        if not self.page.web:
+            self.page.window.icon = NOMBRE_ICONO
+            self.page.window.maximized = True
         
         self.page.theme_mode = ft.ThemeMode.DARK 
         self.page.bgcolor = "#121212" 
         self.page.padding = 0
-        
-        self.page.window.maximized = True
         self.page.update()
         
         self.page.vertical_alignment = ft.MainAxisAlignment.CENTER
@@ -313,7 +312,8 @@ El Sistema.
             icon="close",
             icon_color="white",
             bgcolor="#333333", 
-            on_click=lambda e: self.page.window.close()
+            on_click=lambda e: self.page.window.close() if not self.page.web else None,
+            visible=not self.page.web  # Desaparece inteligentemente en navegadores
         )
 
         layout = ft.Stack(
@@ -596,11 +596,9 @@ El Sistema.
         self.filtro_sin_pronosticar = False   # True o False
 
         # --- SELECTORES ---
-        carpeta_actual = os.path.dirname(os.path.abspath(__file__))
-        ruta_img = os.path.join(carpeta_actual, NOMBRE_ICONO)
-
         self.page.appbar = ft.AppBar(
-            leading=ft.Container(content=ft.Image(src=ruta_img, fit=ft.ImageFit.CONTAIN), padding=5),
+            # Flet buscará la imagen directamente en la carpeta assets
+            leading=ft.Container(content=ft.Image(src=NOMBRE_ICONO, fit=ft.ImageFit.CONTAIN), padding=5),
             leading_width=50,
             title=ft.Text(f"Bienvenido, {usuario}", weight=ft.FontWeight.BOLD, color=Estilos.COLOR_ROJO_CAI),
             center_title=False, bgcolor="white", 
