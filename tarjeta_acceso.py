@@ -36,14 +36,14 @@ class TarjetaAcceso(ft.Container):
         t_ing = ft.Text("YA TENGO CUENTA", size=20, weight=ft.FontWeight.BOLD, color=Estilos.COLOR_BLANCO)
 
         # --- CAMPOS REGISTRO ---
-        self.user_reg = ft.TextField(label="Nombre de usuario", on_change=self._validar_registro, **Estilos.INPUT_CONFIG)
-        self.email_reg = ft.TextField(label="Correo Electrónico", on_change=self._validar_registro, **Estilos.INPUT_CONFIG)
-        self.pass_reg = ft.TextField(label="Contraseña", password=True, can_reveal_password=True, disabled=True, on_change=self._validar_registro, **Estilos.INPUT_CONFIG)
-        self.pass_rep = ft.TextField(label="Repetir contraseña", password=True, disabled=True, on_change=self._validar_registro, **Estilos.INPUT_CONFIG)
+        self.user_reg = ft.TextField(label="Nombre de usuario", on_change=self._validar_registro, on_submit=lambda e: self.email_reg.focus(), **Estilos.INPUT_CONFIG)
+        self.email_reg = ft.TextField(label="Correo Electrónico", on_change=self._validar_registro, on_submit=lambda e: self.pass_reg.focus(), **Estilos.INPUT_CONFIG)
+        self.pass_reg = ft.TextField(label="Contraseña", password=True, can_reveal_password=True, on_change=self._validar_registro, on_submit=lambda e: self.pass_rep.focus(), **Estilos.INPUT_CONFIG)
+        self.pass_rep = ft.TextField(label="Repetir contraseña", password=True, on_change=self._validar_registro, on_submit=self._iniciar_proceso_registro, **Estilos.INPUT_CONFIG)
 
         # --- CAMPOS INGRESO ---
-        self.user_ing = ft.TextField(label="Nombre de usuario o correo electrónico", on_change=self._validar_ingreso, **Estilos.INPUT_CONFIG)
-        self.pass_ing = ft.TextField(label="Contraseña", password=True, can_reveal_password=True, disabled=True, on_change=self._validar_ingreso, **Estilos.INPUT_CONFIG)
+        self.user_ing = ft.TextField(label="Nombre de usuario o correo electrónico", on_change=self._validar_ingreso, on_submit=lambda e: self.pass_ing.focus(), **Estilos.INPUT_CONFIG)
+        self.pass_ing = ft.TextField(label="Contraseña", password=True, can_reveal_password=True, on_change=self._validar_ingreso, on_submit=self._ingresar, **Estilos.INPUT_CONFIG)
 
         self.btn_olvide = ft.TextButton("¿Olvidaste tu contraseña?", style=ft.ButtonStyle(color="white70"), on_click=self._iniciar_flujo_recuperacion)
 
@@ -171,35 +171,21 @@ class TarjetaAcceso(ft.Container):
         if self.page:
             self.tarjeta_roja.update()
 
-    # --- VALIDACIONES (Sin cambios) ---
+    # --- VALIDACIONES LIGERAS ---
     def _validar_registro(self, e):
-        # Validar Usuario
-        if not self.user_reg.value:
-            self.email_reg.disabled = True
-            self.email_reg.value = ""
-            self._desactivar_todo_registro()
-        else:
-            self.email_reg.disabled = False
-
-        # Validar Email (Simple check de contenido)
-        if not self.email_reg.value or self.email_reg.disabled:
-            self.pass_reg.disabled = True
-            self.pass_reg.value = ""
-        else:
-            self.pass_reg.disabled = False
-            
-        # Validar Pass 1
-        if not self.pass_reg.value or self.pass_reg.disabled:
-            self.pass_rep.disabled = True
-            self.pass_rep.value = ""
-        else:
-            self.pass_rep.disabled = False
-
-        # Validar Pass 2 y Botón Final
-        if self.pass_rep.value and not self.pass_rep.disabled:
+        # Solo habilitamos el botón si todos los campos tienen texto
+        if self.user_reg.value and self.email_reg.value and self.pass_reg.value and self.pass_rep.value:
             self.btn_reg.disabled = False
         else:
             self.btn_reg.disabled = True
+        self.update()
+
+    def _validar_ingreso(self, e):
+        # Solo habilitamos el botón si ambos campos de ingreso tienen texto
+        if self.user_ing.value and self.pass_ing.value:
+            self.btn_ing.disabled = False
+        else:
+            self.btn_ing.disabled = True
         self.update()
 
     def _desactivar_todo_registro(self):
@@ -501,20 +487,6 @@ class TarjetaAcceso(ft.Container):
             actions=[ft.ElevatedButton("Cambiar Contraseña", on_click=_cambiar)]
         )
         self.page_principal.open(dlg_pass)
-
-    def _validar_ingreso(self, e):
-        if not self.user_ing.value:
-            self.pass_ing.value = ""
-            self.pass_ing.disabled = True
-            self.btn_ing.disabled = True
-        else:
-            self.pass_ing.disabled = False
-
-        if self.pass_ing.value and not self.pass_ing.disabled:
-            self.btn_ing.disabled = False
-        else:
-            self.btn_ing.disabled = True
-        self.update()
 
     # --- LOGICA CON VENTANA DE CARGA ---
     def _registrar(self, e):

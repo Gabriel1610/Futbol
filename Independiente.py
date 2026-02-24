@@ -5375,12 +5375,16 @@ if __name__ == "__main__":
     def main(page: ft.Page):
         app = SistemaIndependiente(page)
     
-    # Buscamos si existe la variable "PORT" (Render la usa para la nube)
+    # Buscamos si existe la variable "PORT"
     puerto_nube = os.getenv("PORT")
     
+    # --- RUTA ABSOLUTA SEGURA PARA ASSETS ---
+    directorio_actual = os.path.dirname(os.path.abspath(__file__))
+    ruta_assets = os.path.join(directorio_actual, "assets")
+    
     if puerto_nube:
-        # MODO NUBE (Render): Se ejecuta en el puerto que asigne el servidor
-        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=int(puerto_nube), host="0.0.0.0", assets_dir="assets")
+        # MODO NUBE (Render) - Usamos ft.app para Flet 0.25.2
+        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=int(puerto_nube), host="0.0.0.0", assets_dir=ruta_assets)
     else:
-        # MODO PRUEBA WEB LOCAL: Usamos el puerto 8555 para evadir el "fantasma" de Chrome
-        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir="assets")
+        # MODO LOCAL (Tu PC)
+        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8000, assets_dir=ruta_assets)
