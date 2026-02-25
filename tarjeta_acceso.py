@@ -45,7 +45,7 @@ class TarjetaAcceso(ft.Container):
                 elif self.foco_actual == "email_reg": self.user_reg.focus()
             else:
                 # --- TAB HACIA ADELANTE ---
-                if self.foco_actual == "user_ing": self.pass_ing.focus()
+                if self.foco_actual == "user_ing" and self.pass_ing.page: self.pass_ing.focus()
                 elif self.foco_actual == "pass_ing": self.btn_ing.focus() # Solo lo selecciona, no ingresa
                 elif self.foco_actual == "user_reg": self.email_reg.focus()
                 elif self.foco_actual == "email_reg": self.pass_reg.focus()
