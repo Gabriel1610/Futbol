@@ -2387,27 +2387,72 @@ El Sistema.
                 heading_row_color="black",
                 border=ft.border.all(1, "white10"),
                 column_spacing=10,
-                # --- ALTURAS ESTANDARIZADAS ---
                 heading_row_height=60,
                 data_row_max_height=50,
                 data_row_min_height=50
             )
+
+            # ==========================================
+            # MAGIA: FLECHAS HORIZONTALES (CON MEMORIA)
+            # ==========================================
+            es_celular = self.page.width < 600 if self.page.width else False
             
-            columna_content.height = 400
+            flecha_izq = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT, color="amber", size=35), left=0, top=100, visible=False, ignore_interactions=True, data=False)
+            flecha_der = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT, color="amber", size=35), right=0, top=100, visible=es_celular, ignore_interactions=True, data=False)
+
+            def _on_scroll_h(e):
+                try:
+                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
+                    if max_pos <= 0:
+                        if not flecha_izq.data or not flecha_der.data:
+                            flecha_izq.visible, flecha_izq.data = False, True
+                            flecha_der.visible, flecha_der.data = False, True
+                            flecha_izq.update(); flecha_der.update()
+                        return
+                    if not flecha_izq.data:
+                        if pos <= 10 and flecha_izq.visible:
+                            flecha_izq.visible, flecha_izq.data = False, True
+                            flecha_izq.update()
+                        elif pos > 10 and not flecha_izq.visible:
+                            flecha_izq.visible = True; flecha_izq.update()
+                    if not flecha_der.data:
+                        if pos >= (max_pos - 10) and flecha_der.visible:
+                            flecha_der.visible, flecha_der.data = False, True
+                            flecha_der.update()
+                        elif pos < (max_pos - 10) and not flecha_der.visible:
+                            flecha_der.visible = True; flecha_der.update()
+                except: pass
+
+            contenedor_tabla_con_flechas = ft.Stack(
+                controls=[
+                    ft.Row(
+                        scroll=ft.ScrollMode.AUTO,
+                        on_scroll=_on_scroll_h,
+                        controls=[
+                            ft.Container(
+                                height=270,
+                                content=ft.Column(
+                                    controls=[tabla],
+                                    scroll=ft.ScrollMode.ALWAYS
+                                )
+                            )
+                        ]
+                    ),
+                    flecha_izq,
+                    flecha_der
+                ],
+                height=270  # <--- LÍMITE DE CAPA
+            )
+            
+            # --- MÁS ALTO Y CON SCROLL PARA EL CELULAR ---
+            columna_content.height = 460
             columna_content.width = 700
+            columna_content.scroll = ft.ScrollMode.AUTO
             
             columna_content.controls = [
                 ft.Text(titulo, size=18, weight="bold", color="white"),
                 ft.Container(height=10),
-                ft.Container(
-                    # --- ALTURA VISIBLE: 270px (Header 60 + 4 filas de 50 + margen) ---
-                    height=270,
-                    content=ft.Column(
-                        controls=[tabla],
-                        height=270,
-                        scroll=ft.ScrollMode.AUTO
-                    )
-                ),
+                contenedor_tabla_con_flechas,
                 ft.Container(height=10),
                 ft.Row([ft.ElevatedButton("Cerrar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_mejor_predictor))], alignment=ft.MainAxisAlignment.END)
             ]
@@ -2521,26 +2566,72 @@ El Sistema.
                 heading_row_color="black",
                 border=ft.border.all(1, "white10"),
                 column_spacing=10,
-                # --- ALTURAS ESTANDARIZADAS ---
                 heading_row_height=60,
                 data_row_max_height=50,
                 data_row_min_height=50
             )
+
+            # ==========================================
+            # MAGIA: FLECHAS HORIZONTALES (CON MEMORIA)
+            # ==========================================
+            es_celular = self.page.width < 600 if self.page.width else False
             
-            columna_content.height = 400
+            flecha_izq = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT, color="amber", size=35), left=0, top=100, visible=False, ignore_interactions=True, data=False)
+            flecha_der = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT, color="amber", size=35), right=0, top=100, visible=es_celular, ignore_interactions=True, data=False)
+
+            def _on_scroll_h(e):
+                try:
+                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
+                    if max_pos <= 0:
+                        if not flecha_izq.data or not flecha_der.data:
+                            flecha_izq.visible, flecha_izq.data = False, True
+                            flecha_der.visible, flecha_der.data = False, True
+                            flecha_izq.update(); flecha_der.update()
+                        return
+                    if not flecha_izq.data:
+                        if pos <= 10 and flecha_izq.visible:
+                            flecha_izq.visible, flecha_izq.data = False, True
+                            flecha_izq.update()
+                        elif pos > 10 and not flecha_izq.visible:
+                            flecha_izq.visible = True; flecha_izq.update()
+                    if not flecha_der.data:
+                        if pos >= (max_pos - 10) and flecha_der.visible:
+                            flecha_der.visible, flecha_der.data = False, True
+                            flecha_der.update()
+                        elif pos < (max_pos - 10) and not flecha_der.visible:
+                            flecha_der.visible = True; flecha_der.update()
+                except: pass
+
+            contenedor_tabla_con_flechas = ft.Stack(
+                controls=[
+                    ft.Row(
+                        scroll=ft.ScrollMode.AUTO,
+                        on_scroll=_on_scroll_h,
+                        controls=[
+                            ft.Container(
+                                height=270,
+                                content=ft.Column(
+                                    controls=[tabla],
+                                    scroll=ft.ScrollMode.ALWAYS
+                                )
+                            )
+                        ]
+                    ),
+                    flecha_izq,
+                    flecha_der
+                ],
+                height=270  # <--- LÍMITE DE CAPA
+            )
+            
+            # --- MÁS ALTO Y CON SCROLL PARA EL CELULAR ---
+            columna_content.height = 460
             columna_content.width = 500
+            columna_content.scroll = ft.ScrollMode.AUTO
             
             columna_content.controls = [
                 ft.Text(titulo, size=18, weight="bold", color="white"),
                 ft.Container(height=10),
-                ft.Container(
-                    # --- ALTURA VISIBLE: 270px (Header 60 + 4 filas de 50 + margen) ---
-                    height=270,
-                    content=ft.Column(
-                        controls=[tabla],
-                        scroll=ft.ScrollMode.AUTO
-                    )
-                ),
+                contenedor_tabla_con_flechas,
                 ft.Container(height=10),
                 ft.Row([ft.ElevatedButton("Cerrar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_racha))], alignment=ft.MainAxisAlignment.END)
             ]
@@ -3167,13 +3258,10 @@ El Sistema.
         threading.Thread(target=_cargar, daemon=True).start()
 
     def _abrir_modal_cambios_pronostico(self, e):
-        # Copia todo el inicio de la función original, solo cambiamos la sub-función _cargar:
-
         """ 
         Muestra la tabla de 'Estabilidad de Pronósticos'. 
         Clasificación basada en la cantidad promedio de pronósticos por partido (solo terminados).
         """
-        # --- Título y Loading (Igual que antes) ---
         titulo = "Estadísticas de Estabilidad"
         if self.filtro_ranking_nombre: 
              titulo = f"Estabilidad ({self.filtro_ranking_nombre})"
@@ -3203,8 +3291,6 @@ El Sistema.
             time.sleep(0.5)
             bd = BaseDeDatos()
             
-            # 1. Llamada a la NUEVA función específica
-            # Retorna [(Username, Promedio), ...]
             datos_estabilidad = bd.obtener_ranking_estabilidad(self.filtro_ranking_edicion_id, self.filtro_ranking_anio)
             
             if not datos_estabilidad:
@@ -3224,11 +3310,7 @@ El Sistema.
                 self.dlg_cambios.update()
                 return
 
-            # 2. PROCESAR Y ORDENAR
             filas = []
-            
-            # Ordenamos por estabilidad (menor promedio es mejor/más firme)
-            # x[1] es el promedio. Si es None, lo tratamos como 999
             datos_estabilidad.sort(key=lambda x: float(x[1]) if x[1] else 999)
 
             for row in datos_estabilidad:
@@ -3240,8 +3322,6 @@ El Sistema.
                 val_cambios = float(promedio_cambios)
                 txt_cambios = f"{val_cambios:.2f}".replace('.', ',')
                 
-                # --- LÓGICA DE CLASIFICACIÓN ---
-                # 1.0 = Nunca cambia (1 pronóstico por partido)
                 if val_cambios <= 1.10:
                     estilo = "🧱 Firme"
                     color_estilo = "brown"
@@ -3275,20 +3355,68 @@ El Sistema.
                 data_row_max_height=50,
                 data_row_min_height=50
             )
+
+            # ==========================================
+            # MAGIA: FLECHAS HORIZONTALES (CON MEMORIA)
+            # ==========================================
+            es_celular = self.page.width < 600 if self.page.width else False
             
-            columna_content.height = 400
+            flecha_izq = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT, color="amber", size=35), left=0, top=100, visible=False, ignore_interactions=True, data=False)
+            flecha_der = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT, color="amber", size=35), right=0, top=100, visible=es_celular, ignore_interactions=True, data=False)
+
+            def _on_scroll_h(e):
+                try:
+                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
+                    if max_pos <= 0:
+                        if not flecha_izq.data or not flecha_der.data:
+                            flecha_izq.visible, flecha_izq.data = False, True
+                            flecha_der.visible, flecha_der.data = False, True
+                            flecha_izq.update(); flecha_der.update()
+                        return
+                    if not flecha_izq.data:
+                        if pos <= 10 and flecha_izq.visible:
+                            flecha_izq.visible, flecha_izq.data = False, True
+                            flecha_izq.update()
+                        elif pos > 10 and not flecha_izq.visible:
+                            flecha_izq.visible = True; flecha_izq.update()
+                    if not flecha_der.data:
+                        if pos >= (max_pos - 10) and flecha_der.visible:
+                            flecha_der.visible, flecha_der.data = False, True
+                            flecha_der.update()
+                        elif pos < (max_pos - 10) and not flecha_der.visible:
+                            flecha_der.visible = True; flecha_der.update()
+                except: pass
+
+            contenedor_tabla_con_flechas = ft.Stack(
+                controls=[
+                    ft.Row(
+                        scroll=ft.ScrollMode.AUTO,
+                        on_scroll=_on_scroll_h,
+                        controls=[
+                            ft.Container(
+                                height=270,
+                                content=ft.Column(
+                                    controls=[tabla],
+                                    scroll=ft.ScrollMode.ALWAYS
+                                )
+                            )
+                        ]
+                    ),
+                    flecha_izq,
+                    flecha_der
+                ],
+                height=270  # <--- LÍMITE DE CAPA
+            )
+            
+            # --- MÁS ALTO Y CON SCROLL PARA EL CELULAR ---
+            columna_content.height = 460
             columna_content.width = 600
+            columna_content.scroll = ft.ScrollMode.AUTO
             
             columna_content.controls = [
                 ft.Text(titulo, size=18, weight="bold", color="white"),
                 ft.Container(height=10),
-                ft.Container(
-                    height=270, 
-                    content=ft.Column(
-                        controls=[tabla],
-                        scroll=ft.ScrollMode.AUTO
-                    )
-                ),
+                contenedor_tabla_con_flechas,
                 ft.Container(height=10),
                 ft.Row([ft.ElevatedButton("Cerrar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_cambios))], alignment=ft.MainAxisAlignment.END)
             ]
@@ -3861,26 +3989,72 @@ El Sistema.
                 heading_row_color="black",
                 border=ft.border.all(1, "white10"),
                 column_spacing=10,
-                # --- ALTURAS ESTANDARIZADAS ---
                 heading_row_height=60,
                 data_row_max_height=50,
                 data_row_min_height=50
             )
+
+            # ==========================================
+            # MAGIA: FLECHAS HORIZONTALES (CON MEMORIA)
+            # ==========================================
+            es_celular = self.page.width < 600 if self.page.width else False
             
-            columna_content.height = 400
+            flecha_izq = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT, color="amber", size=35), left=0, top=100, visible=False, ignore_interactions=True, data=False)
+            flecha_der = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT, color="amber", size=35), right=0, top=100, visible=es_celular, ignore_interactions=True, data=False)
+
+            def _on_scroll_h(e):
+                try:
+                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
+                    if max_pos <= 0:
+                        if not flecha_izq.data or not flecha_der.data:
+                            flecha_izq.visible, flecha_izq.data = False, True
+                            flecha_der.visible, flecha_der.data = False, True
+                            flecha_izq.update(); flecha_der.update()
+                        return
+                    if not flecha_izq.data:
+                        if pos <= 10 and flecha_izq.visible:
+                            flecha_izq.visible, flecha_izq.data = False, True
+                            flecha_izq.update()
+                        elif pos > 10 and not flecha_izq.visible:
+                            flecha_izq.visible = True; flecha_izq.update()
+                    if not flecha_der.data:
+                        if pos >= (max_pos - 10) and flecha_der.visible:
+                            flecha_der.visible, flecha_der.data = False, True
+                            flecha_der.update()
+                        elif pos < (max_pos - 10) and not flecha_der.visible:
+                            flecha_der.visible = True; flecha_der.update()
+                except: pass
+
+            contenedor_tabla_con_flechas = ft.Stack(
+                controls=[
+                    ft.Row(
+                        scroll=ft.ScrollMode.AUTO,
+                        on_scroll=_on_scroll_h,
+                        controls=[
+                            ft.Container(
+                                height=270,
+                                content=ft.Column(
+                                    controls=[tabla],
+                                    scroll=ft.ScrollMode.ALWAYS
+                                )
+                            )
+                        ]
+                    ),
+                    flecha_izq,
+                    flecha_der
+                ],
+                height=270  # <--- LÍMITE DE CAPA
+            )
+            
+            # --- MÁS ALTO Y CON SCROLL PARA EL CELULAR ---
+            columna_content.height = 460
             columna_content.width = 500
+            columna_content.scroll = ft.ScrollMode.AUTO
             
             columna_content.controls = [
                 ft.Text(titulo, size=18, weight="bold", color="white"),
                 ft.Container(height=10),
-                ft.Container(
-                    # --- ALTURA VISIBLE: 270px (Header 60 + 4 filas de 50 + margen) ---
-                    height=270,
-                    content=ft.Column(
-                        controls=[tabla],
-                        scroll=ft.ScrollMode.AUTO
-                    )
-                ),
+                contenedor_tabla_con_flechas,
                 ft.Container(height=10),
                 ft.Row([ft.ElevatedButton("Cerrar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_racha_record))], alignment=ft.MainAxisAlignment.END)
             ]
