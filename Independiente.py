@@ -1759,9 +1759,9 @@ El Sistema.
                 ),
                 tooltip_bgcolor=ft.Colors.with_opacity(0.9, "#1E1E1E"),
                 min_y=0,
-                max_y=altura_eje,
-                min_x=0,
-                max_x=cant_partidos, 
+                max_y=altura_eje + 5,          # +5 suma tres puntos invisibles de altura para que el texto respire
+                min_x=-0.5,                    # -0.5 aleja el punto de "Inicio" de la pared izquierda
+                max_x=cant_partidos + 0.5,
                 horizontal_grid_lines=ft.ChartGridLines(interval=intervalo_y, color=ft.Colors.WHITE10, width=1),
                 vertical_grid_lines=ft.ChartGridLines(interval=1, color=ft.Colors.WHITE10, width=1),
             )
@@ -1776,10 +1776,19 @@ El Sistema.
                     ], spacing=5)
                 )
 
-            # --- ALTURA DINÁMICA DEL GRÁFICO ---
+            # --- ALTURA Y ANCHO DINÁMICOS (50% MÁS EN CELULARES) ---
                 es_pc = (self.page.width >= 750) if self.page.width else True
-                alto_grafico = 450 if es_pc else 350   
-                alto_requerido_base = 580 if es_pc else 480 
+                
+                # ALTO: PC se mantiene en 450. Celular pasa de 350 a 525 (+50%)
+                alto_grafico = 450 if es_pc else 525          
+                alto_requerido_base = 580 if es_pc else 600
+                
+                # ANCHO: Separación de cada partido. PC=60px. Celular pasa de 60px a 90px (+50%)
+                ancho_punto = 60 if es_pc else 90
+                
+                # --- EL SECRETO DEL ESPACIADO ---
+                ancho_grafico_dinamico = max((ancho - 100), cant_partidos * ancho_punto)
+                necesita_scroll_h = (cant_partidos * ancho_punto) > (ancho - 100)
 
             # ==========================================
             # MAGIA 1: FLECHAS VERTICALES (LÓGICA EXACTA DINÁMICA)
@@ -1847,32 +1856,36 @@ El Sistema.
                         content=chart, 
                         width=ancho_grafico_dinamico, 
                         height=alto_grafico, 
-                        padding=ft.padding.only(top=20, right=20)
+                        padding=ft.padding.only(top=40, right=60, bottom=20, left=50)
                     )
                 ],
                 scroll=ft.ScrollMode.ALWAYS
             )
 
             # --- ENSAMBLE GENERAL ---
+            def _cerrar_grafico_lp(e):
+                self.page.close(self.dlg_grafico_lp_full)
+
             columna_principal = ft.Column([
                 ft.Row(
                     controls=[
                         ft.Container(content=ft.Text(f"Evolución Puntos: {self.temp_camp_graf_lp} {self.temp_anio_graf_lp}", size=20, weight="bold"), expand=True),
-                        ft.IconButton(icon=ft.Icons.CLOSE, on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_lp_full))
+                        ft.IconButton(icon=ft.Icons.CLOSE, on_click=_cerrar_grafico_lp) # <--- BOTÓN CORREGIDO
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN
                 ),
-                ft.Text("Acumulación de puntos fecha a fecha", size=12, color="white54"),
+                ft.Text("Historial partido a partido...", size=12, color="white54"),
                 ft.Divider(),
                 
-                # Inyectamos la fila directamente (sin Stacks ni flechas)
+                # El gráfico ahora va directamente aquí, sin el Container de 30px
                 fila_grafico,
                 
+                ft.Container(height=20),
                 ft.Divider(),
                 ft.Row(items_leyenda, alignment="center", wrap=True),
                 ft.Container(height=30)
-            ], scroll=ft.ScrollMode.ALWAYS, expand=True) # <--- LA MAGIA NATIVA DE FLET
-
+            ], scroll=ft.ScrollMode.ALWAYS, expand=True)
+            
             contenido_final = ft.Container(
                 width=ancho, height=alto,
                 padding=20, bgcolor="#1E1E1E", border_radius=10,
@@ -4378,7 +4391,7 @@ El Sistema.
                     if puestos:
                         peor_puesto_registrado = max(peor_puesto_registrado, max(puestos))
                 
-                altura_eje = peor_puesto_registrado + 1
+                altura_eje = peor_puesto_registrado 
                 
                 colores = [
                     ft.Colors.RED, ft.Colors.WHITE, ft.Colors.CYAN, ft.Colors.AMBER, 
@@ -4392,26 +4405,23 @@ El Sistema.
                     puntos_grafico = []
                     
                     for idx_partido, puesto in enumerate(puestos):
-                        valor_y = altura_eje - puesto
+                        # Puesto 1 siempre quedará arriba, Puesto 4 abajo
+                        valor_y = altura_eje - puesto + 1 
                         
                         puntos_grafico.append(
                             ft.LineChartDataPoint(
                                 x=idx_partido + 1, 
                                 y=valor_y,
-                                # ---> CAMBIO AQUÍ: Se usa la palabra "Puesto" en lugar de "º"
-                                tooltip=f"{user}"
+                                tooltip=f"{user}: Puesto {puesto}" # (O el símbolo que le hayas dejado)
                             )
                         )
                     
                     if puntos_grafico:
                         data_series.append(
                             ft.LineChartData(
-                                data_points=puntos_grafico,
-                                stroke_width=3,
-                                color=colores[i % len(colores)],
-                                curved=False, 
-                                stroke_cap_round=True,
-                                point=True
+                                data_points=puntos_grafico, stroke_width=3,
+                                color=colores[i % len(colores)], curved=False, 
+                                stroke_cap_round=True, point=True
                             )
                         )
 
@@ -4422,11 +4432,11 @@ El Sistema.
                     rango_puestos = range(1, peor_puesto_registrado + 1, 2)
 
                 for p in rango_puestos:
-                    val_y = altura_eje - p
+                    val_y = altura_eje - p + 1
                     labels_y.append(
                         ft.ChartAxisLabel(
                             value=val_y, 
-                            label=ft.Text(str(p), size=12, weight="bold" if p==1 else "normal") # Se le sacó el símbolo también para evitar fallos
+                            label=ft.Text(str(p), size=12, weight="bold" if p==1 else "normal")
                         )
                     )
 
@@ -4437,9 +4447,20 @@ El Sistema.
                 ancho = self.page.width - 50 if self.page.width else 900
                 alto = self.page.height - 50 if self.page.height else 600
 
+                # Detectamos si es PC o Celular AQUÍ (antes de armar el gráfico)
+                es_pc = (self.page.width >= 750) if self.page.width else True
+
+                # --- ALTURA DINÁMICA (AJUSTADA A LA CANTIDAD DE PUESTOS) ---
+                px_fila = 60 if es_pc else 80
+                alto_calculado = (peor_puesto_registrado + 2) * px_fila
+                
+                alto_grafico = max(300, alto_calculado)
+                alto_requerido_base = alto_grafico + 50
+                ancho_punto = 60 if es_pc else 90
+                
                 # --- EL SECRETO DEL ESPACIADO ---
-                ancho_grafico_dinamico = max((ancho - 100), cant_partidos * 60)
-                necesita_scroll_h = (cant_partidos * 60) > (ancho - 100) # Verificador de espacio
+                ancho_grafico_dinamico = max((ancho - 100), cant_partidos * ancho_punto)
+                necesita_scroll_h = (cant_partidos * ancho_punto) > (ancho - 100)
 
                 # 5. Configurar Gráfico
                 chart = ft.LineChart(
@@ -4457,9 +4478,9 @@ El Sistema.
                     ),
                     tooltip_bgcolor=ft.Colors.with_opacity(0.9, "#1E1E1E"),
                     min_y=0,
-                    max_y=altura_eje + 0.5, 
-                    min_x=1,
-                    max_x=cant_partidos, 
+                    max_y=altura_eje + (1.2 if es_pc else 0.5), # <--- Eje Y más corto en celulares
+                    min_x=0.5,
+                    max_x=cant_partidos + 0.5,
                     horizontal_grid_lines=ft.ChartGridLines(interval=1, color=ft.Colors.WHITE10, width=1),
                     vertical_grid_lines=ft.ChartGridLines(interval=1, color=ft.Colors.WHITE10, width=1),
                 )
@@ -4474,10 +4495,25 @@ El Sistema.
                         ], spacing=5)
                     )
 
-                # --- ALTURA DINÁMICA DEL GRÁFICO ---
+                # --- ALTURA DINÁMICA (AJUSTADA A LA CANTIDAD DE PUESTOS) ---
                 es_pc = (self.page.width >= 750) if self.page.width else True
-                alto_grafico = 450 if es_pc else 350          
-                alto_requerido_base = 580 if es_pc else 480
+                
+                # Le damos 60px de altura a cada puesto en PC, y 80px en celular
+                px_fila = 60 if es_pc else 80
+                alto_calculado = (peor_puesto_registrado + 2) * px_fila
+                
+                alto_grafico = max(300, alto_calculado) # Que nunca mida menos de 300px
+                alto_requerido_base = alto_grafico + 50
+                
+                ancho_punto = 60 if es_pc else 90
+                
+                # --- EL SECRETO DEL ESPACIADO ---
+                ancho_grafico_dinamico = max((ancho - 100), cant_partidos * ancho_punto)
+                necesita_scroll_h = (cant_partidos * ancho_punto) > (ancho - 100)
+                
+                # --- EL SECRETO DEL ESPACIADO ---
+                ancho_grafico_dinamico = max((ancho - 100), cant_partidos * ancho_punto)
+                necesita_scroll_h = (cant_partidos * ancho_punto) > (ancho - 100)
 
                 # ==========================================
                 # MAGIA 1: FLECHAS VERTICALES (LÓGICA EXACTA DINÁMICA)
@@ -4553,7 +4589,7 @@ El Sistema.
                             content=chart, 
                             width=ancho_grafico_dinamico, 
                             height=alto_grafico, 
-                            padding=ft.padding.only(top=20, right=20)
+                            padding=ft.padding.only(top=80 if es_pc else 120, right=60, bottom=20, left=50)
                         )
                     ],
                     scroll=ft.ScrollMode.ALWAYS
@@ -4563,16 +4599,18 @@ El Sistema.
                 columna_principal = ft.Column([
                     ft.Row(
                         controls=[
-                            ft.Container(content=ft.Text(f"Evolución: {self.temp_camp_graf} {self.temp_anio_graf}", size=20, weight="bold"), expand=True),
-                            ft.IconButton(icon=ft.Icons.CLOSE, on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_full))
+                            ft.Container(content=ft.Text(f"Evolución...", size=20, weight="bold"), expand=True),
+                            ft.IconButton(icon=ft.Icons.CLOSE, on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_full)) 
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN
                     ),
-                    ft.Text("Historial partido a partido (1º Puntos > 2º PJ > 3º Error > 4º Anticipación)", size=12, color="white54"),
+                    ft.Text("Historial partido a partido...", size=12, color="white54"),
                     ft.Divider(),
                     
+                    # El gráfico ahora va directamente aquí, sin el Container de 30px
                     fila_grafico,
                     
+                    ft.Container(height=20),
                     ft.Divider(),
                     ft.Row(items_leyenda, alignment="center", wrap=True),
                     ft.Container(height=30)
