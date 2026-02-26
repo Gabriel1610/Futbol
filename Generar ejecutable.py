@@ -4,21 +4,21 @@ import shutil
 import time
 import stat
 import datetime
-import sys  # <--- [NUEVO] Necesario para encontrar el Python del venv
+import sys
 
 # --- CONFIGURACIÓN DEL PROYECTO ---
-NOMBRE_ARCHIVO = 'Independiente'  # Nombre del script principal (sin .py)
-NOMBRE_ICONO = 'Escudo.ico'       # El ícono de la ventana
-ARCHIVO_SSL = 'isrgrootx1.pem'    # El certificado necesario para la BD
+NOMBRE_ARCHIVO = 'Independiente'  
+NOMBRE_ICONO = 'Escudo.ico'       
+ARCHIVO_SSL = 'isrgrootx1.pem'    
 
-# Detectamos la ruta donde está este script
 DIRECTORIO_BASE = os.path.dirname(os.path.abspath(__file__))
 RUTA_DIST = os.path.join(DIRECTORIO_BASE, 'dist')
 RUTA_BUILD = os.path.join(DIRECTORIO_BASE, 'build')
 RUTA_SPEC = os.path.join(DIRECTORIO_BASE, f"{NOMBRE_ARCHIVO}.spec")
 
-# Rutas absolutas a los archivos
-RUTA_ICONO_ABS = os.path.join(DIRECTORIO_BASE, NOMBRE_ICONO)
+# --- NUEVO: APUNTAMOS A LA CARPETA ASSETS ---
+RUTA_ASSETS = os.path.join(DIRECTORIO_BASE, "assets")
+RUTA_ICONO_ABS = os.path.join(RUTA_ASSETS, NOMBRE_ICONO)
 RUTA_SSL_ABS = os.path.join(DIRECTORIO_BASE, ARCHIVO_SSL)
 
 def limpiar_pyinstaller():
@@ -61,35 +61,27 @@ def ejecutar_pyinstaller():
     print("Esto puede tardar unos minutos...\n")
 
     if not os.path.exists(RUTA_ICONO_ABS):
-        print(f"ADVERTENCIA: No se encuentra el ícono {NOMBRE_ICONO}")
+        print(f"ADVERTENCIA: No se encuentra el ícono en {RUTA_ICONO_ABS}")
     if not os.path.exists(RUTA_SSL_ABS):
         print(f"ERROR CRÍTICO: No se encuentra el certificado {ARCHIVO_SSL}")
         return False
 
     comando = [
-        # --- [CORRECCIÓN CRÍTICA] ---
-        # Usamos el python actual (del venv) para llamar al módulo PyInstaller
-        # Esto evita el error "FileNotFoundError"
         sys.executable, "-m", "PyInstaller", 
-        
         "--noconsole",          
         "--onefile",            
         f"--name={NOMBRE_ARCHIVO}",
         f"--icon={RUTA_ICONO_ABS}",
         
-        # --- ARCHIVOS ADJUNTOS (DATA) ---
-        f"--add-data={RUTA_SSL_ABS};.",   # Certificado SSL
-        f"--add-data={RUTA_ICONO_ABS};.", # Ícono
+        # --- ARCHIVOS ADJUNTOS ---
+        f"--add-data={RUTA_SSL_ABS};.",     # Certificado SSL en la raíz
+        f"--add-data={RUTA_ASSETS};assets", # Empaqueta TODA la carpeta assets
         
-        # --- LA SOLUCIÓN DEFINITIVA ---
         "--collect-all=mysql", 
         "--collect-all=mysql.connector",
-        
-        # --- IMPORTACIONES OCULTAS ADICIONALES ---
         "--hidden-import=flet",
         "--hidden-import=argon2",
         "--hidden-import=datetime",
-        
         ruta_script_principal
     ]
 

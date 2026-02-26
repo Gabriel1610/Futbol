@@ -321,7 +321,7 @@ class BaseDeDatos:
     def actualizar_resultados_pendientes(self, lista_jugados):
         """
         Regla Pasado: Solo actualiza resultados si el partido YA existe en la BD
-        y tiene los goles en NULL. NO crea partidos nuevos ni rivales nuevos.
+        y tiene los goles en NULL. Diferencia partidos por su ventana de fecha.
         """
         conexion = None
         cursor = None
@@ -331,18 +331,17 @@ class BaseDeDatos:
 
             count = 0
             for datos in lista_jugados:
-                # 1. Buscamos el Rival (Solo lectura, no creamos si no existe)
+                # 1. Buscamos el Rival
                 cursor.execute("SELECT id FROM rivales WHERE nombre = %s OR otro_nombre = %s LIMIT 1", (datos['rival'], datos['rival']))
                 res_rival = cursor.fetchone()
-                if not res_rival: continue # Si no conocemos al rival, el partido no existe en nuestra BD. Saltamos.
+                if not res_rival: continue
                 rival_id = res_rival[0]
 
-                # 2. Buscamos la Edición (Solo lectura)
+                # 2. Buscamos la Edición
                 cursor.execute("SELECT id FROM campeonatos WHERE nombre = %s", (datos['torneo'],))
                 res_camp = cursor.fetchone()
                 if not res_camp: continue
                 
-                # Manejo simple de año string
                 anio_str = str(datos['anio']).split("-")[0]
                 cursor.execute("SELECT id FROM anios WHERE numero = %s", (anio_str,))
                 res_anio = cursor.fetchone()
@@ -353,23 +352,27 @@ class BaseDeDatos:
                 if not res_edicion: continue
                 edicion_id = res_edicion[0]
 
-                # 3. Intentamos ACTUALIZAR solo si los goles están vacíos (NULL)
-                # La fecha también se actualiza por si hubo corrección horaria post-partido
+                # 3. ACTUALIZACIÓN CON TU LÓGICA DE FECHAS Y AMORTIGUADOR
                 if datos['goles_cai'] is not None:
-                    sql = """
-                        UPDATE partidos 
-                        SET goles_independiente = %s, goles_rival = %s, fecha_hora = %s
-                        WHERE rival_id = %s AND edicion_id = %s AND goles_independiente IS NULL
-                    """
-                    cursor.execute(sql, (datos['goles_cai'], datos['goles_rival'], datos['fecha'], rival_id, edicion_id))
-                    if cursor.rowcount > 0:
-                        count += 1
+                    try:
+                        sql = """
+                            UPDATE partidos 
+                            SET goles_independiente = %s, goles_rival = %s, fecha_hora = %s, edicion_id = %s
+                            WHERE rival_id = %s 
+                              AND ABS(DATEDIFF(fecha_hora, %s)) <= 4 
+                              AND goles_independiente IS NULL
+                        """
+                        cursor.execute(sql, (datos['goles_cai'], datos['goles_rival'], datos['fecha'], edicion_id, rival_id, datos['fecha']))
+                        if cursor.rowcount > 0:
+                            count += 1
+                    except mysql.connector.IntegrityError:
+                        pass # Si choca con una fecha existente, simplemente ignoramos el guardado
 
             conexion.commit()
             return count > 0
 
         except Exception as e:
-            logger.error(f"Error actualizando pendientes: {e}")
+            # logger.error(f"Error actualizando pendientes: {e}")
             return False
         finally:
             if cursor: cursor.close()
@@ -377,78 +380,101 @@ class BaseDeDatos:
 
     def sincronizar_proximos_partidos(self, lista_futuros):
         """
-        Regla Futuro (Próximos 5):
-        - Si existe: Actualiza fecha y hora.
-        - Si no existe: Lo agrega (creando rival/torneo si hace falta).
+        Regla Futuro: Procesamiento monolítico en bloque para MÁXIMA VELOCIDAD.
+        Abre UNA sola conexión, procesa todos los partidos y cierra.
         """
         conexion = None
         cursor = None
+        hubo_cambios = False
         try:
             conexion = self.abrir()
             cursor = conexion.cursor()
 
-            cambios = False
             for datos in lista_futuros:
                 rival_nombre = datos['rival']
                 torneo_nombre = datos['torneo']
                 anio_numero = str(datos['anio']).split("-")[0]
                 fecha_hora = datos['fecha']
 
-                # --- A. GESTIÓN DE RIVAL (Buscar o Crear) ---
+                # --- 1. GESTIÓN DE RIVAL ---
                 cursor.execute("SELECT id FROM rivales WHERE nombre = %s OR otro_nombre = %s LIMIT 1", (rival_nombre, rival_nombre))
                 res_rival = cursor.fetchone()
                 if res_rival:
                     rival_id = res_rival[0]
                 else:
-                    cursor.execute("INSERT INTO rivales (nombre) VALUES (%s)", (rival_nombre,))
-                    rival_id = cursor.lastrowid
+                    try:
+                        cursor.execute("INSERT INTO rivales (nombre) VALUES (%s)", (rival_nombre,))
+                        rival_id = cursor.lastrowid
+                    except mysql.connector.IntegrityError:
+                        # Si alguien lo insertó una fracción de segundo antes
+                        cursor.execute("SELECT id FROM rivales WHERE nombre = %s OR otro_nombre = %s LIMIT 1", (rival_nombre, rival_nombre))
+                        rival_id = cursor.fetchone()[0]
 
-                # --- B. GESTIÓN DE TORNEO/AÑO (Buscar o Crear) ---
+                # --- 2. GESTIÓN DE CAMPEONATO ---
                 cursor.execute("SELECT id FROM campeonatos WHERE nombre = %s", (torneo_nombre,))
                 res_camp = cursor.fetchone()
-                if res_camp: camp_id = res_camp[0]
+                if res_camp: 
+                    camp_id = res_camp[0]
                 else:
-                    cursor.execute("INSERT INTO campeonatos (nombre) VALUES (%s)", (torneo_nombre,))
-                    camp_id = cursor.lastrowid
+                    try:
+                        cursor.execute("INSERT INTO campeonatos (nombre) VALUES (%s)", (torneo_nombre,))
+                        camp_id = cursor.lastrowid
+                    except mysql.connector.IntegrityError:
+                        cursor.execute("SELECT id FROM campeonatos WHERE nombre = %s", (torneo_nombre,))
+                        camp_id = cursor.fetchone()[0]
 
+                # --- 3. GESTIÓN DE AÑO ---
                 cursor.execute("SELECT id FROM anios WHERE numero = %s", (anio_numero,))
                 res_anio = cursor.fetchone()
-                if res_anio: anio_id = res_anio[0]
+                if res_anio: 
+                    anio_id = res_anio[0]
                 else:
-                    cursor.execute("INSERT INTO anios (numero) VALUES (%s)", (anio_numero,))
-                    anio_id = cursor.lastrowid
+                    try:
+                        cursor.execute("INSERT INTO anios (numero) VALUES (%s)", (anio_numero,))
+                        anio_id = cursor.lastrowid
+                    except mysql.connector.IntegrityError:
+                        cursor.execute("SELECT id FROM anios WHERE numero = %s", (anio_numero,))
+                        anio_id = cursor.fetchone()[0]
 
+                # --- 4. GESTIÓN DE EDICIÓN ---
                 cursor.execute("SELECT id FROM ediciones WHERE campeonato_id = %s AND anio_id = %s", (camp_id, anio_id))
                 res_ed = cursor.fetchone()
-                if res_ed: edicion_id = res_ed[0]
+                if res_ed: 
+                    edicion_id = res_ed[0]
                 else:
-                    cursor.execute("INSERT INTO ediciones (campeonato_id, anio_id, finalizado) VALUES (%s, %s, FALSE)", (camp_id, anio_id))
-                    edicion_id = cursor.lastrowid
+                    try:
+                        cursor.execute("INSERT INTO ediciones (campeonato_id, anio_id, finalizado) VALUES (%s, %s, FALSE)", (camp_id, anio_id))
+                        edicion_id = cursor.lastrowid
+                    except mysql.connector.IntegrityError:
+                        cursor.execute("SELECT id FROM ediciones WHERE campeonato_id = %s AND anio_id = %s", (camp_id, anio_id))
+                        edicion_id = cursor.fetchone()[0]
 
-                # --- C. GESTIÓN DEL PARTIDO (Upsert Lógico) ---
-                cursor.execute("SELECT id FROM partidos WHERE rival_id = %s AND edicion_id = %s", (rival_id, edicion_id))
-                res_partido = cursor.fetchone()
-
-                if res_partido:
-                    # SI EXISTE: Solo actualizamos la fecha/hora
-                    partido_id = res_partido[0]
-                    cursor.execute("UPDATE partidos SET fecha_hora = %s WHERE id = %s", (fecha_hora, partido_id))
-                    if cursor.rowcount > 0: cambios = True
-                else:
-                    # SI NO EXISTE: Lo insertamos (Goles en NULL por defecto)
+                # --- 5. GESTIÓN DE PARTIDO (Con el escudo de "fecha_unica") ---
+                try:
+                    # Intentamos insertarlo como un partido totalmente nuevo
                     cursor.execute("INSERT INTO partidos (rival_id, edicion_id, fecha_hora) VALUES (%s, %s, %s)", (rival_id, edicion_id, fecha_hora))
-                    cambios = True
+                    hubo_cambios = True
+                except mysql.connector.IntegrityError:
+                    # EL ESCUDO ACTUÓ: Ya hay un partido en esa fecha_unica. Lo actualizamos (por si FotMob cambió la hora exacta o de torneo).
+                    cursor.execute("""
+                        UPDATE partidos 
+                        SET edicion_id = %s, rival_id = %s, fecha_hora = %s 
+                        WHERE DATE(fecha_hora) = DATE(%s)
+                    """, (edicion_id, rival_id, fecha_hora, fecha_hora))
+                    if cursor.rowcount > 0: 
+                        hubo_cambios = True
 
+            # Guardamos todos los cambios de golpe al final del bucle
             conexion.commit()
-            return cambios
-
+            return hubo_cambios
+            
         except Exception as e:
-            logger.error(f"Error sincronizando futuros: {e}")
+            logger.error(f"Error en sincronizacion monolítica: {e}")
             return False
         finally:
             if cursor: cursor.close()
             if conexion: conexion.close()
-
+    
     def obtener_partidos(self, usuario, filtro_tiempo='futuros', edicion_id=None, rival_id=None, solo_sin_pronosticar=False):
         """
         Obtiene la lista de partidos aplicando filtros acumulativos.

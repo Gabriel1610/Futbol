@@ -1,6 +1,7 @@
 # Python 3.11.9
 import flet as ft
 import os
+import sys
 import time
 import threading
 import requests
@@ -19,7 +20,7 @@ NOMBRE_ICONO = "Escudo.ico"
 MAXIMA_CANTIDAD_DE_PUNTOS = 9
 ID_INDEPENDIENTE = 10078  # ID real de Independiente en FotMob
 URL_API = "https://www.fotmob.com/api/teams"
-CANT_PARTIDOS_A_SINCRONIZAR = 5
+CANT_PARTIDOS_A_SINCRONIZAR = 10
 DÍAS_NOTIFICACIÓN = 3  # Días antes del partido para notificar
 ADMINISTRADOR = 'Gabriel'
 
@@ -508,7 +509,7 @@ El Sistema.
                         flecha_izq,
                         flecha_der
                     ],
-                    height=270  # <--- ¡AQUÍ ESTÁ LA SOLUCIÓN!
+                    height=270
                 )
                 
                 columna_content.height = 460 
@@ -714,15 +715,15 @@ El Sistema.
         )
 
         # --- CONTENEDOR 4: RANKINGS ---
-        self.btn_indice_opt_pes = ft.ElevatedButton("Optimismo/Pesimismo", icon="assessment", bgcolor="#333333", color="white", width=180, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_opt_pes)
-        self.btn_ranking_fp = ft.ElevatedButton("Falso profeta", icon="new_releases", bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_falso_profeta)
-        self.btn_estilo_decision = ft.ElevatedButton("Estilo de decisión", icon=ft.Icons.PSYCHOLOGY, bgcolor="#333333", color="white", width=180, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_estilo_decision)
-        self.btn_mufa = ft.ElevatedButton("Mufa", icon="flash_on", bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_mufa)
-        self.btn_mejor_predictor = ft.ElevatedButton("Mejor predictor", icon="precision_manufacturing", bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_mejor_predictor)
-        self.btn_cambios_pronostico = ft.ElevatedButton("Cambios de pronóstico", icon=ft.Icons.EDIT_NOTE, bgcolor="#333333", color="white", width=180, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_cambios_pronostico)
-        self.btn_racha_actual = ft.ElevatedButton("Racha actual", icon="trending_up", bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_racha_actual)
-        self.btn_racha_record = ft.ElevatedButton("Racha récord", icon="military_tech", bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_racha_record)
-        self.btn_mayores_errores = ft.ElevatedButton("Mayores errores", icon=ft.Icons.ERROR_OUTLINE, bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_selector_mayores_errores)
+        self.btn_indice_opt_pes = ft.ElevatedButton("Optimismo/Pesimismo", tooltip="Evalúa si los usuarios tienden a pronosticar mejores o peores resultados para el Rojo en comparación a lo que realmente pasa.", icon="assessment", bgcolor="#333333", color="white", width=180, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_opt_pes)
+        self.btn_ranking_fp = ft.ElevatedButton("Falso profeta", tooltip="Ranking de los usuarios que más se equivocan al asegurar que Independiente va a ganar.", icon="new_releases", bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_falso_profeta)
+        self.btn_estilo_decision = ft.ElevatedButton("Estilo de decisión", tooltip="Clasifica a los usuarios según con cuánta anticipación o demora cargan sus pronósticos en el sistema.", icon=ft.Icons.PSYCHOLOGY, bgcolor="#333333", color="white", width=180, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_estilo_decision)
+        self.btn_mufa = ft.ElevatedButton("Mufa", tooltip="Muestra quiénes aciertan más veces de forma exclusiva cuando pronostican que Independiente pierde.", icon="flash_on", bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_mufa)
+        self.btn_mejor_predictor = ft.ElevatedButton("Mejor predictor", tooltip="Ranking maestro de precisión absoluta basado en el promedio de error de goles. Premia a los más exactos.", icon="precision_manufacturing", bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_mejor_predictor)
+        self.btn_cambios_pronostico = ft.ElevatedButton("Cambios de pronóstico", tooltip="Evalúa quiénes mantienen firme su primer pronóstico y quiénes lo modifican constantemente antes del partido.", icon=ft.Icons.EDIT_NOTE, bgcolor="#333333", color="white", width=180, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_cambios_pronostico)
+        self.btn_racha_actual = ft.ElevatedButton("Racha actual", tooltip="Mide cuántos partidos consecutivos lleva actualmente cada usuario sumando puntos sin fallar el resultado.", icon="trending_up", bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_racha_actual)
+        self.btn_racha_record = ft.ElevatedButton("Racha récord", tooltip="Muestra la mejor racha histórica de aciertos consecutivos (sumando puntos) que cada usuario ha logrado alcanzar.", icon="military_tech", bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_racha_record)
+        self.btn_mayores_errores = ft.ElevatedButton("Mayores errores", tooltip="Top 10 histórico global de los pronósticos más desastrosos y alejados del resultado real.", icon=ft.Icons.ERROR_OUTLINE, bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_selector_mayores_errores)
 
         self.contenedor_indices = ft.Container(
             padding=ft.padding.all(10), border=ft.border.all(1, "white24"), border_radius=8, bgcolor="#1E1E1E", 
@@ -844,18 +845,25 @@ El Sistema.
         self.txt_info_user_actual = ft.Text(f"Usuario: {self.usuario_actual}", size=14, color="cyan", weight=ft.FontWeight.BOLD)
         self.txt_info_email_actual = ft.Text(f"Email: {email_actual_display}", size=14, color="cyan", weight=ft.FontWeight.BOLD)
         
-        contenedor_info_actual = ft.Container(
-            content=ft.Row(
-                controls=[
-                    ft.Icon("info_outline", color="cyan"),
-                    self.txt_info_user_actual,
-                    ft.Container(width=20),
-                    ft.Icon("email_outlined", color="cyan"),
-                    self.txt_info_email_actual
-                ],
-                wrap=True # Responsivo para configuración
-            ),
-            bgcolor="#2D2D2D", padding=10, border_radius=8, border=ft.border.all(1, "white10")
+        # --- NUEVO DISEÑO: ÍCONOS SOLDADOS AL TEXTO ---
+        bloque_usuario = ft.Row([ft.Icon("info_outline", color="cyan"), self.txt_info_user_actual], spacing=5)
+        bloque_email = ft.Row([ft.Icon("email_outlined", color="cyan"), self.txt_info_email_actual], spacing=5)
+
+        # Envolvemos el Container dentro de un Row principal para evitar que se estire al 100%
+        contenedor_info_actual = ft.Row(
+            controls=[
+                ft.Container(
+                    content=ft.Row(
+                        controls=[
+                            bloque_usuario,
+                            ft.Container(width=10), # Pequeño separador si entran en la misma línea
+                            bloque_email
+                        ],
+                        wrap=True # Si la pantalla es chica, bajará el "bloque_email" entero
+                    ),
+                    bgcolor="#2D2D2D", padding=10, border_radius=8, border=ft.border.all(1, "white10")
+                )
+            ]
         )
 
         # 1. PANEL CONTRASEÑA
@@ -899,151 +907,38 @@ El Sistema.
         )
 
         # ==============================================================
-        # --- FÁBRICA MAESTRA DE FLECHAS (VERSIÓN TRIPLE RESPONSIVA) ---
-        # ==============================================================
-        def _crear_par_flechas(tipo="vertical", offset_inicio=0, offset_fin=0, 
-                               umbral_pc_ancho=800, umbral_pc_angosto=800, umbral_movil=1000, 
-                               breakpoint_wrap=1150, umbral_h=1000):
-            
-            # 1. EVALUACIÓN INTELIGENTE DE RESOLUCIÓN Y SALTOS DE LÍNEA
-            ancho_total = self.page.width if self.page.width else 1200
-            alto_total = self.page.height if self.page.height else 800
-            
-            es_celular = ancho_total < 750
-            es_pc_angosta = 750 <= ancho_total < breakpoint_wrap
-
-            if tipo == "vertical":
-                # Descontamos menús superiores (AppBar ~60px, Tabs ~50px) y márgenes Flet (~40px)
-                espacio_util = alto_total - 150 
-                if es_celular:
-                    umbral_real = umbral_movil
-                elif es_pc_angosta:
-                    # Cuando la pantalla de la PC no es tan ancha, las cajas "saltan" abajo y ocupan más alto
-                    umbral_real = umbral_pc_angosto
-                else:
-                    # Pantalla súper ancha, todo entra en un solo renglón
-                    umbral_real = umbral_pc_ancho
-            else:
-                # Eje horizontal
-                espacio_util = ancho_total - 40
-                umbral_real = umbral_h
-                
-            # Solo nace encendida si el espacio útil es menor a lo que realmente va a ocupar el contenido
-            necesita_scroll = espacio_util < umbral_real
-
-            # 2. CREACIÓN DE FLECHAS
-            if tipo == "vertical":
-                f_inicio = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=offset_inicio, right=0, visible=False, ignore_interactions=True, data=False)
-                f_fin = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=offset_fin, right=0, visible=necesita_scroll, ignore_interactions=True, data=False)
-            else:
-                f_inicio = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT, color="amber", size=35), left=0, top=offset_inicio, visible=False, ignore_interactions=True, data=False)
-                f_fin = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT, color="amber", size=35), right=0, top=offset_inicio, visible=necesita_scroll, ignore_interactions=True, data=False)
-
-            # 3. SENSOR DE MOVIMIENTO
-            def _on_scroll(e):
-                try:
-                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
-                    
-                    # SEGURIDAD: Si no hay barra de desplazamiento, las fulmina
-                    if max_pos <= 0:
-                        if not f_inicio.data or not f_fin.data:
-                            f_inicio.visible, f_inicio.data = False, True
-                            f_fin.visible, f_fin.data = False, True
-                            f_inicio.update()
-                            f_fin.update()
-                        return
-
-                    if not f_inicio.data:
-                        if pos <= 10 and f_inicio.visible:
-                            f_inicio.visible, f_inicio.data = False, True
-                            f_inicio.update()
-                        elif pos > 10 and not f_inicio.visible:
-                            f_inicio.visible = True
-                            f_inicio.update()
-                            
-                    if not f_fin.data:
-                        if pos >= (max_pos - 10) and f_fin.visible:
-                            f_fin.visible, f_fin.data = False, True
-                            f_fin.update()
-                        elif pos < (max_pos - 10) and not f_fin.visible:
-                            f_fin.visible = True
-                            f_fin.update()
-                except: pass
-                
-            return f_inicio, f_fin, _on_scroll
-
-        # --- GENERAMOS LOS MOTORES CON MEDIDAS EXACTAS (RECALCULADAS MILIMÉTRICAMENTE) ---
-        
-        # Estadísticas (Contenido alto siempre)
-        f_up_est, f_down_est, scroll_v_est = _crear_par_flechas("vertical", umbral_pc_ancho=1000, umbral_pc_angosto=1100, umbral_movil=1300)
-        f_izq_est, f_der_est, scroll_h_est = _crear_par_flechas("horizontal", offset_inicio=140, umbral_h=1100)
-        f_izq_copas, f_der_copas, scroll_h_copas = _crear_par_flechas("horizontal", offset_inicio=100, umbral_h=450)
-
-        # Partidos (Tabla 420px + Título 40px + Botones 50px + Espacios = ~580px reales)
-        f_up_part, f_down_part, scroll_v_part = _crear_par_flechas("vertical", umbral_pc_ancho=630, umbral_pc_angosto=850, umbral_movil=1000, breakpoint_wrap=1150)
-        f_izq_part, f_der_part, scroll_h_part = _crear_par_flechas("horizontal", offset_inicio=150, umbral_h=950)
-
-        # Pronósticos (Tabla 420px + Título 40px + Botones 50px = ~580px reales)
-        f_up_pron, f_down_pron, scroll_v_pron = _crear_par_flechas("vertical", umbral_pc_ancho=630, umbral_pc_angosto=750, umbral_movil=1000, breakpoint_wrap=900)
-        f_izq_pron, f_der_pron, scroll_h_pron = _crear_par_flechas("horizontal", offset_inicio=150, umbral_h=1050)
-
-        # Configuración (Títulos 100px + Cajas 300px + Espacios = ~450px reales)
-        f_up_conf, f_down_conf, scroll_v_conf = _crear_par_flechas("vertical", umbral_pc_ancho=510, umbral_pc_angosto=800, umbral_movil=1100, breakpoint_wrap=1150)
-
-        # Administración (Título + Tabla 360px + Espacios = ~430px reales)
-        f_up_adm, f_down_adm, scroll_v_adm = _crear_par_flechas("vertical", umbral_pc_ancho=510, umbral_pc_angosto=750, umbral_movil=800)
-        f_izq_adm, f_der_adm, scroll_h_adm = _crear_par_flechas("horizontal", offset_inicio=150, umbral_h=600)
-
-        # ==============================================================
-        # --- CREACIÓN DE PESTAÑAS (DISEÑO FLUIDO Y CON FLECHAS) ---
+        # --- CREACIÓN DE PESTAÑAS (DISEÑO FLUIDO CON SCROLL NATIVO) ---
         # ==============================================================
         lista_pestanas = [
             ft.Tab(
                 text="Estadísticas", icon="bar_chart",
                 content=ft.Container(
                     padding=20, alignment=ft.alignment.top_left,
-                    content=ft.Stack(
-                        expand=True,
+                    content=ft.Column(
+                        scroll=ft.ScrollMode.ALWAYS, expand=True,
                         controls=[
-                            ft.Column(
-                                scroll=ft.ScrollMode.AUTO, on_scroll=scroll_v_est, expand=True,
-                                controls=[
-                                    self.txt_titulo_ranking, self.loading,
-                                    ft.Stack(controls=[
-                                        # RESTAURADO: Contenedor con altura fija (300px) y barra SIEMPRE visible
-                                        ft.Row(scroll=ft.ScrollMode.AUTO, on_scroll=scroll_h_est, controls=[
-                                            ft.Column(spacing=0, controls=[
-                                                self.tabla_estadisticas_header, 
-                                                ft.Container(height=300, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_estadisticas]))
-                                            ])
-                                        ]),
-                                        f_izq_est, f_der_est
-                                    ]),
-                                    ft.Container(height=20),
-                                    ft.Row(wrap=True, alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.START, spacing=20, run_spacing=20, controls=[self.contenedor_filtro_torneo, self.contenedor_graficos, self.contenedor_graficos_torta, self.contenedor_graficos_barra, self.contenedor_indices]),
-                                    ft.Container(height=20),
-                                    ft.Row(wrap=True, alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.START, controls=[
-                                        ft.Column(controls=[
-                                            self.txt_titulo_copas, self.loading_copas, 
-                                            
-                                            # === MAGIA AGREGADA: STACK Y FLECHAS DE COPAS ===
-                                            ft.Stack(controls=[
-                                                ft.Row(scroll=ft.ScrollMode.AUTO, on_scroll=scroll_h_copas, controls=[
-                                                    ft.Column(spacing=0, controls=[
-                                                        self.tabla_copas_header, 
-                                                        ft.Container(height=240, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_copas]))
-                                                    ])
-                                                ]),
-                                                f_izq_copas, f_der_copas
-                                            ])
-                                            # ================================================
-                                            
+                            self.txt_titulo_ranking, self.loading,
+                            ft.Row(scroll=ft.ScrollMode.ALWAYS, controls=[
+                                ft.Column(spacing=0, controls=[
+                                    self.tabla_estadisticas_header, 
+                                    ft.Container(height=300, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_estadisticas]))
+                                ])
+                            ]),
+                            ft.Container(height=20),
+                            ft.Row(wrap=True, alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.START, spacing=20, run_spacing=20, controls=[self.contenedor_filtro_torneo, self.contenedor_graficos, self.contenedor_graficos_torta, self.contenedor_graficos_barra, self.contenedor_indices]),
+                            ft.Container(height=20),
+                            ft.Row(wrap=True, alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.START, controls=[
+                                ft.Column(controls=[
+                                    self.txt_titulo_copas, self.loading_copas, 
+                                    ft.Row(scroll=ft.ScrollMode.ALWAYS, controls=[
+                                        ft.Column(spacing=0, controls=[
+                                            self.tabla_copas_header, 
+                                            ft.Container(height=240, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_copas]))
                                         ])
-                                    ]),
-                                    ft.Container(height=40) 
-                                ]
-                            ),
-                            f_up_est, f_down_est
+                                    ])
+                                ])
+                            ]),
+                            ft.Container(height=40) 
                         ]
                     )
                 )
@@ -1052,32 +947,22 @@ El Sistema.
                 text="Partidos", icon="sports_soccer", 
                 content=ft.Container(
                     padding=20, alignment=ft.alignment.top_left,
-                    content=ft.Stack(
-                        expand=True,
+                    content=ft.Column(
+                        scroll=ft.ScrollMode.ALWAYS, expand=True, horizontal_alignment=ft.CrossAxisAlignment.START,
                         controls=[
-                            ft.Column(
-                                scroll=ft.ScrollMode.AUTO, on_scroll=scroll_v_part, expand=True, horizontal_alignment=ft.CrossAxisAlignment.START,
-                                controls=[
-                                    self.txt_titulo_partidos, self.loading_partidos, 
-                                    ft.Row(wrap=True, vertical_alignment=ft.CrossAxisAlignment.START, spacing=20, run_spacing=20, controls=[
-                                        ft.Stack(controls=[
-                                            ft.Row(scroll=ft.ScrollMode.AUTO, on_scroll=scroll_h_part, controls=[
-                                                ft.Column(spacing=0, controls=[
-                                                    self.tabla_partidos_header, 
-                                                    # RESTAURADO
-                                                    ft.Container(height=350, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_partidos]))
-                                                ])
-                                            ]),
-                                            f_izq_part, f_der_part
-                                        ]), 
-                                        ft.Container(padding=10, border=ft.border.all(1, "white10"), border_radius=8, bgcolor="#1E1E1E", content=ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=15, controls=[ft.Text("Tu Pronóstico", size=16, weight=ft.FontWeight.BOLD), self.input_pred_cai, self.input_pred_rival, self.btn_pronosticar]))
-                                    ]),
-                                    ft.Container(height=10), 
-                                    ft.Row(controls=[self.btn_todos, self.btn_jugados, self.btn_por_jugar, self.btn_por_torneo, self.btn_sin_pronosticar, self.btn_por_equipo], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, wrap=True),
-                                    ft.Container(height=40)
-                                ]
-                            ),
-                            f_up_part, f_down_part
+                            self.txt_titulo_partidos, self.loading_partidos, 
+                            ft.Row(wrap=True, vertical_alignment=ft.CrossAxisAlignment.START, spacing=20, run_spacing=20, controls=[
+                                ft.Row(scroll=ft.ScrollMode.ALWAYS, controls=[
+                                    ft.Column(spacing=0, controls=[
+                                        self.tabla_partidos_header, 
+                                        ft.Container(height=350, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_partidos]))
+                                    ])
+                                ]), 
+                                ft.Container(padding=10, border=ft.border.all(1, "white10"), border_radius=8, bgcolor="#1E1E1E", content=ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=15, controls=[ft.Text("Tu Pronóstico", size=16, weight=ft.FontWeight.BOLD), self.input_pred_cai, self.input_pred_rival, self.btn_pronosticar]))
+                            ]),
+                            ft.Container(height=10), 
+                            ft.Row(controls=[self.btn_todos, self.btn_jugados, self.btn_por_jugar, self.btn_por_torneo, self.btn_sin_pronosticar, self.btn_por_equipo], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, wrap=True),
+                            ft.Container(height=40)
                         ]
                     )
                 )
@@ -1086,29 +971,19 @@ El Sistema.
                 text="Pronósticos", icon="list_alt", 
                 content=ft.Container(
                     padding=20, alignment=ft.alignment.top_left,
-                    content=ft.Stack(
-                        expand=True,
+                    content=ft.Column(
+                        scroll=ft.ScrollMode.ALWAYS, expand=True, horizontal_alignment=ft.CrossAxisAlignment.START,
                         controls=[
-                            ft.Column(
-                                scroll=ft.ScrollMode.AUTO, on_scroll=scroll_v_pron, expand=True, horizontal_alignment=ft.CrossAxisAlignment.START,
-                                controls=[
-                                    self.txt_titulo_pronosticos, self.loading_pronosticos, 
-                                    ft.Stack(controls=[
-                                        ft.Row(scroll=ft.ScrollMode.AUTO, on_scroll=scroll_h_pron, controls=[
-                                            ft.Column(spacing=0, controls=[
-                                                self.tabla_pronosticos_header, 
-                                                # RESTAURADO
-                                                ft.Container(height=350, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_pronosticos]))
-                                            ])
-                                        ]),
-                                        f_izq_pron, f_der_pron
-                                    ]),
-                                    ft.Container(height=10), 
-                                    ft.Row(controls=[self.btn_pron_todos, self.btn_pron_por_jugar, self.btn_pron_jugados, self.btn_pron_por_torneo, self.btn_pron_por_equipo, self.btn_pron_por_usuario], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, wrap=True),
-                                    ft.Container(height=40)
-                                ]
-                            ),
-                            f_up_pron, f_down_pron
+                            self.txt_titulo_pronosticos, self.loading_pronosticos, 
+                            ft.Row(scroll=ft.ScrollMode.ALWAYS, controls=[
+                                ft.Column(spacing=0, controls=[
+                                    self.tabla_pronosticos_header, 
+                                    ft.Container(height=350, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_pronosticos]))
+                                ])
+                            ]),
+                            ft.Container(height=10), 
+                            ft.Row(controls=[self.btn_pron_todos, self.btn_pron_por_jugar, self.btn_pron_jugados, self.btn_pron_por_torneo, self.btn_pron_por_equipo, self.btn_pron_por_usuario], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, wrap=True),
+                            ft.Container(height=40)
                         ]
                     )
                 )
@@ -1117,20 +992,14 @@ El Sistema.
                 text="Configuración", icon=ft.Icons.SETTINGS, 
                 content=ft.Container(
                     padding=30, alignment=ft.alignment.top_left,
-                    content=ft.Stack(
-                        expand=True,
+                    content=ft.Column(
+                        scroll=ft.ScrollMode.ALWAYS, expand=True,
                         controls=[
-                            ft.Column(
-                                scroll=ft.ScrollMode.AUTO, on_scroll=scroll_v_conf, expand=True,
-                                controls=[
-                                    ft.Text("Opciones de usuario", size=28, weight=ft.FontWeight.BOLD, color="white"),
-                                    contenedor_info_actual,
-                                    ft.Container(height=20),
-                                    ft.Row(wrap=True, spacing=20, run_spacing=20, controls=[self.frame_cambio_pass, self.frame_cambio_email, self.frame_cambio_usuario]),
-                                    ft.Container(height=40)
-                                ]
-                            ),
-                            f_up_conf, f_down_conf
+                            ft.Text("Opciones de usuario", size=28, weight=ft.FontWeight.BOLD, color="white"),
+                            contenedor_info_actual,
+                            ft.Container(height=20),
+                            ft.Row(wrap=True, spacing=20, run_spacing=20, controls=[self.frame_cambio_pass, self.frame_cambio_email, self.frame_cambio_usuario]),
+                            ft.Container(height=40)
                         ]
                     )
                 )
@@ -1143,34 +1012,24 @@ El Sistema.
                     text="Administración", icon="admin_panel_settings", 
                     content=ft.Container(
                         padding=20, alignment=ft.alignment.top_left, 
-                        content=ft.Stack(
-                            expand=True,
+                        content=ft.Column(
+                            scroll=ft.ScrollMode.ALWAYS, expand=True,
                             controls=[
-                                ft.Column(
-                                    scroll=ft.ScrollMode.AUTO, on_scroll=scroll_v_adm, expand=True,
+                                ft.Text("Equipos", size=20, weight=ft.FontWeight.BOLD, color="white"), 
+                                self.loading_admin, 
+                                ft.Row(
+                                    wrap=True, spacing=20, run_spacing=20, alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.START, 
                                     controls=[
-                                        ft.Text("Equipos", size=20, weight=ft.FontWeight.BOLD, color="white"), 
-                                        self.loading_admin, 
-                                        ft.Row(
-                                            wrap=True, spacing=20, run_spacing=20, alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.START, 
-                                            controls=[
-                                                ft.Stack(controls=[
-                                                    ft.Row(scroll=ft.ScrollMode.AUTO, on_scroll=scroll_h_adm, controls=[
-                                                        ft.Column(spacing=0, controls=[
-                                                            self.tabla_rivales_header, 
-                                                            # RESTAURADO
-                                                            ft.Container(height=300, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_rivales]))
-                                                        ])
-                                                    ]),
-                                                    f_izq_adm, f_der_adm
-                                                ]),
-                                                ft.Card(width=320, content=ft.Container(padding=15, content=ft.Column(controls=[ft.Text("Cambiar nombre", weight="bold", size=16), self.contenedor_admin_rivales])))
-                                            ]
-                                        ),
-                                        ft.Container(height=40)
+                                        ft.Row(scroll=ft.ScrollMode.ALWAYS, controls=[
+                                            ft.Column(spacing=0, controls=[
+                                                self.tabla_rivales_header, 
+                                                ft.Container(height=300, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_rivales]))
+                                            ])
+                                        ]),
+                                        ft.Card(width=320, content=ft.Container(padding=15, content=ft.Column(controls=[ft.Text("Cambiar nombre", weight="bold", size=16), self.contenedor_admin_rivales])))
                                     ]
                                 ),
-                                f_up_adm, f_down_adm
+                                ft.Container(height=40)
                             ]
                         )
                     )
@@ -1558,7 +1417,13 @@ El Sistema.
                     except: pass
 
             # 3. TORNEO
-            nombre_torneo = match.get("league", {}).get("name", "Liga Profesional")
+            # Buscamos el nombre correcto en "tournament" (como dicta la API de FotMob actualmente)
+            nombre_torneo = match.get("tournament", {}).get("name")
+            
+            # Plan B: Si FotMob llega a cambiar la estructura en el futuro o viene vacío, intentamos con "league"
+            if not nombre_torneo:
+                nombre_torneo = match.get("league", {}).get("name", "Liga Profesional")
+                
             anio_temporada = str(fecha_dt.year)
 
             return {
@@ -1602,18 +1467,34 @@ El Sistema.
     # --- FUNCIONES GRÁFICO DE BARRAS (PUNTOS) ---
 
     def _abrir_selector_grafico_barras(self, e):
-        """Abre el modal para configurar el gráfico de barras de puntos."""
-        self.lv_torneos_barra = ft.ListView(expand=True, spacing=5, height=200)
-        self.lv_anios_barra = ft.ListView(expand=True, spacing=5, height=200)
-        self.lv_usuarios_barra = ft.ListView(expand=True, spacing=5, height=200)
+        """Abre el modal para configurar el gráfico de barras de puntos con carga inicial."""
         
-        self.temp_camp_barra = None
-        self.temp_anio_barra = None
-        self.usuario_grafico_barra_sel = None 
-        
-        self.btn_generar_grafico_barras = ft.ElevatedButton("Generar Gráfico", icon=ft.Icons.BAR_CHART, disabled=True, on_click=self._generar_grafico_barras)
+        # 1. Animación de carga inicial
+        loading_content = ft.Column(
+            controls=[
+                ft.Text("Cargando filtros...", size=16, weight="bold", color="white"),
+                ft.Container(height=10),
+                ft.ProgressBar(width=200, color="amber", bgcolor="#222222"),
+                ft.Text("Obteniendo torneos y usuarios...", size=12, color="white70")
+            ],
+            height=100, width=300, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
+        )
+        self.dlg_carga_filtros = ft.AlertDialog(content=loading_content, modal=True)
+        self.page.open(self.dlg_carga_filtros)
 
         def _cargar_datos():
+            time.sleep(0.5) # Pausa estética para ver la carga
+            
+            self.lv_torneos_barra = ft.ListView(expand=True, spacing=5, height=200)
+            self.lv_anios_barra = ft.ListView(expand=True, spacing=5, height=200)
+            self.lv_usuarios_barra = ft.ListView(expand=True, spacing=5, height=200)
+            
+            self.temp_camp_barra = None
+            self.temp_anio_barra = None
+            self.usuario_grafico_barra_sel = None 
+            
+            self.btn_generar_grafico_barras = ft.ElevatedButton("Generar Gráfico", icon=ft.Icons.BAR_CHART, disabled=True, on_click=self._generar_grafico_barras)
+
             bd = BaseDeDatos()
             # 1. Torneos
             ediciones = bd.obtener_ediciones()
@@ -1625,102 +1506,68 @@ El Sistema.
                 controles_tor.append(ft.ListTile(title=ft.Text(nombre, size=14), data=nombre, on_click=self._sel_torneo_barra_modal, bgcolor="#2D2D2D"))
             self.lv_torneos_barra.controls = controles_tor
             
-            # 2. Usuarios (Lista para seleccionar uno solo)
+            # 2. Usuarios
             usuarios = bd.obtener_usuarios()
             controles_usu = []
             for usu in usuarios:
                 controles_usu.append(
-                    ft.ListTile(
-                        title=ft.Text(usu, size=14),
-                        data=usu,
-                        on_click=self._sel_usuario_barra_modal,
-                        bgcolor="#2D2D2D"
-                    )
+                    ft.ListTile(title=ft.Text(usu, size=14), data=usu, on_click=self._sel_usuario_barra_modal, bgcolor="#2D2D2D")
                 )
             self.lv_usuarios_barra.controls = controles_usu
             
-            self.lv_torneos_barra.update()
-            self.lv_usuarios_barra.update()
+            col_tor = ft.Container(width=200, content=ft.Column(controls=[ft.Text("1. Torneo (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_torneos_barra, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("2. Año (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_anios_barra, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_usu = ft.Container(width=200, content=ft.Column(controls=[ft.Text("3. Usuario (Obligatorio)", weight="bold", size=12, color="cyan"), ft.Container(content=self.lv_usuarios_barra, border=ft.border.all(1, "white24"), border_radius=5)]))
 
-        # --- DISEÑO RESPONSIVO CON FLECHAS (GRÁFICO DE BARRAS) ---
-        col_tor = ft.Container(width=200, content=ft.Column(controls=[ft.Text("1. Torneo (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_torneos_barra, border=ft.border.all(1, "white24"), border_radius=5)]))
-        col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("2. Año (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_anios_barra, border=ft.border.all(1, "white24"), border_radius=5)]))
-        col_usu = ft.Container(width=200, content=ft.Column(controls=[ft.Text("3. Usuario (Obligatorio)", weight="bold", size=12, color="cyan"), ft.Container(content=self.lv_usuarios_barra, border=ft.border.all(1, "white24"), border_radius=5)]))
-
-        es_celular = self.page.width < 750 if self.page.width else False
-        
-        flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=0, right=10, visible=False, ignore_interactions=True, data=False)
-        flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=0, right=10, visible=es_celular, ignore_interactions=True, data=False)
-
-        def _on_scroll_modal(e):
-            try:
-                pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
-                
-                # SEGURIDAD ABSOLUTA: Si no hay barra de scroll (PC), mata ambas flechas al instante
-                if max_pos <= 0:
-                    if not flecha_arriba.data or not flecha_abajo.data:
-                        flecha_arriba.visible, flecha_arriba.data = False, True
-                        flecha_abajo.visible, flecha_abajo.data = False, True
-                        flecha_arriba.update()
-                        flecha_abajo.update()
-                    return
-
-                if not flecha_arriba.data:
-                    if pos <= 10 and flecha_arriba.visible:
-                        flecha_arriba.visible, flecha_arriba.data = False, True
-                        flecha_arriba.update()
-                    elif pos > 10 and not flecha_arriba.visible:
-                        flecha_arriba.visible = True
-                        flecha_arriba.update()
-                        
-                if not flecha_abajo.data:
-                    if pos >= (max_pos - 10) and flecha_abajo.visible:
-                        flecha_abajo.visible, flecha_abajo.data = False, True
-                        flecha_abajo.update()
-                    elif pos < (max_pos - 10) and not flecha_abajo.visible:
-                        flecha_abajo.visible = True
-                        flecha_abajo.update()
-            except: pass
-
-        # === AQUÍ ESTÁ LA VARIABLE QUE FALTABA ===
-        contenido = ft.Container(
-            width=750, height=350, 
-            content=ft.Stack(
-                expand=True,
-                controls=[
-                    ft.Column(
-                        scroll=ft.ScrollMode.AUTO,
-                        on_scroll=_on_scroll_modal,
-                        controls=[
-                            ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
-                            ft.Container(height=40) # Margen fantasma inferior
-                        ]
-                    ),
-                    flecha_arriba,
-                    flecha_abajo
-                ]
+            contenido = ft.Container(
+                width=750, height=350, 
+                content=ft.Column(
+                    scroll=ft.ScrollMode.ALWAYS,
+                    controls=[
+                        ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
+                        ft.Container(height=40) 
+                    ]
+                )
             )
-        )
 
-        self.dlg_grafico_barras = ft.AlertDialog(modal=True, title=ft.Text("Configurar Gráfico de Puntos"), content=contenido, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_barras)), self.btn_generar_grafico_barras])
-        self.page.open(self.dlg_grafico_barras)
+            self.dlg_grafico_barras = ft.AlertDialog(modal=True, title=ft.Text("Configurar Gráfico de Puntos"), content=contenido, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_barras)), self.btn_generar_grafico_barras])
+            
+            # Cerrar carga y abrir modal definitivo
+            self.page.close(self.dlg_carga_filtros)
+            self.page.open(self.dlg_grafico_barras)
+
         threading.Thread(target=_cargar_datos, daemon=True).start()
 
     # --- FUNCIONES GRÁFICO DE LÍNEA POR PUNTOS ---
 
     def _abrir_selector_grafico_linea_puntos(self, e):
-        """Abre el modal para configurar el gráfico de línea de puntos."""
-        self.lv_torneos_graf_lp = ft.ListView(expand=True, spacing=5, height=200)
-        self.lv_anios_graf_lp = ft.ListView(expand=True, spacing=5, height=200)
-        self.lv_usuarios_graf_lp = ft.ListView(expand=True, spacing=5, height=200)
+        """Abre el modal para configurar el gráfico de línea de puntos con carga inicial."""
         
-        self.temp_camp_graf_lp = None
-        self.temp_anio_graf_lp = None
-        self.chk_usuarios_grafico_lp = [] 
-        
-        self.btn_generar_grafico_lp = ft.ElevatedButton("Generar Gráfico", icon=ft.Icons.SHOW_CHART, disabled=True, on_click=self._generar_grafico_linea_puntos)
+        # 1. Animación de carga inicial
+        loading_content = ft.Column(
+            controls=[
+                ft.Text("Cargando filtros...", size=16, weight="bold", color="white"),
+                ft.Container(height=10),
+                ft.ProgressBar(width=200, color="amber", bgcolor="#222222"),
+                ft.Text("Obteniendo torneos y usuarios...", size=12, color="white70")
+            ],
+            height=100, width=300, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
+        )
+        self.dlg_carga_filtros = ft.AlertDialog(content=loading_content, modal=True)
+        self.page.open(self.dlg_carga_filtros)
 
         def _cargar_datos_lp():
+            time.sleep(0.5)
+            self.lv_torneos_graf_lp = ft.ListView(expand=True, spacing=5, height=200)
+            self.lv_anios_graf_lp = ft.ListView(expand=True, spacing=5, height=200)
+            self.lv_usuarios_graf_lp = ft.ListView(expand=True, spacing=5, height=200)
+            
+            self.temp_camp_graf_lp = None
+            self.temp_anio_graf_lp = None
+            self.chk_usuarios_grafico_lp = [] 
+            
+            self.btn_generar_grafico_lp = ft.ElevatedButton("Generar Gráfico", icon=ft.Icons.SHOW_CHART, disabled=True, on_click=self._generar_grafico_linea_puntos)
+
             bd = BaseDeDatos()
             # 1. Torneos
             ediciones = bd.obtener_ediciones()
@@ -1740,74 +1587,28 @@ El Sistema.
                 self.chk_usuarios_grafico_lp.append(chk)
                 controles_usu.append(chk)
             self.lv_usuarios_graf_lp.controls = controles_usu
-            
-            if self.lv_torneos_graf_lp.page:
-                self.lv_torneos_graf_lp.update()
-            self.lv_usuarios_graf_lp.update()
 
-        # --- DISEÑO RESPONSIVO CON FLECHAS (ARRIBA Y ABAJO) ---
-        col_tor = ft.Container(width=200, content=ft.Column(controls=[ft.Text("1. Torneo", weight="bold"), ft.Container(content=self.lv_torneos_graf_lp, border=ft.border.all(1, "white24"), border_radius=5)]))
-        col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("2. Año", weight="bold"), ft.Container(content=self.lv_anios_graf_lp, border=ft.border.all(1, "white24"), border_radius=5)]))
-        col_usu = ft.Container(width=200, content=ft.Column(controls=[ft.Text("3. Usuarios (Max 4)", weight="bold"), ft.Container(content=self.lv_usuarios_graf_lp, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_tor = ft.Container(width=200, content=ft.Column(controls=[ft.Text("1. Torneo", weight="bold"), ft.Container(content=self.lv_torneos_graf_lp, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("2. Año", weight="bold"), ft.Container(content=self.lv_anios_graf_lp, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_usu = ft.Container(width=200, content=ft.Column(controls=[ft.Text("3. Usuarios (Max 4)", weight="bold"), ft.Container(content=self.lv_usuarios_graf_lp, border=ft.border.all(1, "white24"), border_radius=5)]))
 
-        es_celular = self.page.width < 750 if self.page.width else False
-        
-        flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=0, right=10, visible=False, ignore_interactions=True, data=False)
-        flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=0, right=10, visible=es_celular, ignore_interactions=True, data=False)
-
-        def _on_scroll_modal(e):
-            try:
-                pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
-                
-                # SEGURIDAD ABSOLUTA: Si no hay barra de scroll (PC), mata ambas flechas al instante
-                if max_pos <= 0:
-                    if not flecha_arriba.data or not flecha_abajo.data:
-                        flecha_arriba.visible, flecha_arriba.data = False, True
-                        flecha_abajo.visible, flecha_abajo.data = False, True
-                        flecha_arriba.update()
-                        flecha_abajo.update()
-                    return
-
-                # Lógica Flecha Arriba
-                if not flecha_arriba.data:
-                    if pos <= 10 and flecha_arriba.visible:
-                        flecha_arriba.visible, flecha_arriba.data = False, True
-                        flecha_arriba.update()
-                    elif pos > 10 and not flecha_arriba.visible:
-                        flecha_arriba.visible = True
-                        flecha_arriba.update()
-                        
-                # Lógica Flecha Abajo
-                if not flecha_abajo.data:
-                    if pos >= (max_pos - 10) and flecha_abajo.visible:
-                        flecha_abajo.visible, flecha_abajo.data = False, True
-                        flecha_abajo.update()
-                    elif pos < (max_pos - 10) and not flecha_abajo.visible:
-                        flecha_abajo.visible = True
-                        flecha_abajo.update()
-            except: pass
-
-        contenido = ft.Container(
-            width=700, height=350, 
-            content=ft.Stack(
-                expand=True,
-                controls=[
-                    ft.Column(
-                        scroll=ft.ScrollMode.AUTO,
-                        on_scroll=_on_scroll_modal,
-                        controls=[
-                            ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
-                            ft.Container(height=40) # Margen fantasma inferior
-                        ]
-                    ),
-                    flecha_arriba,
-                    flecha_abajo
-                ]
+            contenido = ft.Container(
+                width=700, height=350, 
+                content=ft.Column(
+                    scroll=ft.ScrollMode.ALWAYS,
+                    controls=[
+                        ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
+                        ft.Container(height=40) 
+                    ]
+                )
             )
-        )
 
-        self.dlg_grafico_lp = ft.AlertDialog(modal=True, title=ft.Text("Configurar Gráfico de Puntos (Línea)"), content=contenido, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_lp)), self.btn_generar_grafico_lp])
-        self.page.open(self.dlg_grafico_lp)
+            self.dlg_grafico_lp = ft.AlertDialog(modal=True, title=ft.Text("Configurar Gráfico de Puntos (Línea)"), content=contenido, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_lp)), self.btn_generar_grafico_lp])
+            
+            # Cerrar carga y abrir modal definitivo
+            self.page.close(self.dlg_carga_filtros)
+            self.page.open(self.dlg_grafico_lp)
+
         threading.Thread(target=_cargar_datos_lp, daemon=True).start()
 
     def _sel_torneo_graf_lp_modal(self, e):
@@ -1953,7 +1754,7 @@ El Sistema.
                 ),
                 bottom_axis=ft.ChartAxis(
                     labels_interval=intervalo_x,
-                    title=ft.Text("Partido N°", size=14, italic=True),
+                    title=ft.Text("Partido Nro", size=14, italic=True),
                     labels_size=40,
                 ),
                 tooltip_bgcolor=ft.Colors.with_opacity(0.9, "#1E1E1E"),
@@ -1975,13 +1776,23 @@ El Sistema.
                     ], spacing=5)
                 )
 
+            # --- ALTURA DINÁMICA DEL GRÁFICO ---
+                es_pc = (self.page.width >= 750) if self.page.width else True
+                alto_grafico = 450 if es_pc else 350   
+                alto_requerido_base = 580 if es_pc else 480 
+
             # ==========================================
-            # MAGIA 1: FLECHAS VERTICALES (CON MEMORIA)
+            # MAGIA 1: FLECHAS VERTICALES (LÓGICA EXACTA DINÁMICA)
             # ==========================================
-            es_celular = self.page.width < 750 if self.page.width else False
+            espacio_util_interno = alto - 40
+            
+            # Base dinámica + 25px extra por CADA usuario seleccionado
+            alto_requerido = alto_requerido_base + (len(usuarios_sel) * 25)
+            
+            necesita_scroll_v = alto_requerido > espacio_util_interno
             
             flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=60, right=10, visible=False, ignore_interactions=True, data=False)
-            flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=10, right=10, visible=es_celular, ignore_interactions=True, data=False)
+            flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=10, right=10, visible=necesita_scroll_v, ignore_interactions=True, data=False)
 
             def _on_scroll_vertical(e):
                 try:
@@ -2029,30 +1840,23 @@ El Sistema.
                             flecha_der.update()
                 except: pass
 
-            # --- CONTENEDOR GRÁFICO (ROW SCROLL + STACK FLECHAS) ---
+            # --- CONTENEDOR GRÁFICO (CON ALTURA DINÁMICA) ---
             fila_grafico = ft.Row(
                 controls=[
                     ft.Container(
                         content=chart, 
                         width=ancho_grafico_dinamico, 
-                        height=350, 
+                        height=alto_grafico, 
                         padding=ft.padding.only(top=20, right=20)
                     )
                 ],
-                scroll=ft.ScrollMode.AUTO,
-                on_scroll=_on_scroll_horizontal
-            )
-
-            contenedor_scroll_horizontal_y_flechas = ft.Stack(
-                controls=[fila_grafico, flecha_izq, flecha_der],
-                height=350
+                scroll=ft.ScrollMode.ALWAYS
             )
 
             # --- ENSAMBLE GENERAL ---
             columna_principal = ft.Column([
                 ft.Row(
                     controls=[
-                        # El secreto para que la X no se escape: expand=True en el título
                         ft.Container(content=ft.Text(f"Evolución Puntos: {self.temp_camp_graf_lp} {self.temp_anio_graf_lp}", size=20, weight="bold"), expand=True),
                         ft.IconButton(icon=ft.Icons.CLOSE, on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_lp_full))
                     ],
@@ -2061,28 +1865,20 @@ El Sistema.
                 ft.Text("Acumulación de puntos fecha a fecha", size=12, color="white54"),
                 ft.Divider(),
                 
-                # Inyectamos el componente compuesto
-                contenedor_scroll_horizontal_y_flechas,
+                # Inyectamos la fila directamente (sin Stacks ni flechas)
+                fila_grafico,
                 
                 ft.Divider(),
                 ft.Row(items_leyenda, alignment="center", wrap=True),
                 ft.Container(height=30)
-            ], scroll=ft.ScrollMode.AUTO, on_scroll=_on_scroll_vertical, expand=True)
+            ], scroll=ft.ScrollMode.ALWAYS, expand=True) # <--- LA MAGIA NATIVA DE FLET
 
             contenido_final = ft.Container(
                 width=ancho, height=alto,
                 padding=20, bgcolor="#1E1E1E", border_radius=10,
-                content=ft.Stack(
-                    controls=[
-                        columna_principal,
-                        flecha_arriba,
-                        flecha_abajo
-                    ],
-                    expand=True
-                )
+                content=columna_principal
             )
             
-            # Cierre y apertura final
             self.page.close(self.dlg_grafico_lp)
             self.dlg_grafico_lp_full = ft.AlertDialog(content=contenido_final, modal=True, content_padding=0, bgcolor=ft.Colors.TRANSPARENT)
             self.page.open(self.dlg_grafico_lp_full)
@@ -2203,7 +1999,7 @@ El Sistema.
                         ft.ChartAxisLabel(value=i+1, label=ft.Text(str(i+1), size=12)) for i in range(cant_partidos)
                     ],
                     labels_size=40,
-                    title=ft.Text("Partido N°", size=14, italic=True),
+                    title=ft.Text("Partido Nro", size=14, italic=True),
                     title_size=40
                 ),
                 horizontal_grid_lines=ft.ChartGridLines(interval=1, color=ft.Colors.WHITE10, width=1),
@@ -2212,12 +2008,20 @@ El Sistema.
             )
 
             # ==========================================
-            # MAGIA 1: FLECHAS VERTICALES (CON MEMORIA)
+            # MAGIA 1: FLECHAS VERTICALES (LÓGICA EXACTA DE CONTENEDOR)
             # ==========================================
-            es_celular = self.page.width < 750 if self.page.width else False
+            # 1. ¿Cuánto espacio real tenemos adentro de la caja oscura? (Descontamos padding de 20 arriba y 20 abajo = 40px)
+            espacio_util_interno = alto - 40
+            
+            # 2. ¿Cuántos píxeles fijos ocupan nuestros elementos hacia abajo?
+            # Títulos (~60) + Textos (~20) + Divisores (~30) + Gráfico (350) + Márgenes (~40) = 500px reales
+            alto_requerido = 500
+            
+            # 3. Tu lógica: Guiarnos por si la barra nativa va a existir o no
+            necesita_scroll_v = alto_requerido > espacio_util_interno
             
             flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=60, right=10, visible=False, ignore_interactions=True, data=False)
-            flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=10, right=10, visible=es_celular, ignore_interactions=True, data=False)
+            flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=10, right=10, visible=necesita_scroll_v, ignore_interactions=True, data=False)
 
             def _on_scroll_vertical(e):
                 try:
@@ -2265,7 +2069,7 @@ El Sistema.
                             flecha_der.update()
                 except: pass
 
-            # --- CONTENEDOR GRÁFICO (ROW SCROLL + STACK FLECHAS) ---
+            # --- CONTENEDOR GRÁFICO (CON BARRA SIEMPRE VISIBLE) ---
             fila_grafico = ft.Row(
                 controls=[
                     ft.Container(
@@ -2275,13 +2079,7 @@ El Sistema.
                         padding=ft.padding.only(top=20, right=20)
                     )
                 ],
-                scroll=ft.ScrollMode.AUTO,
-                on_scroll=_on_scroll_horizontal
-            )
-
-            contenedor_scroll_horizontal_y_flechas = ft.Stack(
-                controls=[fila_grafico, flecha_izq, flecha_der],
-                height=350
+                scroll=ft.ScrollMode.ALWAYS
             )
 
             # --- ENSAMBLE GENERAL ---
@@ -2296,27 +2094,18 @@ El Sistema.
                 ft.Text("Puntos sumados por partido", size=12, color="white54"),
                 ft.Divider(),
                 
-                # Inyectamos el componente compuesto
-                contenedor_scroll_horizontal_y_flechas,
+                fila_grafico,
                 
                 ft.Divider(),
                 ft.Container(height=30)
-            ], scroll=ft.ScrollMode.AUTO, on_scroll=_on_scroll_vertical, expand=True)
+            ], scroll=ft.ScrollMode.ALWAYS, expand=True)
 
             contenido_final = ft.Container(
                 width=ancho, height=alto,
                 padding=20, bgcolor="#1E1E1E", border_radius=10,
-                content=ft.Stack(
-                    controls=[
-                        columna_principal,
-                        flecha_arriba,
-                        flecha_abajo
-                    ],
-                    expand=True
-                )
+                content=columna_principal
             )
             
-            # Cierre y apertura final
             self.page.close(self.dlg_grafico_barras)
             self.dlg_grafico_barras_full = ft.AlertDialog(content=contenido_final, modal=True, content_padding=0, bgcolor=ft.Colors.TRANSPARENT)
             self.page.open(self.dlg_grafico_barras_full)
@@ -4424,18 +4213,33 @@ El Sistema.
     # --- FUNCIONES GRÁFICO DE PUESTOS ---
 
     def _abrir_selector_grafico_puestos(self, e):
-        """Abre el modal para configurar el gráfico de evolución de puestos."""
-        self.lv_torneos_graf = ft.ListView(expand=True, spacing=5, height=200)
-        self.lv_anios_graf = ft.ListView(expand=True, spacing=5, height=200)
-        self.lv_usuarios_graf = ft.ListView(expand=True, spacing=5, height=200)
+        """Abre el modal para configurar el gráfico de evolución de puestos con carga inicial."""
         
-        self.temp_camp_graf = None
-        self.temp_anio_graf = None
-        self.chk_usuarios_grafico = [] 
-        
-        self.btn_generar_grafico = ft.ElevatedButton("Generar Gráfico", icon=ft.Icons.SHOW_CHART, disabled=True, on_click=self._generar_grafico_puestos)
+        # 1. Animación de carga inicial
+        loading_content = ft.Column(
+            controls=[
+                ft.Text("Cargando filtros...", size=16, weight="bold", color="white"),
+                ft.Container(height=10),
+                ft.ProgressBar(width=200, color="amber", bgcolor="#222222"),
+                ft.Text("Obteniendo torneos y usuarios...", size=12, color="white70")
+            ],
+            height=100, width=300, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
+        )
+        self.dlg_carga_filtros = ft.AlertDialog(content=loading_content, modal=True)
+        self.page.open(self.dlg_carga_filtros)
 
         def _cargar_datos():
+            time.sleep(0.5)
+            self.lv_torneos_graf = ft.ListView(expand=True, spacing=5, height=200)
+            self.lv_anios_graf = ft.ListView(expand=True, spacing=5, height=200)
+            self.lv_usuarios_graf = ft.ListView(expand=True, spacing=5, height=200)
+            
+            self.temp_camp_graf = None
+            self.temp_anio_graf = None
+            self.chk_usuarios_grafico = [] 
+            
+            self.btn_generar_grafico = ft.ElevatedButton("Generar Gráfico", icon=ft.Icons.SHOW_CHART, disabled=True, on_click=self._generar_grafico_puestos)
+
             bd = BaseDeDatos()
             # 1. Torneos y Años
             ediciones = bd.obtener_ediciones()
@@ -4455,72 +4259,34 @@ El Sistema.
                 self.chk_usuarios_grafico.append(chk)
                 controles_usu.append(chk)
             self.lv_usuarios_graf.controls = controles_usu
-            
-            self.lv_torneos_graf.update()
-            self.lv_usuarios_graf.update()
 
-        # 1. Usamos Container con un ancho fijo de 200px para que NUNCA se aplasten
-        col_tor = ft.Container(width=200, content=ft.Column(controls=[ft.Text("1. Torneo", weight="bold"), ft.Container(content=self.lv_torneos_graf, border=ft.border.all(1, "white24"), border_radius=5)]))
-        col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("2. Año", weight="bold"), ft.Container(content=self.lv_anios_graf, border=ft.border.all(1, "white24"), border_radius=5)]))
-        col_usu = ft.Container(width=200, content=ft.Column(controls=[ft.Text("3. Usuarios (Max 4)", weight="bold"), ft.Container(content=self.lv_usuarios_graf, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_tor = ft.Container(width=200, content=ft.Column(controls=[ft.Text("1. Torneo", weight="bold"), ft.Container(content=self.lv_torneos_graf, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("2. Año", weight="bold"), ft.Container(content=self.lv_anios_graf, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_usu = ft.Container(width=200, content=ft.Column(controls=[ft.Text("3. Usuarios (Max 4)", weight="bold"), ft.Container(content=self.lv_usuarios_graf, border=ft.border.all(1, "white24"), border_radius=5)]))
 
-        # --- MAGIA DE LA FLECHA FLOTANTE ---
-        # Detectamos si es celular para que la flecha aparezca encendida por defecto
-        es_celular = self.page.width < 750 if self.page.width else False
-        
-        self.flecha_puestos = ft.Container(
-            content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35),
-            bottom=0, 
-            right=10, 
-            visible=es_celular,
-            ignore_interactions=True,
-            data=False # <-- AÑADIDO: Memoria para saber si ya se desactivó
-        )
-
-        def _on_scroll_puestos(e):
-            """Matemática para ocultar la flecha permanentemente si llegamos al fondo"""
-            try:
-                # Solo evalúa si la flecha aún "está viva" (data es False)
-                if not self.flecha_puestos.data:
-                    llegaste_al_fondo = float(e.pixels) >= (float(e.max_scroll_extent) - 10)
-                    
-                    if llegaste_al_fondo and self.flecha_puestos.visible:
-                        self.flecha_puestos.visible = False
-                        self.flecha_puestos.data = True # ¡Muerte permanente!
-                        self.flecha_puestos.update()
-            except:
-                pass
-
-        # 2. Bloque con Stack (Capas) para superponer la flecha encima del Scroll
-        contenido = ft.Container(
-            width=700, 
-            height=350, # IMPORTANTE: Obligamos al contenedor a medir 300px para que exista un fondo
-            content=ft.Stack(
-                controls=[
-                    ft.Column(
-                        scroll=ft.ScrollMode.AUTO,
-                        on_scroll=_on_scroll_puestos, # El sensor de movimiento
-                        expand=True,
-                        controls=[
-                            ft.Row(
-                                controls=[col_tor, col_anio, col_usu], 
-                                wrap=True, spacing=20, run_spacing=20, 
-                                alignment=ft.MainAxisAlignment.CENTER
-                            ),
-                            # Espacio fantasma para que la flecha no tape el último elemento
-                            ft.Container(height=40) 
-                        ]
-                    ),
-                    self.flecha_puestos
-                ],
-                expand=True
+            contenido = ft.Container(
+                width=700, height=350,
+                content=ft.Column(
+                    scroll=ft.ScrollMode.ALWAYS,
+                    expand=True,
+                    controls=[
+                        ft.Row(
+                            controls=[col_tor, col_anio, col_usu], 
+                            wrap=True, spacing=20, run_spacing=20, 
+                            alignment=ft.MainAxisAlignment.CENTER
+                        ),
+                        ft.Container(height=40) 
+                    ]
+                )
             )
-        )
 
-        self.dlg_grafico = ft.AlertDialog(modal=True, title=ft.Text("Configurar Gráfico de Evolución"), content=contenido, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico)), self.btn_generar_grafico])
-        self.page.open(self.dlg_grafico)
+            self.dlg_grafico = ft.AlertDialog(modal=True, title=ft.Text("Configurar Gráfico de Evolución"), content=contenido, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico)), self.btn_generar_grafico])
+            
+            # Cerrar carga y abrir modal definitivo
+            self.page.close(self.dlg_carga_filtros)
+            self.page.open(self.dlg_grafico)
+
         threading.Thread(target=_cargar_datos, daemon=True).start()
-
 
     def _sel_torneo_graf_modal(self, e):
         """Selecciona torneo en el modal de gráfico y carga años."""
@@ -4708,14 +4474,23 @@ El Sistema.
                         ], spacing=5)
                     )
 
+                # --- ALTURA DINÁMICA DEL GRÁFICO ---
+                es_pc = (self.page.width >= 750) if self.page.width else True
+                alto_grafico = 450 if es_pc else 350          
+                alto_requerido_base = 580 if es_pc else 480
+
                 # ==========================================
-                # MAGIA 1: FLECHAS VERTICALES (CON MEMORIA)
+                # MAGIA 1: FLECHAS VERTICALES (LÓGICA EXACTA DINÁMICA)
                 # ==========================================
-                es_celular = self.page.width < 750 if self.page.width else False
+                espacio_util_interno = alto - 40
                 
-                # Usamos '.data = False' como bandera para saber si ya se desactivaron permanentemente
+                # Base dinámica + 25px extra por CADA usuario seleccionado
+                alto_requerido = alto_requerido_base + (len(usuarios_sel) * 25)
+                
+                necesita_scroll_v = alto_requerido > espacio_util_interno
+                
                 flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=60, right=10, visible=False, ignore_interactions=True, data=False)
-                flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=10, right=10, visible=es_celular, ignore_interactions=True, data=False)
+                flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=10, right=10, visible=necesita_scroll_v, ignore_interactions=True, data=False)
 
                 def _on_scroll_vertical(e):
                     try:
@@ -4771,27 +4546,17 @@ El Sistema.
                                 flecha_der.update()
                     except: pass
 
-                # --- CONTENEDOR GRÁFICO (ROW SCROLL + STACK FLECHAS) ---
+                # --- CONTENEDOR GRÁFICO (CON ALTURA DINÁMICA) ---
                 fila_grafico = ft.Row(
                     controls=[
                         ft.Container(
                             content=chart, 
                             width=ancho_grafico_dinamico, 
-                            height=350, 
+                            height=alto_grafico, 
                             padding=ft.padding.only(top=20, right=20)
                         )
                     ],
-                    scroll=ft.ScrollMode.AUTO,
-                    on_scroll=_on_scroll_horizontal # Conectamos el sensor horizontal aquí
-                )
-
-                contenedor_scroll_horizontal_y_flechas = ft.Stack(
-                    controls=[
-                        fila_grafico,
-                        flecha_izq,
-                        flecha_der
-                    ],
-                    height=350 # Obligatorio darle altura al Stack para que respete el espacio
+                    scroll=ft.ScrollMode.ALWAYS
                 )
 
                 # --- ENSAMBLE GENERAL ---
@@ -4806,25 +4571,17 @@ El Sistema.
                     ft.Text("Historial partido a partido (1º Puntos > 2º PJ > 3º Error > 4º Anticipación)", size=12, color="white54"),
                     ft.Divider(),
                     
-                    # Inyectamos el componente compuesto
-                    contenedor_scroll_horizontal_y_flechas,
+                    fila_grafico,
                     
                     ft.Divider(),
                     ft.Row(items_leyenda, alignment="center", wrap=True),
                     ft.Container(height=30)
-                ], scroll=ft.ScrollMode.AUTO, on_scroll=_on_scroll_vertical, expand=True)
+                ], scroll=ft.ScrollMode.ALWAYS, expand=True)
 
                 contenido_final = ft.Container(
                     width=ancho, height=alto,
                     padding=20, bgcolor="#1E1E1E", border_radius=10,
-                    content=ft.Stack(
-                        controls=[
-                            columna_principal,
-                            flecha_arriba,
-                            flecha_abajo
-                        ],
-                        expand=True
-                    )
+                    content=columna_principal
                 )
                 
                 self.dlg_grafico_full = ft.AlertDialog(content=contenido_final, modal=True, content_padding=0, bgcolor=ft.Colors.TRANSPARENT)
@@ -5185,7 +4942,6 @@ El Sistema.
                 )
             self.lv_usuarios_torta.controls = controles_usu
             
-            # --- DISEÑO RESPONSIVO CON FLECHAS (ARRIBA Y ABAJO) ---
             col_tor = ft.Container(width=200, content=ft.Column(controls=[ft.Text("1. Torneo (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_torneos_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
             col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("2. Año (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_anios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
             col_usu = ft.Container(width=200, content=ft.Column(controls=[ft.Text("3. Usuario (Obligatorio)", weight="bold", size=12, color="cyan"), ft.Container(content=self.lv_usuarios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
@@ -5227,19 +4983,11 @@ El Sistema.
 
             contenido = ft.Container(
                 width=750, height=350, 
-                content=ft.Stack(
-                    expand=True,
+                content=ft.Column(
+                    scroll=ft.ScrollMode.ALWAYS,
                     controls=[
-                        ft.Column(
-                            scroll=ft.ScrollMode.AUTO,
-                            on_scroll=_on_scroll_modal,
-                            controls=[
-                                ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
-                                ft.Container(height=40) # Margen fantasma inferior
-                            ]
-                        ),
-                        flecha_arriba,
-                        flecha_abajo
+                        ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
+                        ft.Container(height=40) # Margen fantasma inferior
                     ]
                 )
             )
@@ -5324,36 +5072,9 @@ El Sistema.
             titulo_txt = f"Estilo: {self.temp_usuario_torta}"
             subtitulo_txt = f"{self.temp_camp_torta} {self.temp_anio_torta}" if self.temp_camp_torta else (f"Año {self.temp_anio_torta}" if self.temp_anio_torta else "Histórico completo")
 
-            # --- ESTRUCTURA RESPONSIVA CON SCROLL Y FLECHAS ---
+            # --- ESTRUCTURA RESPONSIVA (BARRAS SIEMPRE VISIBLES) ---
             ancho_dialogo = self.page.width - 50 if self.page.width else 700
             alto_dialogo = self.page.height - 50 if self.page.height else 600
-            es_celular = self.page.width < 750 if self.page.width else False
-
-            flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=60, right=10, visible=False, ignore_interactions=True, data=False)
-            flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=10, right=10, visible=es_celular, ignore_interactions=True, data=False)
-
-            def _on_scroll_grafico(e):
-                try:
-                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
-                    if max_pos <= 0:
-                        if not flecha_arriba.data or not flecha_abajo.data:
-                            flecha_arriba.visible, flecha_arriba.data = False, True
-                            flecha_abajo.visible, flecha_abajo.data = False, True
-                            flecha_arriba.update(); flecha_abajo.update()
-                        return
-                    if not flecha_arriba.data:
-                        if pos <= 10 and flecha_arriba.visible:
-                            flecha_arriba.visible, flecha_arriba.data = False, True
-                            flecha_arriba.update()
-                        elif pos > 10 and not flecha_arriba.visible:
-                            flecha_arriba.visible = True; flecha_arriba.update()
-                    if not flecha_abajo.data:
-                        if pos >= (max_pos - 10) and flecha_abajo.visible:
-                            flecha_abajo.visible, flecha_abajo.data = False, True
-                            flecha_abajo.update()
-                        elif pos < (max_pos - 10) and not flecha_abajo.visible:
-                            flecha_abajo.visible = True; flecha_abajo.update()
-                except: pass
 
             columna_principal = ft.Column([
                 ft.Row(
@@ -5366,18 +5087,19 @@ El Sistema.
                 ft.Row(
                     controls=[
                         ft.Container(content=chart, width=280, height=280),
-                        ft.Container(content=leyenda, width=200, padding=10)
+                        ft.Container(content=leyenda, padding=10)
                     ],
                     wrap=True, alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER
                 ),
                 ft.Container(height=20),
+                # RECUERDA: en la primera función es "total_partidos", en las otras dos es "total"
                 ft.Text(f"Total Partidos Jugados: {total_partidos}", size=12, italic=True, text_align=ft.TextAlign.CENTER),
                 ft.Container(height=40)
-            ], scroll=ft.ScrollMode.AUTO, on_scroll=_on_scroll_grafico, expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+            ], scroll=ft.ScrollMode.ALWAYS, expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
             contenido_final = ft.Container(
                 width=ancho_dialogo, height=alto_dialogo, padding=20, bgcolor="#1E1E1E", border_radius=10,
-                content=ft.Stack([columna_principal, flecha_arriba, flecha_abajo], expand=True)
+                content=columna_principal
             )
             
             self.page.close(self.dlg_carga_grafico)
@@ -5577,19 +5299,11 @@ El Sistema.
 
             contenido = ft.Container(
                 width=750, height=350, 
-                content=ft.Stack(
-                    expand=True,
+                content=ft.Column(
+                    scroll=ft.ScrollMode.ALWAYS,
                     controls=[
-                        ft.Column(
-                            scroll=ft.ScrollMode.AUTO,
-                            on_scroll=_on_scroll_modal,
-                            controls=[
-                                ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
-                                ft.Container(height=40) # Margen fantasma inferior
-                            ]
-                        ),
-                        flecha_arriba,
-                        flecha_abajo
+                        ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
+                        ft.Container(height=40) # Margen fantasma inferior
                     ]
                 )
             )
@@ -5672,36 +5386,9 @@ El Sistema.
             titulo_txt = f"Tendencia: {self.temp_usuario_torta}"
             subtitulo_txt = f"{self.temp_camp_torta} {self.temp_anio_torta}" if self.temp_camp_torta else (f"Año {self.temp_anio_torta}" if self.temp_anio_torta else "Histórico completo")
 
-            # --- ESTRUCTURA RESPONSIVA CON SCROLL Y FLECHAS ---
+            # --- ESTRUCTURA RESPONSIVA (BARRAS SIEMPRE VISIBLES) ---
             ancho_dialogo = self.page.width - 50 if self.page.width else 700
             alto_dialogo = self.page.height - 50 if self.page.height else 600
-            es_celular = self.page.width < 750 if self.page.width else False
-
-            flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=60, right=10, visible=False, ignore_interactions=True, data=False)
-            flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=10, right=10, visible=es_celular, ignore_interactions=True, data=False)
-
-            def _on_scroll_grafico(e):
-                try:
-                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
-                    if max_pos <= 0:
-                        if not flecha_arriba.data or not flecha_abajo.data:
-                            flecha_arriba.visible, flecha_arriba.data = False, True
-                            flecha_abajo.visible, flecha_abajo.data = False, True
-                            flecha_arriba.update(); flecha_abajo.update()
-                        return
-                    if not flecha_arriba.data:
-                        if pos <= 10 and flecha_arriba.visible:
-                            flecha_arriba.visible, flecha_arriba.data = False, True
-                            flecha_arriba.update()
-                        elif pos > 10 and not flecha_arriba.visible:
-                            flecha_arriba.visible = True; flecha_arriba.update()
-                    if not flecha_abajo.data:
-                        if pos >= (max_pos - 10) and flecha_abajo.visible:
-                            flecha_abajo.visible, flecha_abajo.data = False, True
-                            flecha_abajo.update()
-                        elif pos < (max_pos - 10) and not flecha_abajo.visible:
-                            flecha_abajo.visible = True; flecha_abajo.update()
-                except: pass
 
             columna_principal = ft.Column([
                 ft.Row(
@@ -5714,18 +5401,19 @@ El Sistema.
                 ft.Row(
                     controls=[
                         ft.Container(content=chart, width=280, height=280),
-                        ft.Container(content=leyenda, width=200, padding=10)
+                        ft.Container(content=leyenda, padding=10)
                     ],
                     wrap=True, alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER
                 ),
                 ft.Container(height=20),
+                # RECUERDA: en la primera función es "total_partidos", en las otras dos es "total"
                 ft.Text(f"Total Partidos Jugados: {total}", size=12, italic=True, text_align=ft.TextAlign.CENTER),
                 ft.Container(height=40)
-            ], scroll=ft.ScrollMode.AUTO, on_scroll=_on_scroll_grafico, expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+            ], scroll=ft.ScrollMode.ALWAYS, expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
             contenido_final = ft.Container(
                 width=ancho_dialogo, height=alto_dialogo, padding=20, bgcolor="#1E1E1E", border_radius=10,
-                content=ft.Stack([columna_principal, flecha_arriba, flecha_abajo], expand=True)
+                content=columna_principal
             )
             
             self.page.close(self.dlg_carga_grafico)
@@ -5844,19 +5532,11 @@ El Sistema.
 
             contenido = ft.Container(
                 width=750, height=350, 
-                content=ft.Stack(
-                    expand=True,
+                content=ft.Column(
+                    scroll=ft.ScrollMode.ALWAYS,
                     controls=[
-                        ft.Column(
-                            scroll=ft.ScrollMode.AUTO,
-                            on_scroll=_on_scroll_modal,
-                            controls=[
-                                ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
-                                ft.Container(height=40) # Margen fantasma inferior
-                            ]
-                        ),
-                        flecha_arriba,
-                        flecha_abajo
+                        ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
+                        ft.Container(height=40) # Margen fantasma inferior
                     ]
                 )
             )
@@ -5935,36 +5615,9 @@ El Sistema.
             titulo_txt = f"Grado de firmeza: {self.temp_usuario_torta}"
             subtitulo_txt = f"{self.temp_camp_torta} {self.temp_anio_torta}" if self.temp_camp_torta else (f"Año {self.temp_anio_torta}" if self.temp_anio_torta else "Histórico completo")
 
-            # --- ESTRUCTURA RESPONSIVA CON SCROLL Y FLECHAS ---
+            # --- ESTRUCTURA RESPONSIVA (BARRAS SIEMPRE VISIBLES) ---
             ancho_dialogo = self.page.width - 50 if self.page.width else 700
             alto_dialogo = self.page.height - 50 if self.page.height else 600
-            es_celular = self.page.width < 750 if self.page.width else False
-
-            flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=60, right=10, visible=False, ignore_interactions=True, data=False)
-            flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=10, right=10, visible=es_celular, ignore_interactions=True, data=False)
-
-            def _on_scroll_grafico(e):
-                try:
-                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
-                    if max_pos <= 0:
-                        if not flecha_arriba.data or not flecha_abajo.data:
-                            flecha_arriba.visible, flecha_arriba.data = False, True
-                            flecha_abajo.visible, flecha_abajo.data = False, True
-                            flecha_arriba.update(); flecha_abajo.update()
-                        return
-                    if not flecha_arriba.data:
-                        if pos <= 10 and flecha_arriba.visible:
-                            flecha_arriba.visible, flecha_arriba.data = False, True
-                            flecha_arriba.update()
-                        elif pos > 10 and not flecha_arriba.visible:
-                            flecha_arriba.visible = True; flecha_arriba.update()
-                    if not flecha_abajo.data:
-                        if pos >= (max_pos - 10) and flecha_abajo.visible:
-                            flecha_abajo.visible, flecha_abajo.data = False, True
-                            flecha_abajo.update()
-                        elif pos < (max_pos - 10) and not flecha_abajo.visible:
-                            flecha_abajo.visible = True; flecha_abajo.update()
-                except: pass
 
             columna_principal = ft.Column([
                 ft.Row(
@@ -5977,18 +5630,19 @@ El Sistema.
                 ft.Row(
                     controls=[
                         ft.Container(content=chart, width=280, height=280),
-                        ft.Container(content=leyenda, width=220, padding=10) # Leyenda al lado o abajo
+                        ft.Container(content=leyenda, padding=10)
                     ],
                     wrap=True, alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER
                 ),
                 ft.Container(height=20),
+                # RECUERDA: en la primera función es "total_partidos", en las otras dos es "total"
                 ft.Text(f"Total Partidos Jugados: {total}", size=12, italic=True, text_align=ft.TextAlign.CENTER),
                 ft.Container(height=40)
-            ], scroll=ft.ScrollMode.AUTO, on_scroll=_on_scroll_grafico, expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+            ], scroll=ft.ScrollMode.ALWAYS, expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
             contenido_final = ft.Container(
                 width=ancho_dialogo, height=alto_dialogo, padding=20, bgcolor="#1E1E1E", border_radius=10,
-                content=ft.Stack([columna_principal, flecha_arriba, flecha_abajo], expand=True)
+                content=columna_principal
             )
             
             self.page.close(self.dlg_carga_grafico)
@@ -6324,22 +5978,38 @@ def main(page: ft.Page):
     app = SistemaIndependiente(page)
 
 if __name__ == "__main__":
+
     def main(page: ft.Page):
         app = SistemaIndependiente(page)
     
     puerto_nube = os.getenv("PORT")
+    es_ejecutable = getattr(sys, 'frozen', False)
     
     # --- RUTA ABSOLUTA BLINDADA ---
-    directorio_actual = os.path.dirname(os.path.abspath(__file__))
-    ruta_assets = os.path.join(directorio_actual, "assets")
-    
-    # Si Git ignoró la carpeta assets y no viajó a Render, la creamos en la nube para que Flet no colapse
-    if not os.path.exists(ruta_assets):
-        os.makedirs(ruta_assets)
-    
-    if puerto_nube:
-        # MODO NUBE (Render) - Usamos ft.AppView.WEB_BROWSER (El oficial de la versión 0.25.2)
-        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=int(puerto_nube), host="0.0.0.0", assets_dir=ruta_assets)
+    if es_ejecutable:
+        # Si es un .EXE, usa la memoria temporal interna donde PyInstaller guardó las imágenes
+        directorio_raiz = sys._MEIPASS
     else:
-        # MODO LOCAL (Tu PC)
+        # Si es tu código .py o Render, usa la carpeta real del proyecto
+        directorio_raiz = os.path.dirname(os.path.abspath(__file__))
+        
+    ruta_assets = os.path.join(directorio_raiz, "assets")
+    
+    # Prevenir colapsos
+    if not os.path.exists(ruta_assets):
+        try: os.makedirs(ruta_assets)
+        except: pass
+    
+    # --- MOTOR DE ARRANQUE TRIPLE ---
+    if es_ejecutable:
+        # MODO 1: USUARIO FINAL (.exe)
+        # Abre ventana nativa y apunta los recursos a la memoria interna
+        ft.app(target=main, assets_dir=ruta_assets)
+        
+    elif puerto_nube:
+        # MODO 2: RENDER (Nube)
+        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=int(puerto_nube), host="0.0.0.0", assets_dir=ruta_assets)
+        
+    else:
+        # MODO 3: DEPURACIÓN LOCAL (Navegador)
         ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir=ruta_assets)
