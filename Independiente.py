@@ -23,6 +23,10 @@ URL_API = "https://www.fotmob.com/api/teams"
 CANT_PARTIDOS_A_SINCRONIZAR = 10
 DÍAS_NOTIFICACIÓN = 3  # Días antes del partido para notificar
 ADMINISTRADOR = 'Gabriel'
+CANT_USUARIOS_EN_LISTA = 4
+ALTURA_POR_USUARIO_LISTA = 52
+ALTURA_LISTAS_DIALOGO = CANT_USUARIOS_EN_LISTA * ALTURA_POR_USUARIO_LISTA
+ANCHO_COLUMNA_USUARIO = 100
 
 # --- CREDENCIALES SEGURAS ---
 # Lee el correo desde el sistema, si no lo encuentra usa el tuyo por defecto
@@ -400,6 +404,10 @@ El Sistema.
         
         self.loading_modal = ft.ProgressBar(width=200, color="amber", bgcolor="#222222")
         
+        # Ancho dinámico para que no se salga del celular
+        ancho_pantalla = self.page.width if self.page.width else 600
+        ancho_modal = min(650, ancho_pantalla - 20)
+        
         columna_content = ft.Column(
             controls=[
                 ft.Text("Ranking Falso Profeta 🤡", size=18, weight="bold", color="white"),
@@ -409,8 +417,8 @@ El Sistema.
                 ft.Container(height=50)
             ],
             height=150,
-            width=650,
-            scroll=None
+            width=ancho_modal, # <--- AHORA ES DINÁMICO
+            scroll=ft.ScrollMode.ALWAYS
         )
         
         self.dlg_fp = ft.AlertDialog(content=columna_content, modal=True)
@@ -438,7 +446,7 @@ El Sistema.
                     
                     filas.append(ft.DataRow(cells=[
                         ft.DataCell(ft.Container(content=ft.Text(f"{i}º", color="white", weight=ft.FontWeight.BOLD), width=50, alignment=ft.alignment.center)),
-                        ft.DataCell(ft.Container(content=ft.Text(user, color="white"), width=150, alignment=ft.alignment.center_left)),
+                        ft.DataCell(ft.Container(content=ft.Text(user, color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                         ft.DataCell(ft.Container(content=ft.Text(str(victorias_pred), color="cyan"), width=120, alignment=ft.alignment.center)),
                         ft.DataCell(ft.Container(content=ft.Text(txt_porcentaje, color=color_txt, weight=ft.FontWeight.BOLD), width=120, alignment=ft.alignment.center)),
                     ]))
@@ -446,7 +454,7 @@ El Sistema.
                 tabla = ft.DataTable(
                     columns=[
                         ft.DataColumn(ft.Container(content=ft.Text("Pos", weight="bold", color="white"), width=50, alignment=ft.alignment.center)),
-                        ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
+                        ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                         ft.DataColumn(ft.Container(content=ft.Text("Pred. Victoria", tooltip="Veces que dijo que ganábamos", weight="bold", color="white"), width=120, alignment=ft.alignment.center), numeric=True),
                         ft.DataColumn(ft.Container(content=ft.Text("% Falso Profeta", tooltip="Porcentaje de veces que falló al predecir victoria", weight="bold", color="white"), width=120, alignment=ft.alignment.center), numeric=True),
                     ],
@@ -460,67 +468,32 @@ El Sistema.
                     data_row_min_height=50
                 )
                 
-                # ==========================================
-                # MAGIA: FLECHAS HORIZONTALES (CON MEMORIA)
-                # ==========================================
-                es_celular = self.page.width < 600 if self.page.width else False
-                
-                flecha_izq = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT, color="amber", size=35), left=0, top=100, visible=False, ignore_interactions=True, data=False)
-                flecha_der = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT, color="amber", size=35), right=0, top=100, visible=es_celular, ignore_interactions=True, data=False)
+                # Altura matemática perfecta: 60px de cabecera + 50px por cada usuario
+                altura_tabla = 60 + (len(filas) * 50) + 30
+                altura_contenedor = min(270, altura_tabla)
 
-                def _on_scroll_h(e):
-                    try:
-                        pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
-                        if max_pos <= 0:
-                            if not flecha_izq.data or not flecha_der.data:
-                                flecha_izq.visible, flecha_izq.data = False, True
-                                flecha_der.visible, flecha_der.data = False, True
-                                flecha_izq.update(); flecha_der.update()
-                            return
-                        if not flecha_izq.data:
-                            if pos <= 10 and flecha_izq.visible:
-                                flecha_izq.visible, flecha_izq.data = False, True
-                                flecha_izq.update()
-                            elif pos > 10 and not flecha_izq.visible:
-                                flecha_izq.visible = True; flecha_izq.update()
-                        if not flecha_der.data:
-                            if pos >= (max_pos - 10) and flecha_der.visible:
-                                flecha_der.visible, flecha_der.data = False, True
-                                flecha_der.update()
-                            elif pos < (max_pos - 10) and not flecha_der.visible:
-                                flecha_der.visible = True; flecha_der.update()
-                    except: pass
-
-                contenedor_tabla_con_flechas = ft.Stack(
+                contenedor_tabla_nativa = ft.Row(
+                    scroll=ft.ScrollMode.ALWAYS,
                     controls=[
-                        ft.Row(
-                            scroll=ft.ScrollMode.AUTO,
-                            on_scroll=_on_scroll_h,
-                            controls=[
-                                ft.Container(
-                                    height=270,
-                                    content=ft.Column(
-                                        controls=[tabla],
-                                        scroll=ft.ScrollMode.ALWAYS
-                                    )
-                                )
-                            ]
-                        ),
-                        flecha_izq,
-                        flecha_der
-                    ],
-                    height=270
+                        ft.Container(
+                            height=altura_contenedor,
+                            content=ft.Column(
+                                controls=[tabla],
+                                scroll=ft.ScrollMode.ALWAYS
+                            )
+                        )
+                    ]
                 )
                 
-                columna_content.height = 460 
-                columna_content.width = 650
-                columna_content.scroll = ft.ScrollMode.AUTO # Evita que se bloqueen los clics si se desborda
+                # Ajuste dinámico del modal sin dejar espacios vacíos
+                alto_pantalla = self.page.height if self.page.height else 600
+                columna_content.height = min(alto_pantalla - 50, altura_contenedor + 150) 
                 
                 columna_content.controls = [
                     ft.Text("Ranking Falso Profeta 🤡", size=18, weight="bold", color="white"),
                     ft.Text("Usuarios que más le erran cuando dicen que el Rojo va a ganar.", size=12, color="white70"),
                     ft.Container(height=10),
-                    contenedor_tabla_con_flechas,
+                    contenedor_tabla_nativa,
                     ft.Container(height=10),
                     ft.Row([ft.ElevatedButton("Cerrar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_fp))], alignment=ft.MainAxisAlignment.END)
                 ]
@@ -670,7 +643,7 @@ El Sistema.
         )
 
         # --- CONTENEDOR 5: GRÁFICOS DE TORTA ---
-        self.btn_grafico_torta_estilo = ft.ElevatedButton("Resultados pronosticados", icon=ft.Icons.PIE_CHART, bgcolor="#333333", color="white", width=215, height=30, tooltip="Muestra el porcentaje histórico de victorias, empates y derrotas pronosticadas por un usuario.", style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_selector_grafico_torta)
+        self.btn_grafico_torta_estilo = ft.ElevatedButton("Resultados pronosticados", icon=ft.Icons.PIE_CHART, bgcolor="#333333", color="white", width=215, height=30, tooltip="Muestra el porcentaje histórico de victorias, empates y derrotas pronosticadas por un usuario.", style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_selector_grafico_torta_estilo_pronostico)
         self.btn_grafico_torta_tendencia = ft.ElevatedButton("Tendencia de pronóstico", icon=ft.Icons.PIE_CHART_OUTLINE, bgcolor="#333333", color="white", width=215, height=30, tooltip="Analiza si tus pronósticos suelen ser optimistas, neutrales o pesimistas respecto al resultado final.", style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_selector_grafico_torta_tendencia)
         self.btn_grafico_torta_firmeza = ft.ElevatedButton("Grado de firmeza", icon=ft.Icons.SHIELD, bgcolor="#333333", color="white", width=215, height=30, tooltip="Analiza la cantidad de veces que cambiaste de opinión antes del partido.\n🧱 1 vez | 🤔 2 veces | 🔄 3+ veces", style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_selector_grafico_torta_firmeza)
 
@@ -794,7 +767,7 @@ El Sistema.
             ft.DataColumn(ft.Container(content=ft.Text("Puntos", color="green", weight=ft.FontWeight.BOLD), width=60, alignment=ft.alignment.center), numeric=True, on_sort=self._ordenar_tabla_pronosticos),
             ft.DataColumn(ft.Container(content=ft.Text("Error\nabsoluto", color="red", weight=ft.FontWeight.BOLD, text_align="center"), width=80, alignment=ft.alignment.center), numeric=True, on_sort=self._ordenar_tabla_pronosticos)
         ]
-        ancho_usuario = 140
+        ancho_usuario = ANCHO_COLUMNA_USUARIO
         columnas_estadisticas = [
             ft.DataColumn(ft.Container(content=ft.Text("Puesto", color="white", weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER), width=50, alignment=ft.alignment.center)), 
             ft.DataColumn(ft.Container(content=ft.Text("Usuario", color="white", weight=ft.FontWeight.BOLD), width=ancho_usuario, alignment=ft.alignment.center)), 
@@ -1161,6 +1134,10 @@ El Sistema.
              
         self.loading_modal = ft.ProgressBar(width=200, color="amber", bgcolor="#222222")
         
+        # Ancho dinámico para que no se salga del celular
+        ancho_pantalla = self.page.width if self.page.width else 600
+        ancho_modal = min(650, ancho_pantalla - 20)
+        
         columna_content = ft.Column(
             controls=[
                 ft.Text(titulo, size=18, weight="bold", color="white"),
@@ -1169,8 +1146,8 @@ El Sistema.
                 ft.Container(height=50)
             ],
             height=150,
-            width=650, 
-            scroll=None
+            width=ancho_modal, 
+            scroll=ft.ScrollMode.ALWAYS 
         )
         
         self.dlg_opt_pes = ft.AlertDialog(content=columna_content, modal=True)
@@ -1211,7 +1188,7 @@ El Sistema.
 
                 filas.append(ft.DataRow(cells=[
                     ft.DataCell(ft.Container(content=ft.Text(f"{i}º", weight="bold", color="white"), width=50, alignment=ft.alignment.center)),
-                    ft.DataCell(ft.Container(content=ft.Text(user, weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
+                    ft.DataCell(ft.Container(content=ft.Text(user, weight="bold", color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                     ft.DataCell(ft.Container(content=ft.Text(txt_val, weight="bold", color=color_val), width=150, alignment=ft.alignment.center)),
                     ft.DataCell(ft.Container(content=ft.Text(clasificacion, weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
                 ]))
@@ -1219,7 +1196,7 @@ El Sistema.
             tabla = ft.DataTable(
                 columns=[
                     ft.DataColumn(ft.Container(content=ft.Text("Puesto", weight="bold", color="white"), width=50, alignment=ft.alignment.center)),
-                    ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
+                    ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                     ft.DataColumn(ft.Container(content=ft.Text("Optimismo/\nPesimismo", text_align="center", weight="bold", color="white"), width=150, alignment=ft.alignment.center), numeric=True),
                     ft.DataColumn(ft.Container(content=ft.Text("Clasificación", weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
                 ],
@@ -1232,66 +1209,31 @@ El Sistema.
                 data_row_min_height=50
             )
 
-            # ==========================================
-            # MAGIA: FLECHAS HORIZONTALES (CON MEMORIA)
-            # ==========================================
-            es_celular = self.page.width < 600 if self.page.width else False
-            
-            flecha_izq = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT, color="amber", size=35), left=0, top=100, visible=False, ignore_interactions=True, data=False)
-            flecha_der = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT, color="amber", size=35), right=0, top=100, visible=es_celular, ignore_interactions=True, data=False)
+            # Altura matemática perfecta
+            altura_tabla = 60 + (len(filas) * 50) + 30
+            altura_contenedor = min(270, altura_tabla)
 
-            def _on_scroll_h(e):
-                try:
-                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
-                    if max_pos <= 0:
-                        if not flecha_izq.data or not flecha_der.data:
-                            flecha_izq.visible, flecha_izq.data = False, True
-                            flecha_der.visible, flecha_der.data = False, True
-                            flecha_izq.update(); flecha_der.update()
-                        return
-                    if not flecha_izq.data:
-                        if pos <= 10 and flecha_izq.visible:
-                            flecha_izq.visible, flecha_izq.data = False, True
-                            flecha_izq.update()
-                        elif pos > 10 and not flecha_izq.visible:
-                            flecha_izq.visible = True; flecha_izq.update()
-                    if not flecha_der.data:
-                        if pos >= (max_pos - 10) and flecha_der.visible:
-                            flecha_der.visible, flecha_der.data = False, True
-                            flecha_der.update()
-                        elif pos < (max_pos - 10) and not flecha_der.visible:
-                            flecha_der.visible = True; flecha_der.update()
-                except: pass
-
-            contenedor_tabla_con_flechas = ft.Stack(
+            contenedor_tabla_nativa = ft.Row(
+                scroll=ft.ScrollMode.ALWAYS,
                 controls=[
-                    ft.Row(
-                        scroll=ft.ScrollMode.AUTO,
-                        on_scroll=_on_scroll_h,
-                        controls=[
-                            ft.Container(
-                                height=270,
-                                content=ft.Column(
-                                    controls=[tabla],
-                                    scroll=ft.ScrollMode.ALWAYS
-                                )
-                            )
-                        ]
-                    ),
-                    flecha_izq,
-                    flecha_der
-                ],
-                height=270
+                    ft.Container(
+                        height=altura_contenedor,
+                        content=ft.Column(
+                            controls=[tabla],
+                            scroll=ft.ScrollMode.ALWAYS
+                        )
+                    )
+                ]
             )
             
-            # Ajuste de altura total del modal
-            columna_content.height = 400 
-            columna_content.width = 650
+            # Ajuste dinámico del modal sin dejar espacios vacíos
+            alto_pantalla = self.page.height if self.page.height else 600
+            columna_content.height = min(alto_pantalla - 50, altura_contenedor + 130) 
             
             columna_content.controls = [
                 ft.Text(titulo, size=18, weight="bold", color="white"),
                 ft.Container(height=10),
-                contenedor_tabla_con_flechas,
+                contenedor_tabla_nativa,
                 ft.Container(height=10),
                 ft.Row([ft.ElevatedButton("Cerrar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_opt_pes))], alignment=ft.MainAxisAlignment.END)
             ]
@@ -1485,9 +1427,9 @@ El Sistema.
         def _cargar_datos():
             time.sleep(0.5) # Pausa estética para ver la carga
             
-            self.lv_torneos_barra = ft.ListView(expand=True, spacing=5, height=200)
-            self.lv_anios_barra = ft.ListView(expand=True, spacing=5, height=200)
-            self.lv_usuarios_barra = ft.ListView(expand=True, spacing=5, height=200)
+            self.lv_torneos_barra = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
+            self.lv_anios_barra = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
+            self.lv_usuarios_barra = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
             
             self.temp_camp_barra = None
             self.temp_anio_barra = None
@@ -1956,6 +1898,17 @@ El Sistema.
             bd = BaseDeDatos()
             puntos_lista = bd.obtener_historial_puntos_usuario(edicion_id, self.usuario_grafico_barra_sel)
             
+            # --- SOLUCIÓN: IGNORAR PARTIDOS FUTUROS ---
+            # Averiguamos cuántos partidos REALMENTE finalizaron usando la función de las líneas
+            cant_partidos_reales, _, _ = bd.obtener_datos_evolucion_puntos(edicion_id, [self.usuario_grafico_barra_sel])
+            
+            # Recortamos la lista de puntos para que coincida exactamente con los finalizados
+            if cant_partidos_reales > 0:
+                puntos_lista = puntos_lista[:cant_partidos_reales] # Corta la lista en el partido 7
+            elif cant_partidos_reales == 0:
+                puntos_lista = [] # Si el torneo no empezó, vaciamos la lista
+            # ------------------------------------------
+
             if not puntos_lista:
                 self.page.close(self.dlg_grafico_barras)
                 GestorMensajes.mostrar(self.page, "Info", "No hay partidos jugados o pronósticos para este usuario.", "info")
@@ -1971,7 +1924,10 @@ El Sistema.
                 if puntos == 9: color_barra = "#0B8616"
                 elif puntos == 6: color_barra = "#FFFF00"
                 elif puntos == 3: color_barra = "#FF5100"
-                else: color_barra = ft.Colors.TRANSPARENT 
+                else: color_barra = "#FF0000"
+                
+                # Truco: Le damos una "mini altura" al 0 para que el dedo/ratón pueda detectarlo
+                altura_barra = 0.15 if puntos == 0 else puntos
                 
                 bar_groups.append(
                     ft.BarChartGroup(
@@ -1979,7 +1935,7 @@ El Sistema.
                         bar_rods=[
                             ft.BarChartRod(
                                 from_y=0,
-                                to_y=puntos,
+                                to_y=altura_barra,
                                 width=20,
                                 color=color_barra,
                                 tooltip=f"Partido {n_partido}: {puntos} pts",
@@ -2083,13 +2039,18 @@ El Sistema.
                 except: pass
 
             # --- CONTENEDOR GRÁFICO (CON BARRA SIEMPRE VISIBLE) ---
+            es_pc = (self.page.width >= 750) if self.page.width else True
+            
             fila_grafico = ft.Row(
                 controls=[
                     ft.Container(
                         content=chart, 
                         width=ancho_grafico_dinamico, 
                         height=350, 
-                        padding=ft.padding.only(top=20, right=20)
+                        padding=ft.padding.only(
+                            top=20 if es_pc else 35,   # Aleja el gráfico del título en celulares
+                            right=20 if es_pc else 50  # Da más margen a la derecha en celulares
+                        )
                     )
                 ],
                 scroll=ft.ScrollMode.ALWAYS
@@ -2136,6 +2097,10 @@ El Sistema.
              
         self.loading_modal = ft.ProgressBar(width=200, color="amber", bgcolor="#222222")
         
+        # Ancho dinámico para que no se salga del celular
+        ancho_pantalla = self.page.width if self.page.width else 600
+        ancho_modal = min(700, ancho_pantalla - 20)
+        
         columna_content = ft.Column(
             controls=[
                 ft.Text(titulo, size=18, weight="bold", color="white"),
@@ -2144,8 +2109,8 @@ El Sistema.
                 ft.Container(height=50)
             ],
             height=150,
-            width=700, 
-            scroll=None
+            width=ancho_modal, 
+            scroll=ft.ScrollMode.ALWAYS # Barra vertical nativa siempre activa
         )
         
         self.dlg_mejor_predictor = ft.AlertDialog(content=columna_content, modal=True)
@@ -2173,7 +2138,7 @@ El Sistema.
 
                 filas.append(ft.DataRow(cells=[
                     ft.DataCell(ft.Container(content=ft.Text(f"{i}º", weight="bold", color="white"), width=50, alignment=ft.alignment.center)),
-                    ft.DataCell(ft.Container(content=ft.Text(user, weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
+                    ft.DataCell(ft.Container(content=ft.Text(user, weight="bold", color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                     ft.DataCell(ft.Container(content=ft.Text(txt_val, weight="bold", color=color_val), width=180, alignment=ft.alignment.center)),
                     ft.DataCell(ft.Container(content=ft.Text(clasificacion, weight="bold", color="white"), width=200, alignment=ft.alignment.center_left)),
                 ]))
@@ -2181,7 +2146,7 @@ El Sistema.
             tabla = ft.DataTable(
                 columns=[
                     ft.DataColumn(ft.Container(content=ft.Text("Puesto", weight="bold", color="white"), width=50, alignment=ft.alignment.center)),
-                    ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
+                    ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                     ft.DataColumn(ft.Container(content=ft.Text("Promedio error\nabsoluto de goles", text_align="center", weight="bold", color="white"), width=180, alignment=ft.alignment.center), numeric=True),
                     ft.DataColumn(ft.Container(content=ft.Text("Clasificación", weight="bold", color="white"), width=200, alignment=ft.alignment.center_left)),
                 ],
@@ -2194,67 +2159,32 @@ El Sistema.
                 data_row_min_height=50
             )
 
-            # ==========================================
-            # MAGIA: FLECHAS HORIZONTALES (CON MEMORIA)
-            # ==========================================
-            es_celular = self.page.width < 600 if self.page.width else False
-            
-            flecha_izq = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT, color="amber", size=35), left=0, top=100, visible=False, ignore_interactions=True, data=False)
-            flecha_der = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT, color="amber", size=35), right=0, top=100, visible=es_celular, ignore_interactions=True, data=False)
+            # Altura matemática perfecta
+            altura_tabla = 60 + (len(filas) * 50) + 30
+            altura_contenedor = min(270, altura_tabla)
 
-            def _on_scroll_h(e):
-                try:
-                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
-                    if max_pos <= 0:
-                        if not flecha_izq.data or not flecha_der.data:
-                            flecha_izq.visible, flecha_izq.data = False, True
-                            flecha_der.visible, flecha_der.data = False, True
-                            flecha_izq.update(); flecha_der.update()
-                        return
-                    if not flecha_izq.data:
-                        if pos <= 10 and flecha_izq.visible:
-                            flecha_izq.visible, flecha_izq.data = False, True
-                            flecha_izq.update()
-                        elif pos > 10 and not flecha_izq.visible:
-                            flecha_izq.visible = True; flecha_izq.update()
-                    if not flecha_der.data:
-                        if pos >= (max_pos - 10) and flecha_der.visible:
-                            flecha_der.visible, flecha_der.data = False, True
-                            flecha_der.update()
-                        elif pos < (max_pos - 10) and not flecha_der.visible:
-                            flecha_der.visible = True; flecha_der.update()
-                except: pass
-
-            contenedor_tabla_con_flechas = ft.Stack(
+            # Contenedor limpio con scroll nativo visible
+            contenedor_tabla_nativa = ft.Row(
+                scroll=ft.ScrollMode.ALWAYS,
                 controls=[
-                    ft.Row(
-                        scroll=ft.ScrollMode.AUTO,
-                        on_scroll=_on_scroll_h,
-                        controls=[
-                            ft.Container(
-                                height=270,
-                                content=ft.Column(
-                                    controls=[tabla],
-                                    scroll=ft.ScrollMode.ALWAYS
-                                )
-                            )
-                        ]
-                    ),
-                    flecha_izq,
-                    flecha_der
-                ],
-                height=270  # <--- LÍMITE DE CAPA
+                    ft.Container(
+                        height=altura_contenedor,
+                        content=ft.Column(
+                            controls=[tabla],
+                            scroll=ft.ScrollMode.ALWAYS
+                        )
+                    )
+                ]
             )
             
-            # --- MÁS ALTO Y CON SCROLL PARA EL CELULAR ---
-            columna_content.height = 460
-            columna_content.width = 700
-            columna_content.scroll = ft.ScrollMode.AUTO
+            # Ajuste dinámico del modal sin dejar espacios vacíos
+            alto_pantalla = self.page.height if self.page.height else 600
+            columna_content.height = min(alto_pantalla - 50, altura_contenedor + 150) 
             
             columna_content.controls = [
                 ft.Text(titulo, size=18, weight="bold", color="white"),
                 ft.Container(height=10),
-                contenedor_tabla_con_flechas,
+                contenedor_tabla_nativa,
                 ft.Container(height=10),
                 ft.Row([ft.ElevatedButton("Cerrar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_mejor_predictor))], alignment=ft.MainAxisAlignment.END)
             ]
@@ -2354,14 +2284,14 @@ El Sistema.
 
                 filas.append(ft.DataRow(cells=[
                     ft.DataCell(ft.Container(content=ft.Text(f"{i}º", weight="bold", color="white"), width=50, alignment=ft.alignment.center)),
-                    ft.DataCell(ft.Container(content=ft.Text(user, weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
+                    ft.DataCell(ft.Container(content=ft.Text(user, weight="bold", color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                     ft.DataCell(ft.Container(content=ft.Text(str(racha), weight="bold", color=color_racha), width=100, alignment=ft.alignment.center)),
                 ]))
             
             tabla = ft.DataTable(
                 columns=[
                     ft.DataColumn(ft.Container(content=ft.Text("Puesto", weight="bold", color="white"), width=50, alignment=ft.alignment.center)),
-                    ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
+                    ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                     ft.DataColumn(ft.Container(content=ft.Text("Racha actual", text_align="center", weight="bold", color="white"), width=100, alignment=ft.alignment.center), numeric=True),
                 ],
                 rows=filas,
@@ -2725,7 +2655,10 @@ El Sistema.
         self.loading_modal = ft.ProgressBar(width=200, color="amber", bgcolor="#222222")
         self.txt_estado_modal = ft.Text("Analizando tiempos de predicción...", color="white70", size=12)
         
-        # Contenido inicial del modal
+        # Ancho dinámico para que no se salga del celular
+        ancho_pantalla = self.page.width if self.page.width else 600
+        ancho_modal = min(650, ancho_pantalla - 20)
+        
         columna_content = ft.Column(
             controls=[
                 ft.Text(titulo, size=18, weight="bold", color="white"),
@@ -2735,8 +2668,8 @@ El Sistema.
                 ft.Container(height=20)
             ],
             height=150,
-            width=650,
-            scroll=None
+            width=ancho_modal, # <--- ANCHO DINÁMICO
+            scroll=ft.ScrollMode.ALWAYS # <--- BARRA VERTICAL SIEMPRE VISIBLE
         )
         
         self.dlg_estilo = ft.AlertDialog(content=columna_content, modal=True)
@@ -2828,7 +2761,7 @@ El Sistema.
                     color_estilo = "white30"
 
                 filas.append(ft.DataRow(cells=[
-                    ft.DataCell(ft.Container(content=ft.Text(user, weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
+                    ft.DataCell(ft.Container(content=ft.Text(user, weight="bold", color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                     ft.DataCell(ft.Container(content=ft.Text(txt_tiempo, color="cyan", weight="bold"), width=120, alignment=ft.alignment.center)),
                     ft.DataCell(ft.Container(content=ft.Text(estilo, color=color_estilo, weight="bold", size=15), width=180, alignment=ft.alignment.center_left)),
                 ]))
@@ -2836,7 +2769,7 @@ El Sistema.
             # 3. CONSTRUIR TABLA
             tabla = ft.DataTable(
                 columns=[
-                    ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
+                    ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                     ft.DataColumn(ft.Container(content=ft.Text("Anticipación\nPromedio", text_align="center", weight="bold", color="white"), width=120, alignment=ft.alignment.center)),
                     ft.DataColumn(ft.Container(content=ft.Text("Estilo", weight="bold", color="white"), width=180, alignment=ft.alignment.center_left)),
                 ],
@@ -2849,68 +2782,36 @@ El Sistema.
                 data_row_min_height=50
             )
 
-            # ==========================================
-            # MAGIA: FLECHAS HORIZONTALES (CON MEMORIA)
-            # ==========================================
-            es_celular = self.page.width < 600 if self.page.width else False
-            
-            flecha_izq = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT, color="amber", size=35), left=0, top=100, visible=False, ignore_interactions=True, data=False)
-            flecha_der = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT, color="amber", size=35), right=0, top=100, visible=es_celular, ignore_interactions=True, data=False)
+            # Altura matemática perfecta
+            altura_tabla = 60 + (len(filas) * 50) + 30
+            altura_contenedor = min(270, altura_tabla)
 
-            def _on_scroll_h(e):
-                try:
-                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
-                    if max_pos <= 0:
-                        if not flecha_izq.data or not flecha_der.data:
-                            flecha_izq.visible, flecha_izq.data = False, True
-                            flecha_der.visible, flecha_der.data = False, True
-                            flecha_izq.update(); flecha_der.update()
-                        return
-                    if not flecha_izq.data:
-                        if pos <= 10 and flecha_izq.visible:
-                            flecha_izq.visible, flecha_izq.data = False, True
-                            flecha_izq.update()
-                        elif pos > 10 and not flecha_izq.visible:
-                            flecha_izq.visible = True; flecha_izq.update()
-                    if not flecha_der.data:
-                        if pos >= (max_pos - 10) and flecha_der.visible:
-                            flecha_der.visible, flecha_der.data = False, True
-                            flecha_der.update()
-                        elif pos < (max_pos - 10) and not flecha_der.visible:
-                            flecha_der.visible = True; flecha_der.update()
-                except: pass
-
-            contenedor_tabla_con_flechas = ft.Stack(
+            contenedor_tabla_nativa = ft.Row(
+                scroll=ft.ScrollMode.ALWAYS,
                 controls=[
-                    ft.Row(
-                        scroll=ft.ScrollMode.AUTO,
-                        on_scroll=_on_scroll_h,
-                        controls=[
-                            ft.Container(
-                                height=270,
-                                content=ft.Column(
-                                    controls=[tabla],
-                                    scroll=ft.ScrollMode.ALWAYS
-                                )
-                            )
-                        ]
-                    ),
-                    flecha_izq,
-                    flecha_der
-                ],
-                height=270  # <--- LÍMITE DE CAPA
+                    ft.Container(
+                        height=altura_contenedor,
+                        content=ft.Column(
+                            controls=[tabla],
+                            scroll=ft.ScrollMode.ALWAYS
+                        )
+                    )
+                ]
             )
 
-            # Actualizar el contenido del modal (MÁS ALTO Y CON SCROLL)
-            columna_content.height = 460
-            columna_content.width = 650
-            columna_content.scroll = ft.ScrollMode.AUTO
-
+            # Ajuste dinámico del modal sin dejar espacios vacíos
+            alto_pantalla = self.page.height if self.page.height else 600
+            columna_content.height = min(alto_pantalla - 50, altura_contenedor + 150) 
+            
+            # ¡IMPORTANTE! Aseguramos el ancho dinámico para que no se salga
+            ancho_pantalla = self.page.width if self.page.width else 600
+            columna_content.width = min(650, ancho_pantalla - 20)
+            
             columna_content.controls = [
                 ft.Text(titulo, size=18, weight="bold", color="white"),
                 ft.Text("Promedio de tiempo de anticipación de los pronósticos.", size=12, color="white70"),
                 ft.Container(height=10),
-                contenedor_tabla_con_flechas,
+                contenedor_tabla_nativa, # <--- TABLA LIMPIA
                 ft.Container(height=10),
                 ft.Row([ft.ElevatedButton("Cerrar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_estilo))], alignment=ft.MainAxisAlignment.END)
             ]
@@ -2924,6 +2825,10 @@ El Sistema.
         # 1. Configuración inicial del modal (Estado Cargando)
         self.loading_modal = ft.ProgressBar(width=200, color="amber", bgcolor="#222222")
         
+        # Ancho dinámico para que no se salga del celular
+        ancho_pantalla = self.page.width if self.page.width else 600
+        ancho_modal = min(650, ancho_pantalla - 20)
+        
         columna_content = ft.Column(
             controls=[
                 ft.Text("Ranking Mufa 🌩️", size=18, weight="bold", color="white"),
@@ -2933,8 +2838,8 @@ El Sistema.
                 ft.Container(height=50)
             ],
             height=150,
-            width=650,
-            scroll=None
+            width=ancho_modal, # <--- ANCHO DINÁMICO
+            scroll=ft.ScrollMode.ALWAYS # <--- BARRA VERTICAL SIEMPRE VISIBLE
         )
         
         self.dlg_mufa = ft.AlertDialog(content=columna_content, modal=True)
@@ -2961,7 +2866,7 @@ El Sistema.
                     
                     filas.append(ft.DataRow(cells=[
                         ft.DataCell(ft.Container(content=ft.Text(f"{i}º", color="white", weight=ft.FontWeight.BOLD), width=50, alignment=ft.alignment.center)),
-                        ft.DataCell(ft.Container(content=ft.Text(user, color="white"), width=150, alignment=ft.alignment.center_left)),
+                        ft.DataCell(ft.Container(content=ft.Text(user, color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                         ft.DataCell(ft.Container(content=ft.Text(str(pred_derrotas), color="cyan"), width=100, alignment=ft.alignment.center)),
                         ft.DataCell(ft.Container(content=ft.Text(str(aciertos), color="white"), width=100, alignment=ft.alignment.center)),
                         ft.DataCell(ft.Container(content=ft.Text(txt_porcentaje, color=color_txt, weight=ft.FontWeight.BOLD), width=100, alignment=ft.alignment.center)),
@@ -2970,7 +2875,7 @@ El Sistema.
                 tabla = ft.DataTable(
                     columns=[
                         ft.DataColumn(ft.Container(content=ft.Text("Pos", weight="bold", color="white"), width=50, alignment=ft.alignment.center)),
-                        ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
+                        ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                         ft.DataColumn(ft.Container(content=ft.Text("Pred. Derrota", tooltip="Veces que pronosticó que perdíamos", weight="bold", color="white"), width=100, alignment=ft.alignment.center), numeric=True),
                         ft.DataColumn(ft.Container(content=ft.Text("Acertadas", tooltip="Veces que pronosticó derrota y PERDIMOS", weight="bold", color="white"), width=100, alignment=ft.alignment.center), numeric=True),
                         ft.DataColumn(ft.Container(content=ft.Text("% Mufa", tooltip="Porcentaje de derrotas acertadas", weight="bold", color="white"), width=100, alignment=ft.alignment.center), numeric=True),
@@ -2985,68 +2890,32 @@ El Sistema.
                     data_row_min_height=50
                 )
                 
-                # ==========================================
-                # MAGIA: FLECHAS HORIZONTALES (CON MEMORIA)
-                # ==========================================
-                es_celular = self.page.width < 600 if self.page.width else False
-                
-                flecha_izq = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT, color="amber", size=35), left=0, top=100, visible=False, ignore_interactions=True, data=False)
-                flecha_der = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT, color="amber", size=35), right=0, top=100, visible=es_celular, ignore_interactions=True, data=False)
+                # Altura matemática perfecta: 60px de cabecera + 50px por cada usuario
+                altura_tabla = 60 + (len(filas) * 50) + 30
+                altura_contenedor = min(270, altura_tabla)
 
-                def _on_scroll_h(e):
-                    try:
-                        pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
-                        if max_pos <= 0:
-                            if not flecha_izq.data or not flecha_der.data:
-                                flecha_izq.visible, flecha_izq.data = False, True
-                                flecha_der.visible, flecha_der.data = False, True
-                                flecha_izq.update(); flecha_der.update()
-                            return
-                        if not flecha_izq.data:
-                            if pos <= 10 and flecha_izq.visible:
-                                flecha_izq.visible, flecha_izq.data = False, True
-                                flecha_izq.update()
-                            elif pos > 10 and not flecha_izq.visible:
-                                flecha_izq.visible = True; flecha_izq.update()
-                        if not flecha_der.data:
-                            if pos >= (max_pos - 10) and flecha_der.visible:
-                                flecha_der.visible, flecha_der.data = False, True
-                                flecha_der.update()
-                            elif pos < (max_pos - 10) and not flecha_der.visible:
-                                flecha_der.visible = True; flecha_der.update()
-                    except: pass
-
-                contenedor_tabla_con_flechas = ft.Stack(
+                contenedor_tabla_nativa = ft.Row(
+                    scroll=ft.ScrollMode.ALWAYS,
                     controls=[
-                        ft.Row(
-                            scroll=ft.ScrollMode.AUTO,
-                            on_scroll=_on_scroll_h,
-                            controls=[
-                                ft.Container(
-                                    height=270,
-                                    content=ft.Column(
-                                        controls=[tabla],
-                                        scroll=ft.ScrollMode.ALWAYS
-                                    )
-                                )
-                            ]
-                        ),
-                        flecha_izq,
-                        flecha_der
-                    ],
-                    height=270 # <--- LÍMITE DE CAPA
+                        ft.Container(
+                            height=altura_contenedor,
+                            content=ft.Column(
+                                controls=[tabla],
+                                scroll=ft.ScrollMode.ALWAYS
+                            )
+                        )
+                    ]
                 )
 
-                # 3. Actualizar contenido del modal (MÁS ALTO Y CON SCROLL)
-                columna_content.height = 460
-                columna_content.width = 650
-                columna_content.scroll = ft.ScrollMode.AUTO
+                # Ajuste dinámico del modal sin dejar espacios vacíos
+                alto_pantalla = self.page.height if self.page.height else 600
+                columna_content.height = min(alto_pantalla - 50, altura_contenedor + 150)
                 
                 columna_content.controls = [
                     ft.Text("Ranking Mufa 🌩️", size=18, weight="bold", color="white"),
                     ft.Text("Usuarios que más aciertan cuando pronostican que el Rojo pierde.", size=12, color="white70"),
                     ft.Container(height=10),
-                    contenedor_tabla_con_flechas,
+                    contenedor_tabla_nativa, # <--- TABLA LIMPIA
                     ft.Container(height=10),
                     ft.Row([ft.ElevatedButton("Cerrar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_mufa))], alignment=ft.MainAxisAlignment.END)
                 ]
@@ -3073,6 +2942,10 @@ El Sistema.
         self.loading_modal = ft.ProgressBar(width=200, color="amber", bgcolor="#222222")
         self.txt_estado_modal = ft.Text("Analizando historial de cambios...", color="white70", size=12)
         
+        # Ancho dinámico para que no se salga del celular
+        ancho_pantalla = self.page.width if self.page.width else 600
+        ancho_modal = min(600, ancho_pantalla - 20)
+        
         columna_content = ft.Column(
             controls=[
                 ft.Text(titulo, size=18, weight="bold", color="white"),
@@ -3082,8 +2955,8 @@ El Sistema.
                 ft.Container(height=20)
             ],
             height=150,
-            width=600,
-            scroll=None
+            width=ancho_modal,
+            scroll=ft.ScrollMode.ALWAYS # Barra vertical nativa siempre activa
         )
         
         self.dlg_cambios = ft.AlertDialog(content=columna_content, modal=True)
@@ -3138,14 +3011,14 @@ El Sistema.
                     color_estilo = "red"
 
                 filas.append(ft.DataRow(cells=[
-                    ft.DataCell(ft.Container(content=ft.Text(user, weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
+                    ft.DataCell(ft.Container(content=ft.Text(user, weight="bold", color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                     ft.DataCell(ft.Container(content=ft.Text(txt_cambios, color="white", weight="bold"), width=120, alignment=ft.alignment.center)),
                     ft.DataCell(ft.Container(content=ft.Text(estilo, color=color_estilo, weight="bold", size=14), width=180, alignment=ft.alignment.center_left)),
                 ]))
 
             tabla = ft.DataTable(
                 columns=[
-                    ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
+                    ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                     ft.DataColumn(ft.Container(content=ft.Text("Promedio de\npronósticos", text_align="center", weight="bold", color="white", tooltip="Promedio de veces que guardó pronóstico por partido finalizado"), width=120, alignment=ft.alignment.center), numeric=True),
                     ft.DataColumn(ft.Container(content=ft.Text("Perfil", weight="bold", color="white"), width=180, alignment=ft.alignment.center_left)),
                 ],
@@ -3158,67 +3031,33 @@ El Sistema.
                 data_row_min_height=50
             )
 
-            # ==========================================
-            # MAGIA: FLECHAS HORIZONTALES (CON MEMORIA)
-            # ==========================================
-            es_celular = self.page.width < 600 if self.page.width else False
+            # Altura matemática + 30px de respiro para los bordes y líneas divisorias
+            altura_tabla = 60 + (len(filas) * 50) + 30 
             
-            flecha_izq = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT, color="amber", size=35), left=0, top=100, visible=False, ignore_interactions=True, data=False)
-            flecha_der = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT, color="amber", size=35), right=0, top=100, visible=es_celular, ignore_interactions=True, data=False)
+            altura_contenedor = min(270, altura_tabla)
 
-            def _on_scroll_h(e):
-                try:
-                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
-                    if max_pos <= 0:
-                        if not flecha_izq.data or not flecha_der.data:
-                            flecha_izq.visible, flecha_izq.data = False, True
-                            flecha_der.visible, flecha_der.data = False, True
-                            flecha_izq.update(); flecha_der.update()
-                        return
-                    if not flecha_izq.data:
-                        if pos <= 10 and flecha_izq.visible:
-                            flecha_izq.visible, flecha_izq.data = False, True
-                            flecha_izq.update()
-                        elif pos > 10 and not flecha_izq.visible:
-                            flecha_izq.visible = True; flecha_izq.update()
-                    if not flecha_der.data:
-                        if pos >= (max_pos - 10) and flecha_der.visible:
-                            flecha_der.visible, flecha_der.data = False, True
-                            flecha_der.update()
-                        elif pos < (max_pos - 10) and not flecha_der.visible:
-                            flecha_der.visible = True; flecha_der.update()
-                except: pass
-
-            contenedor_tabla_con_flechas = ft.Stack(
+            # Contenedor limpio con scroll nativo visible
+            contenedor_tabla_nativa = ft.Row(
+                scroll=ft.ScrollMode.ALWAYS,
                 controls=[
-                    ft.Row(
-                        scroll=ft.ScrollMode.AUTO,
-                        on_scroll=_on_scroll_h,
-                        controls=[
-                            ft.Container(
-                                height=270,
-                                content=ft.Column(
-                                    controls=[tabla],
-                                    scroll=ft.ScrollMode.ALWAYS
-                                )
-                            )
-                        ]
-                    ),
-                    flecha_izq,
-                    flecha_der
-                ],
-                height=270  # <--- LÍMITE DE CAPA
+                    ft.Container(
+                        height=altura_contenedor,
+                        content=ft.Column(
+                            controls=[tabla],
+                            scroll=ft.ScrollMode.ALWAYS
+                        )
+                    )
+                ]
             )
             
-            # --- MÁS ALTO Y CON SCROLL PARA EL CELULAR ---
-            columna_content.height = 460
-            columna_content.width = 600
-            columna_content.scroll = ft.ScrollMode.AUTO
+            # Ajuste dinámico del modal sin dejar espacios vacíos
+            alto_pantalla = self.page.height if self.page.height else 600
+            columna_content.height = min(alto_pantalla - 50, altura_contenedor + 150) 
             
             columna_content.controls = [
                 ft.Text(titulo, size=18, weight="bold", color="white"),
                 ft.Container(height=10),
-                contenedor_tabla_con_flechas,
+                contenedor_tabla_nativa,
                 ft.Container(height=10),
                 ft.Row([ft.ElevatedButton("Cerrar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_cambios))], alignment=ft.MainAxisAlignment.END)
             ]
@@ -3508,7 +3347,7 @@ El Sistema.
                     filas_ranking.append(ft.DataRow(
                         cells=[
                             ft.DataCell(ft.Container(content=ft.Text(f"{i}º", weight="bold", color="white", text_align=ft.TextAlign.CENTER), width=50, alignment=ft.alignment.center, padding=0, on_click=evento_click)),
-                            ft.DataCell(ft.Container(content=ft.Text(user_display, weight="bold", color="white", text_align=ft.TextAlign.CENTER), width=140, alignment=ft.alignment.center, padding=0, on_click=evento_click)),
+                            ft.DataCell(ft.Container(content=ft.Text(user_display, weight="bold", color="white", text_align=ft.TextAlign.CENTER), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center, padding=0, on_click=evento_click)),
                             ft.DataCell(ft.Container(content=ft.Text(str(total), weight="bold", color="yellow", size=16, text_align=ft.TextAlign.CENTER), width=75, alignment=ft.alignment.center, padding=0, on_click=evento_click)),
                             ft.DataCell(ft.Container(content=ft.Text(str(pts_cai), color="white", text_align=ft.TextAlign.CENTER), width=75, alignment=ft.alignment.center, padding=0, on_click=evento_click)),
                             ft.DataCell(ft.Container(content=ft.Text(str(pts_rival), color="white", text_align=ft.TextAlign.CENTER), width=75, alignment=ft.alignment.center, padding=0, on_click=evento_click)),
@@ -3538,7 +3377,7 @@ El Sistema.
                     
                     filas_copas.append(ft.DataRow(cells=[
                         ft.DataCell(ft.Container(content=ft.Text(f"{i}º", weight=ft.FontWeight.BOLD, color="white"), width=60, alignment=ft.alignment.center)),
-                        ft.DataCell(ft.Container(content=ft.Text(user_display, weight=ft.FontWeight.BOLD, color="white"), width=110, alignment=ft.alignment.center_left)),
+                        ft.DataCell(ft.Container(content=ft.Text(user_display, weight=ft.FontWeight.BOLD, color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                         ft.DataCell(ft.Container(content=ft.Text(str(copas), weight=ft.FontWeight.BOLD, color="yellow", size=16), width=120, alignment=ft.alignment.center)),
                     ]))
                 self.tabla_copas.rows = filas_copas
@@ -3777,14 +3616,14 @@ El Sistema.
 
                 filas.append(ft.DataRow(cells=[
                     ft.DataCell(ft.Container(content=ft.Text(f"{i}º", weight="bold", color="white"), width=50, alignment=ft.alignment.center)),
-                    ft.DataCell(ft.Container(content=ft.Text(user, weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
+                    ft.DataCell(ft.Container(content=ft.Text(user, weight="bold", color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                     ft.DataCell(ft.Container(content=ft.Text(str(racha), weight="bold", color=color_racha), width=100, alignment=ft.alignment.center)),
                 ]))
             
             tabla = ft.DataTable(
                 columns=[
                     ft.DataColumn(ft.Container(content=ft.Text("Puesto", weight="bold", color="white"), width=50, alignment=ft.alignment.center)),
-                    ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
+                    ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                     ft.DataColumn(ft.Container(content=ft.Text("Racha récord", text_align="center", weight="bold", color="white"), width=100, alignment=ft.alignment.center), numeric=True),
                 ],
                 rows=filas,
@@ -4908,7 +4747,7 @@ El Sistema.
     
     # --- FUNCIONES GRÁFICO DE TORTA (ESTILO DE PRONÓSTICO) ---
 
-    def _abrir_selector_grafico_torta(self, e):
+    def _abrir_selector_grafico_torta_estilo_pronostico(self, e):
         """Abre el modal para configurar el gráfico de torta con animación de carga inicial."""
         
         # 1. Crear y mostrar diálogo de carga
@@ -4932,9 +4771,9 @@ El Sistema.
             time.sleep(0.5)
             
             # Inicializar listas
-            self.lv_torneos_torta = ft.ListView(expand=True, spacing=5, height=200)
-            self.lv_anios_torta = ft.ListView(expand=True, spacing=5, height=200)
-            self.lv_usuarios_torta = ft.ListView(expand=True, spacing=5, height=200)
+            self.lv_torneos_torta = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
+            self.lv_anios_torta = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
+            self.lv_usuarios_torta = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
             
             self.temp_camp_torta = None
             self.temp_anio_torta = None
@@ -4944,7 +4783,7 @@ El Sistema.
                 "Generar Gráfico", 
                 icon=ft.Icons.PIE_CHART, 
                 disabled=True, 
-                on_click=self._generar_grafico_torta
+                on_click=self._generar_grafico_torta_estilo_pronostico
             )
 
             bd = BaseDeDatos()
@@ -5046,8 +4885,8 @@ El Sistema.
 
         threading.Thread(target=_cargar_datos_torta, daemon=True).start()
 
-    def _generar_grafico_torta(self, e):
-        """Genera el PieChart con animación de carga y diseño responsivo."""
+    def _generar_grafico_torta_estilo_pronostico(self, e):
+        """Genera el PieChart con animación de carga y diseño responsivo infalible."""
         
         loading_content = ft.Column(
             controls=[
@@ -5095,7 +4934,8 @@ El Sistema.
             if derrotas > 0: secciones.append(ft.PieChartSection(value=derrotas, title=f"{calc_pct(derrotas):.0f}%", color=ft.Colors.RED, radius=100, title_style=ft.TextStyle(size=14, weight=ft.FontWeight.BOLD, color="white")))
             if sin_pron > 0: secciones.append(ft.PieChartSection(value=sin_pron, title=f"{calc_pct(sin_pron):.0f}%", color=ft.Colors.TRANSPARENT, radius=98, border_side=ft.BorderSide(2, "white54"), title_style=ft.TextStyle(size=12, color="white70")))
 
-            chart = ft.PieChart(sections=secciones, sections_space=2, center_space_radius=0, expand=True)
+            # ELIMINADO: expand=True para que no rompa la estructura
+            chart = ft.PieChart(sections=secciones, sections_space=2, center_space_radius=0)
 
             leyenda = ft.Column(
                 controls=[
@@ -5110,9 +4950,29 @@ El Sistema.
             titulo_txt = f"Estilo: {self.temp_usuario_torta}"
             subtitulo_txt = f"{self.temp_camp_torta} {self.temp_anio_torta}" if self.temp_camp_torta else (f"Año {self.temp_anio_torta}" if self.temp_anio_torta else "Histórico completo")
 
-            # --- ESTRUCTURA RESPONSIVA (BARRAS SIEMPRE VISIBLES) ---
-            ancho_dialogo = self.page.width - 50 if self.page.width else 700
-            alto_dialogo = self.page.height - 50 if self.page.height else 600
+            # --- ESTRUCTURA RESPONSIVA INFALIBLE ---
+            es_pc = (self.page.width >= 600) if self.page.width else True
+            
+            if es_pc:
+                # PC: Fila (lado a lado)
+                ancho_dialogo = 650
+                contenedor_torta_leyenda = ft.Row(
+                    controls=[
+                        ft.Container(content=chart, width=280, height=280),
+                        ft.Container(content=leyenda, padding=ft.padding.only(left=20))
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER
+                )
+            else:
+                # Celular: Columna (arriba y abajo)
+                ancho_dialogo = self.page.width - 20
+                contenedor_torta_leyenda = ft.Column(
+                    controls=[
+                        ft.Container(content=chart, width=220, height=220), # Torta un poquito más chica
+                        ft.Container(content=leyenda, padding=ft.padding.only(top=10))
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                )
 
             columna_principal = ft.Column([
                 ft.Row(
@@ -5122,21 +4982,14 @@ El Sistema.
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN
                 ),
                 ft.Divider(),
-                ft.Row(
-                    controls=[
-                        ft.Container(content=chart, width=280, height=280),
-                        ft.Container(content=leyenda, padding=10)
-                    ],
-                    wrap=True, alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER
-                ),
+                contenedor_torta_leyenda,
                 ft.Container(height=20),
-                # RECUERDA: en la primera función es "total_partidos", en las otras dos es "total"
                 ft.Text(f"Total Partidos Jugados: {total_partidos}", size=12, italic=True, text_align=ft.TextAlign.CENTER),
-                ft.Container(height=40)
-            ], scroll=ft.ScrollMode.ALWAYS, expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+                ft.Container(height=10)
+            ], scroll=ft.ScrollMode.ALWAYS, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
             contenido_final = ft.Container(
-                width=ancho_dialogo, height=alto_dialogo, padding=20, bgcolor="#1E1E1E", border_radius=10,
+                width=ancho_dialogo, padding=20, bgcolor="#1E1E1E", border_radius=10,
                 content=columna_principal
             )
             
@@ -5250,9 +5103,9 @@ El Sistema.
             time.sleep(0.5)
             
             # Reutilizamos las variables de listas para no duplicar lógica de selección
-            self.lv_torneos_torta = ft.ListView(expand=True, spacing=5, height=150)
-            self.lv_anios_torta = ft.ListView(expand=True, spacing=5, height=150)
-            self.lv_usuarios_torta = ft.ListView(expand=True, spacing=5, height=150)
+            self.lv_torneos_torta = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
+            self.lv_anios_torta = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
+            self.lv_usuarios_torta = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
             
             self.temp_camp_torta = None
             self.temp_anio_torta = None
@@ -5362,7 +5215,7 @@ El Sistema.
         threading.Thread(target=_cargar_datos_torta, daemon=True).start()
 
     def _generar_grafico_torta_tendencia(self, e):
-        """Genera el gráfico de torta de Tendencia con diseño responsivo."""
+        """Genera el gráfico de torta de Tendencia con diseño responsivo infalible."""
         
         loading_content = ft.Column(
             controls=[
@@ -5413,7 +5266,8 @@ El Sistema.
             if muy_pes > 0: secciones.append(ft.PieChartSection(value=muy_pes, title=f"{calc_pct(muy_pes):.0f}%", color=ft.Colors.PURPLE, radius=100, title_style=ft.TextStyle(size=12, weight="bold", color="white")))
             if sin_pron > 0: secciones.append(ft.PieChartSection(value=sin_pron, title=f"{calc_pct(sin_pron):.0f}%", color=ft.Colors.TRANSPARENT, radius=98, border_side=ft.BorderSide(2, "white54"), title_style=ft.TextStyle(size=12, color="white70")))
 
-            chart = ft.PieChart(sections=secciones, sections_space=2, center_space_radius=0, expand=True)
+            # ELIMINADO: expand=True
+            chart = ft.PieChart(sections=secciones, sections_space=2, center_space_radius=0)
 
             items_leyenda = [(ft.Colors.RED, "Muy optimista"), (ft.Colors.ORANGE, "Optimista"), (ft.Colors.GREEN, "Neutral"), (ft.Colors.BLUE, "Pesimista"), (ft.Colors.PURPLE, "Muy pesimista")]
             controles_leyenda = [ft.Row([ft.Container(width=15, height=15, bgcolor=col, shape=ft.BoxShape.CIRCLE), ft.Text(txt, weight="bold", size=12)], spacing=5) for col, txt in items_leyenda]
@@ -5424,9 +5278,27 @@ El Sistema.
             titulo_txt = f"Tendencia: {self.temp_usuario_torta}"
             subtitulo_txt = f"{self.temp_camp_torta} {self.temp_anio_torta}" if self.temp_camp_torta else (f"Año {self.temp_anio_torta}" if self.temp_anio_torta else "Histórico completo")
 
-            # --- ESTRUCTURA RESPONSIVA (BARRAS SIEMPRE VISIBLES) ---
-            ancho_dialogo = self.page.width - 50 if self.page.width else 700
-            alto_dialogo = self.page.height - 50 if self.page.height else 600
+            # --- ESTRUCTURA RESPONSIVA INFALIBLE ---
+            es_pc = (self.page.width >= 600) if self.page.width else True
+            
+            if es_pc:
+                ancho_dialogo = 650
+                contenedor_torta_leyenda = ft.Row(
+                    controls=[
+                        ft.Container(content=chart, width=280, height=280),
+                        ft.Container(content=leyenda, padding=ft.padding.only(left=20))
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER
+                )
+            else:
+                ancho_dialogo = self.page.width - 20
+                contenedor_torta_leyenda = ft.Column(
+                    controls=[
+                        ft.Container(content=chart, width=220, height=220),
+                        ft.Container(content=leyenda, padding=ft.padding.only(top=10))
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                )
 
             columna_principal = ft.Column([
                 ft.Row(
@@ -5436,21 +5308,14 @@ El Sistema.
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN
                 ),
                 ft.Divider(),
-                ft.Row(
-                    controls=[
-                        ft.Container(content=chart, width=280, height=280),
-                        ft.Container(content=leyenda, padding=10)
-                    ],
-                    wrap=True, alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER
-                ),
+                contenedor_torta_leyenda,
                 ft.Container(height=20),
-                # RECUERDA: en la primera función es "total_partidos", en las otras dos es "total"
                 ft.Text(f"Total Partidos Jugados: {total}", size=12, italic=True, text_align=ft.TextAlign.CENTER),
-                ft.Container(height=40)
-            ], scroll=ft.ScrollMode.ALWAYS, expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+                ft.Container(height=10)
+            ], scroll=ft.ScrollMode.ALWAYS, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
             contenido_final = ft.Container(
-                width=ancho_dialogo, height=alto_dialogo, padding=20, bgcolor="#1E1E1E", border_radius=10,
+                width=ancho_dialogo, padding=20, bgcolor="#1E1E1E", border_radius=10,
                 content=columna_principal
             )
             
@@ -5482,10 +5347,10 @@ El Sistema.
         def _cargar_datos_torta():
             time.sleep(0.5)
             
-            # Inicializar listas
-            self.lv_torneos_torta = ft.ListView(expand=True, spacing=5, height=150)
-            self.lv_anios_torta = ft.ListView(expand=True, spacing=5, height=150)
-            self.lv_usuarios_torta = ft.ListView(expand=True, spacing=5, height=150)
+            # Reutilizamos las variables de listas para no duplicar lógica de selección
+            self.lv_torneos_torta = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
+            self.lv_anios_torta = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
+            self.lv_usuarios_torta = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
             
             self.temp_camp_torta = None
             self.temp_anio_torta = None
@@ -5595,7 +5460,7 @@ El Sistema.
         threading.Thread(target=_cargar_datos_torta, daemon=True).start()
 
     def _generar_grafico_torta_firmeza(self, e):
-        """Genera el gráfico de torta de Grado de Firmeza con diseño responsivo."""
+        """Genera el gráfico de torta de Grado de Firmeza con diseño responsivo infalible."""
         
         loading_content = ft.Column(
             controls=[
@@ -5642,7 +5507,8 @@ El Sistema.
             if cambiante > 0: secciones.append(ft.PieChartSection(value=cambiante, title=f"{calc_pct(cambiante):.0f}%", color=ft.Colors.RED, radius=100, title_style=ft.TextStyle(size=14, weight="bold", color="white")))
             if sin_pron > 0: secciones.append(ft.PieChartSection(value=sin_pron, title=f"{calc_pct(sin_pron):.0f}%", color=ft.Colors.TRANSPARENT, radius=98, border_side=ft.BorderSide(2, "white54"), title_style=ft.TextStyle(size=12, color="white70")))
 
-            chart = ft.PieChart(sections=secciones, sections_space=2, center_space_radius=0, expand=True)
+            # ELIMINADO: expand=True
+            chart = ft.PieChart(sections=secciones, sections_space=2, center_space_radius=0)
 
             items_leyenda = [(ft.Colors.GREEN, "🧱 Firme (1 intento)"), (ft.Colors.AMBER, "🤔 Dudoso (2 intentos)"), (ft.Colors.RED, "🔄 Cambiante (3+ intentos)")]
             controles_leyenda = [ft.Row([ft.Container(width=18, height=18, bgcolor=col, shape=ft.BoxShape.CIRCLE), ft.Text(txt, weight="bold", size=14)], spacing=10) for col, txt in items_leyenda]
@@ -5653,9 +5519,27 @@ El Sistema.
             titulo_txt = f"Grado de firmeza: {self.temp_usuario_torta}"
             subtitulo_txt = f"{self.temp_camp_torta} {self.temp_anio_torta}" if self.temp_camp_torta else (f"Año {self.temp_anio_torta}" if self.temp_anio_torta else "Histórico completo")
 
-            # --- ESTRUCTURA RESPONSIVA (BARRAS SIEMPRE VISIBLES) ---
-            ancho_dialogo = self.page.width - 50 if self.page.width else 700
-            alto_dialogo = self.page.height - 50 if self.page.height else 600
+            # --- ESTRUCTURA RESPONSIVA INFALIBLE ---
+            es_pc = (self.page.width >= 600) if self.page.width else True
+            
+            if es_pc:
+                ancho_dialogo = 650
+                contenedor_torta_leyenda = ft.Row(
+                    controls=[
+                        ft.Container(content=chart, width=280, height=280),
+                        ft.Container(content=leyenda, padding=ft.padding.only(left=20))
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER
+                )
+            else:
+                ancho_dialogo = self.page.width - 20
+                contenedor_torta_leyenda = ft.Column(
+                    controls=[
+                        ft.Container(content=chart, width=220, height=220),
+                        ft.Container(content=leyenda, padding=ft.padding.only(top=10))
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                )
 
             columna_principal = ft.Column([
                 ft.Row(
@@ -5665,21 +5549,14 @@ El Sistema.
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN
                 ),
                 ft.Divider(),
-                ft.Row(
-                    controls=[
-                        ft.Container(content=chart, width=280, height=280),
-                        ft.Container(content=leyenda, padding=10)
-                    ],
-                    wrap=True, alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER
-                ),
+                contenedor_torta_leyenda,
                 ft.Container(height=20),
-                # RECUERDA: en la primera función es "total_partidos", en las otras dos es "total"
                 ft.Text(f"Total Partidos Jugados: {total}", size=12, italic=True, text_align=ft.TextAlign.CENTER),
-                ft.Container(height=40)
-            ], scroll=ft.ScrollMode.ALWAYS, expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+                ft.Container(height=10)
+            ], scroll=ft.ScrollMode.ALWAYS, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
             contenido_final = ft.Container(
-                width=ancho_dialogo, height=alto_dialogo, padding=20, bgcolor="#1E1E1E", border_radius=10,
+                width=ancho_dialogo, padding=20, bgcolor="#1E1E1E", border_radius=10,
                 content=columna_principal
             )
             
@@ -5850,7 +5727,7 @@ El Sistema.
                         else: break
                 
                 # --- CÁLCULO DE ANCHOS ---
-                w_cols = [130, 140, 100, 100, 60, 60, 100] 
+                w_cols = [ANCHO_COLUMNA_USUARIO, 140, 100, 100, 60, 60, 100] 
                 w_spacing = 10
                 ancho_tabla_neto = sum(w_cols) + (w_spacing * (len(w_cols) - 1))
                 

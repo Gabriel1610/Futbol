@@ -357,12 +357,22 @@ class BaseDeDatos:
                     try:
                         sql = """
                             UPDATE partidos 
-                            SET goles_independiente = %s, goles_rival = %s, fecha_hora = %s, edicion_id = %s
+                            SET goles_independiente = %s, goles_rival = %s, fecha_hora = %s
                             WHERE rival_id = %s 
+                              AND edicion_id = %s  -- <--- FILTRO ESTRICTO DE TORNEO AGREGADO
                               AND ABS(DATEDIFF(fecha_hora, %s)) <= 4 
                               AND goles_independiente IS NULL
                         """
-                        cursor.execute(sql, (datos['goles_cai'], datos['goles_rival'], datos['fecha'], edicion_id, rival_id, datos['fecha']))
+                        # ATENCIÓN: Se cambió el orden de las variables para coincidir con el nuevo SQL
+                        cursor.execute(sql, (
+                            datos['goles_cai'], 
+                            datos['goles_rival'], 
+                            datos['fecha'], 
+                            rival_id, 
+                            edicion_id,  # <--- SE USA COMO FILTRO, NO COMO SET
+                            datos['fecha']
+                        ))
+                        
                         if cursor.rowcount > 0:
                             count += 1
                     except mysql.connector.IntegrityError:
