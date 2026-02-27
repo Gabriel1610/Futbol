@@ -17,6 +17,7 @@ from ventana_mensaje import GestorMensajes
 
 # Constantes
 NOMBRE_ICONO = "Escudo.ico"
+NOMBRE_ICONO_UI = "Escudo.png"
 MAXIMA_CANTIDAD_DE_PUNTOS = 9
 ID_INDEPENDIENTE = 10078  # ID real de Independiente en FotMob
 URL_API = "https://www.fotmob.com/api/teams"
@@ -294,9 +295,8 @@ El Sistema.
     def _configurar_ventana(self):
         self.page.title = "Sistema Club Atlético Independiente"
         
-        # Protegemos los comandos de ventana para que no rompan la web
         if not self.page.web:
-            self.page.window.icon = NOMBRE_ICONO
+            self.page.window.icon = NOMBRE_ICONO # ¡Sigue usando el .ico!
             self.page.window.maximized = True
         
         self.page.theme_mode = ft.ThemeMode.DARK 
@@ -612,7 +612,7 @@ El Sistema.
         # --- SELECTORES ---
         self.page.appbar = ft.AppBar(
             # Flet buscará la imagen directamente en la carpeta assets
-            leading=ft.Container(content=ft.Image(src=NOMBRE_ICONO, fit=ft.ImageFit.CONTAIN), padding=5),
+            leading=ft.Container(content=ft.Image(src=NOMBRE_ICONO_UI, fit=ft.ImageFit.CONTAIN), padding=5),
             leading_width=50,
             title=ft.Text(f"Bienvenido, {usuario}", weight=ft.FontWeight.BOLD, color=Estilos.COLOR_ROJO_CAI),
             center_title=False, bgcolor="white", 
@@ -2253,6 +2253,10 @@ El Sistema.
              
         self.loading_modal = ft.ProgressBar(width=200, color="amber", bgcolor="#222222")
         
+        # Ancho dinámico para que no se salga del celular
+        ancho_pantalla = self.page.width if self.page.width else 600
+        ancho_modal = min(500, ancho_pantalla - 20)
+        
         columna_content = ft.Column(
             controls=[
                 ft.Text(titulo, size=18, weight="bold", color="white"),
@@ -2261,8 +2265,8 @@ El Sistema.
                 ft.Container(height=20)
             ],
             height=150,
-            width=500,
-            scroll=None
+            width=ancho_modal,
+            scroll=ft.ScrollMode.ALWAYS # Barra vertical nativa siempre activa
         )
         
         self.dlg_racha = ft.AlertDialog(content=columna_content, modal=True)
@@ -2303,67 +2307,32 @@ El Sistema.
                 data_row_min_height=50
             )
 
-            # ==========================================
-            # MAGIA: FLECHAS HORIZONTALES (CON MEMORIA)
-            # ==========================================
-            es_celular = self.page.width < 600 if self.page.width else False
-            
-            flecha_izq = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT, color="amber", size=35), left=0, top=100, visible=False, ignore_interactions=True, data=False)
-            flecha_der = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT, color="amber", size=35), right=0, top=100, visible=es_celular, ignore_interactions=True, data=False)
+            # Altura matemática + 30px de respiro para los bordes
+            altura_tabla = 60 + (len(filas) * 50) + 30 
+            altura_contenedor = min(400, altura_tabla) 
 
-            def _on_scroll_h(e):
-                try:
-                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
-                    if max_pos <= 0:
-                        if not flecha_izq.data or not flecha_der.data:
-                            flecha_izq.visible, flecha_izq.data = False, True
-                            flecha_der.visible, flecha_der.data = False, True
-                            flecha_izq.update(); flecha_der.update()
-                        return
-                    if not flecha_izq.data:
-                        if pos <= 10 and flecha_izq.visible:
-                            flecha_izq.visible, flecha_izq.data = False, True
-                            flecha_izq.update()
-                        elif pos > 10 and not flecha_izq.visible:
-                            flecha_izq.visible = True; flecha_izq.update()
-                    if not flecha_der.data:
-                        if pos >= (max_pos - 10) and flecha_der.visible:
-                            flecha_der.visible, flecha_der.data = False, True
-                            flecha_der.update()
-                        elif pos < (max_pos - 10) and not flecha_der.visible:
-                            flecha_der.visible = True; flecha_der.update()
-                except: pass
-
-            contenedor_tabla_con_flechas = ft.Stack(
+            # Contenedor limpio con scroll nativo visible
+            contenedor_tabla_nativa = ft.Row(
+                scroll=ft.ScrollMode.ALWAYS,
                 controls=[
-                    ft.Row(
-                        scroll=ft.ScrollMode.AUTO,
-                        on_scroll=_on_scroll_h,
-                        controls=[
-                            ft.Container(
-                                height=270,
-                                content=ft.Column(
-                                    controls=[tabla],
-                                    scroll=ft.ScrollMode.ALWAYS
-                                )
-                            )
-                        ]
-                    ),
-                    flecha_izq,
-                    flecha_der
-                ],
-                height=270  # <--- LÍMITE DE CAPA
+                    ft.Container(
+                        height=altura_contenedor,
+                        content=ft.Column(
+                            controls=[tabla],
+                            scroll=ft.ScrollMode.ALWAYS
+                        )
+                    )
+                ]
             )
             
-            # --- MÁS ALTO Y CON SCROLL PARA EL CELULAR ---
-            columna_content.height = 460
-            columna_content.width = 500
-            columna_content.scroll = ft.ScrollMode.AUTO
+            # Ajuste dinámico del modal sin dejar espacios vacíos
+            alto_pantalla = self.page.height if self.page.height else 600
+            columna_content.height = min(alto_pantalla - 50, altura_contenedor + 150) 
             
             columna_content.controls = [
                 ft.Text(titulo, size=18, weight="bold", color="white"),
                 ft.Container(height=10),
-                contenedor_tabla_con_flechas,
+                contenedor_tabla_nativa,
                 ft.Container(height=10),
                 ft.Row([ft.ElevatedButton("Cerrar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_racha))], alignment=ft.MainAxisAlignment.END)
             ]
@@ -2432,14 +2401,23 @@ El Sistema.
             self._recargar_datos(actualizar_pronosticos=True)
 
     def _abrir_selector_torneo_pronosticos(self, e):
-        # Reutilizamos el mismo diseño del modal, pero cambiamos la acción del botón "Ver"
-        self.lv_torneos = ft.ListView(expand=True, spacing=5, height=200)
-        self.lv_anios = ft.ListView(expand=True, spacing=5, height=200)
-        
-        # El botón llama a _confirmar_filtro_torneo_pronosticos
-        self.btn_ver_torneo = ft.ElevatedButton("Ver", icon=ft.Icons.VISIBILITY, disabled=True, on_click=self._confirmar_filtro_torneo_pronosticos)
-        
+        loading_content = ft.Column(
+            controls=[
+                ft.Text("Cargando filtros...", size=16, weight="bold", color="white"),
+                ft.ProgressBar(width=200, color="amber", bgcolor="#222222")
+            ],
+            height=80, width=300, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
+        )
+        self.dlg_carga_filtros = ft.AlertDialog(content=loading_content, modal=True)
+        self.page.open(self.dlg_carga_filtros)
+
         def _cargar_datos_modal():
+            time.sleep(0.5)
+            self.lv_torneos = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5)
+            self.lv_anios = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5)
+            
+            self.btn_ver_torneo = ft.ElevatedButton("Ver", icon=ft.Icons.VISIBILITY, disabled=True, on_click=self._confirmar_filtro_torneo_pronosticos)
+            
             try:
                 bd = BaseDeDatos()
                 ediciones = bd.obtener_ediciones()
@@ -2450,46 +2428,35 @@ El Sistema.
                 for nombre in nombres_unicos:
                     controles.append(ft.ListTile(title=ft.Text(nombre, size=14), data=nombre, on_click=self._seleccionar_campeonato_modal, bgcolor="#2D2D2D", shape=ft.RoundedRectangleBorder(radius=5)))
                 self.lv_torneos.controls = controles
-                self.lv_torneos.update()
             except Exception as ex:
                 self._mostrar_mensaje_admin("Error cargando modal", f"{ex}", "error")
 
-        # --- DISEÑO RESPONSIVO CON FLECHA ---
-        col_torneo = ft.Container(width=200, content=ft.Column(controls=[ft.Text("Torneo", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_torneos, border=ft.border.all(1, "white24"), border_radius=5, padding=5)]))
-        col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("Año", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_anios, border=ft.border.all(1, "white24"), border_radius=5, padding=5)]))
+            # --- DISEÑO RESPONSIVO ---
+            es_pc = (self.page.width >= 600) if self.page.width else True
+            ancho_pantalla = self.page.width if self.page.width else 600
+            ancho_modal = min(500, ancho_pantalla - 20)
+            ancho_caja = 200 if es_pc else (ancho_modal - 40)
 
-        es_celular = self.page.width < 750 if self.page.width else False
-        flecha_modal = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=0, right=10, visible=es_celular, ignore_interactions=True, data=False)
+            col_torneo = ft.Column(controls=[ft.Text("Torneo", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_torneos, height=180, width=ancho_caja, border=ft.border.all(1, "white24"), border_radius=5, padding=5)])
+            col_anio = ft.Column(controls=[ft.Text("Año", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_anios, height=180, width=ancho_caja, border=ft.border.all(1, "white24"), border_radius=5, padding=5)])
 
-        def _on_scroll_modal(e):
-            try:
-                if not flecha_modal.data:
-                    if float(e.pixels) >= (float(e.max_scroll_extent) - 10) and flecha_modal.visible:
-                        flecha_modal.visible = False
-                        flecha_modal.data = True # Muerte permanente
-                        flecha_modal.update()
-            except: pass
+            if es_pc:
+                layout_filtros = ft.Row(controls=[col_torneo, col_anio], spacing=20, alignment=ft.MainAxisAlignment.CENTER)
+                alto_contenedor = 250
+            else:
+                layout_filtros = ft.Column(controls=[col_torneo, col_anio], spacing=20, scroll=ft.ScrollMode.ALWAYS, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+                alto_contenedor = 450
 
-        contenido_modal = ft.Container(
-            width=500, height=350, 
-            content=ft.Stack(
-                expand=True,
-                controls=[
-                    ft.Column(
-                        scroll=ft.ScrollMode.AUTO,
-                        on_scroll=_on_scroll_modal,
-                        controls=[
-                            ft.Row(controls=[col_torneo, col_anio], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
-                            ft.Container(height=40) # Margen fantasma inferior
-                        ]
-                    ),
-                    flecha_modal
-                ]
+            contenido_modal = ft.Container(width=ancho_modal, height=alto_contenedor, content=layout_filtros)
+
+            self.dlg_modal = ft.AlertDialog(
+                modal=True, title=ft.Text("Filtrar por Torneo"), content=contenido_modal, 
+                actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_modal)), self.btn_ver_torneo], 
+                actions_alignment=ft.MainAxisAlignment.END
             )
-        )
-        
-        self.dlg_modal = ft.AlertDialog(modal=True, title=ft.Text("Filtrar por Torneo"), content=contenido_modal, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_modal)), self.btn_ver_torneo], actions_alignment=ft.MainAxisAlignment.END)
-        self.page.open(self.dlg_modal)
+            self.page.close(self.dlg_carga_filtros)
+            self.page.open(self.dlg_modal)
+
         threading.Thread(target=_cargar_datos_modal, daemon=True).start()
 
     def _confirmar_filtro_equipo_pronosticos(self, e):
@@ -3585,6 +3552,10 @@ El Sistema.
              
         self.loading_modal = ft.ProgressBar(width=200, color="amber", bgcolor="#222222")
         
+        # Ancho dinámico para que no se salga del celular
+        ancho_pantalla = self.page.width if self.page.width else 600
+        ancho_modal = min(500, ancho_pantalla - 20)
+        
         columna_content = ft.Column(
             controls=[
                 ft.Text(titulo, size=18, weight="bold", color="white"),
@@ -3593,8 +3564,8 @@ El Sistema.
                 ft.Container(height=20)
             ],
             height=150,
-            width=500,
-            scroll=None
+            width=ancho_modal,
+            scroll=ft.ScrollMode.ALWAYS # Barra vertical nativa siempre activa
         )
         
         self.dlg_racha_record = ft.AlertDialog(content=columna_content, modal=True)
@@ -3635,67 +3606,32 @@ El Sistema.
                 data_row_min_height=50
             )
 
-            # ==========================================
-            # MAGIA: FLECHAS HORIZONTALES (CON MEMORIA)
-            # ==========================================
-            es_celular = self.page.width < 600 if self.page.width else False
-            
-            flecha_izq = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT, color="amber", size=35), left=0, top=100, visible=False, ignore_interactions=True, data=False)
-            flecha_der = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT, color="amber", size=35), right=0, top=100, visible=es_celular, ignore_interactions=True, data=False)
+            # Altura matemática + 30px de respiro para los bordes
+            altura_tabla = 60 + (len(filas) * 50) + 30 
+            altura_contenedor = min(400, altura_tabla) 
 
-            def _on_scroll_h(e):
-                try:
-                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
-                    if max_pos <= 0:
-                        if not flecha_izq.data or not flecha_der.data:
-                            flecha_izq.visible, flecha_izq.data = False, True
-                            flecha_der.visible, flecha_der.data = False, True
-                            flecha_izq.update(); flecha_der.update()
-                        return
-                    if not flecha_izq.data:
-                        if pos <= 10 and flecha_izq.visible:
-                            flecha_izq.visible, flecha_izq.data = False, True
-                            flecha_izq.update()
-                        elif pos > 10 and not flecha_izq.visible:
-                            flecha_izq.visible = True; flecha_izq.update()
-                    if not flecha_der.data:
-                        if pos >= (max_pos - 10) and flecha_der.visible:
-                            flecha_der.visible, flecha_der.data = False, True
-                            flecha_der.update()
-                        elif pos < (max_pos - 10) and not flecha_der.visible:
-                            flecha_der.visible = True; flecha_der.update()
-                except: pass
-
-            contenedor_tabla_con_flechas = ft.Stack(
+            # Contenedor limpio con scroll nativo visible
+            contenedor_tabla_nativa = ft.Row(
+                scroll=ft.ScrollMode.ALWAYS,
                 controls=[
-                    ft.Row(
-                        scroll=ft.ScrollMode.AUTO,
-                        on_scroll=_on_scroll_h,
-                        controls=[
-                            ft.Container(
-                                height=270,
-                                content=ft.Column(
-                                    controls=[tabla],
-                                    scroll=ft.ScrollMode.ALWAYS
-                                )
-                            )
-                        ]
-                    ),
-                    flecha_izq,
-                    flecha_der
-                ],
-                height=270  # <--- LÍMITE DE CAPA
+                    ft.Container(
+                        height=altura_contenedor,
+                        content=ft.Column(
+                            controls=[tabla],
+                            scroll=ft.ScrollMode.ALWAYS
+                        )
+                    )
+                ]
             )
             
-            # --- MÁS ALTO Y CON SCROLL PARA EL CELULAR ---
-            columna_content.height = 460
-            columna_content.width = 500
-            columna_content.scroll = ft.ScrollMode.AUTO
+            # Ajuste dinámico del modal sin dejar espacios vacíos
+            alto_pantalla = self.page.height if self.page.height else 600
+            columna_content.height = min(alto_pantalla - 50, altura_contenedor + 150) 
             
             columna_content.controls = [
                 ft.Text(titulo, size=18, weight="bold", color="white"),
                 ft.Container(height=10),
-                contenedor_tabla_con_flechas,
+                contenedor_tabla_nativa,
                 ft.Container(height=10),
                 ft.Row([ft.ElevatedButton("Cerrar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_racha_record))], alignment=ft.MainAxisAlignment.END)
             ]
@@ -3860,18 +3796,30 @@ El Sistema.
         - Si no hay torneo, abre el modal para elegir uno.
         """
         if self.filtro_edicion_id is not None:
-            # Desactivar filtro
             self.filtro_edicion_id = None
             self._actualizar_botones_partidos_visual()
             self._actualizar_titulo_partidos()
             self._recargar_datos(actualizar_partidos=True, actualizar_copas=False)
         else:
-            # Abrir modal (código original de carga del modal)
-            self.lv_torneos = ft.ListView(expand=True, spacing=5, height=200)
-            self.lv_anios = ft.ListView(expand=True, spacing=5, height=200)
-            self.btn_ver_torneo = ft.ElevatedButton("Ver", icon=ft.Icons.VISIBILITY, disabled=True, on_click=self._confirmar_filtro_torneo)
-            
+            loading_content = ft.Column(
+                controls=[
+                    ft.Text("Cargando filtros...", size=16, weight="bold", color="white"),
+                    ft.ProgressBar(width=200, color="amber", bgcolor="#222222")
+                ],
+                height=80, width=300, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            )
+            self.dlg_carga_filtros = ft.AlertDialog(content=loading_content, modal=True)
+            self.page.open(self.dlg_carga_filtros)
+
             def _cargar_datos_modal():
+                time.sleep(0.5)
+                
+                # ¡CLAVE! Usamos Column con scroll y quitamos el expand=True
+                self.lv_torneos = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5)
+                self.lv_anios = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5)
+                
+                self.btn_ver_torneo = ft.ElevatedButton("Ver", icon=ft.Icons.VISIBILITY, disabled=True, on_click=self._confirmar_filtro_torneo)
+                
                 try:
                     bd = BaseDeDatos()
                     ediciones = bd.obtener_ediciones()
@@ -3882,45 +3830,54 @@ El Sistema.
                     for nombre in nombres_unicos:
                         controles.append(ft.ListTile(title=ft.Text(nombre, size=14), data=nombre, on_click=self._seleccionar_campeonato_modal, bgcolor="#2D2D2D", shape=ft.RoundedRectangleBorder(radius=5)))
                     self.lv_torneos.controls = controles
-                    self.lv_torneos.update()
                 except Exception as ex:
-                    self._mostrar_mensaje_general("Error cargando modal", f"No se pudieron cargar los torneos: {ex}", "error")
+                    self._mostrar_mensaje_admin("Error cargando modal", f"No se pudieron cargar los torneos: {ex}", "error")
 
-            # --- DISEÑO RESPONSIVO CON FLECHA ---
-            col_torneo = ft.Container(width=200, content=ft.Column(controls=[ft.Text("Torneo", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_torneos, border=ft.border.all(1, "white24"), border_radius=5, padding=5)]))
-            col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("Año", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_anios, border=ft.border.all(1, "white24"), border_radius=5, padding=5)]))
+                # --- DISEÑO RESPONSIVO CON MEDIDAS EXACTAS ---
+                es_pc = (self.page.width >= 600) if self.page.width else True
+                ancho_pantalla = self.page.width if self.page.width else 600
+                ancho_modal = min(500, ancho_pantalla - 20)
+                
+                # En PC los cuadros miden 200px. En celular ocupan todo el ancho disponible.
+                ancho_caja = 200 if es_pc else (ancho_modal - 40)
 
-            es_celular = self.page.width < 750 if self.page.width else False
-            flecha_modal = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=0, right=10, visible=es_celular, ignore_interactions=True, data=False)
-
-            def _on_scroll_modal(e):
-                try:
-                    if not flecha_modal.data:
-                        if float(e.pixels) >= (float(e.max_scroll_extent) - 10) and flecha_modal.visible:
-                            flecha_modal.visible = False
-                            flecha_modal.data = True # Muerte permanente
-                            flecha_modal.update()
-                except: pass
-
-            contenido_modal = ft.Container(
-                width=500, height=350, 
-                content=ft.Stack(
-                    expand=True,
+                col_torneo = ft.Column(
                     controls=[
-                        ft.Column(
-                            scroll=ft.ScrollMode.AUTO,
-                            on_scroll=_on_scroll_modal,
-                            controls=[
-                                ft.Row(controls=[col_torneo, col_anio], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
-                                ft.Container(height=40) # Margen fantasma inferior
-                            ]
-                        ),
-                        flecha_modal
+                        ft.Text("Torneo", weight=ft.FontWeight.BOLD), 
+                        ft.Container(content=self.lv_torneos, height=180, width=ancho_caja, border=ft.border.all(1, "white24"), border_radius=5, padding=5)
                     ]
                 )
-            )
-            self.dlg_modal = ft.AlertDialog(modal=True, title=ft.Text("Filtrar Partidos por Torneo"), content=contenido_modal, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_modal)), self.btn_ver_torneo], actions_alignment=ft.MainAxisAlignment.END)
-            self.page.open(self.dlg_modal)
+                col_anio = ft.Column(
+                    controls=[
+                        ft.Text("Año", weight=ft.FontWeight.BOLD), 
+                        ft.Container(content=self.lv_anios, height=180, width=ancho_caja, border=ft.border.all(1, "white24"), border_radius=5, padding=5)
+                    ]
+                )
+
+                if es_pc:
+                    layout_filtros = ft.Row(controls=[col_torneo, col_anio], spacing=20, alignment=ft.MainAxisAlignment.CENTER)
+                    alto_contenedor = 250
+                else:
+                    layout_filtros = ft.Column(controls=[col_torneo, col_anio], spacing=20, scroll=ft.ScrollMode.ALWAYS, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+                    alto_contenedor = 450
+
+                contenido_modal = ft.Container(
+                    width=ancho_modal, 
+                    height=alto_contenedor, 
+                    content=layout_filtros
+                )
+
+                self.dlg_modal = ft.AlertDialog(
+                    modal=True, 
+                    title=ft.Text("Filtrar Partidos por Torneo"), 
+                    content=contenido_modal, 
+                    actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_modal)), self.btn_ver_torneo], 
+                    actions_alignment=ft.MainAxisAlignment.END
+                )
+                
+                self.page.close(self.dlg_carga_filtros)
+                self.page.open(self.dlg_modal)
+
             threading.Thread(target=_cargar_datos_modal, daemon=True).start()
 
     def _confirmar_filtro_torneo(self, e):
@@ -3955,11 +3912,24 @@ El Sistema.
             self._actualizar_titulo_partidos()
             self._recargar_datos(actualizar_partidos=True, actualizar_copas=False)
         else:
-            # Abrir modal
-            self.lv_equipos = ft.ListView(expand=True, spacing=5, height=300)
-            self.btn_ver_equipo = ft.ElevatedButton("Ver", icon=ft.Icons.VISIBILITY, disabled=True, on_click=self._confirmar_filtro_equipo)
-            
+            # 1. Animación de carga inicial
+            loading_content = ft.Column(
+                controls=[
+                    ft.Text("Cargando equipos...", size=16, weight="bold", color="white"),
+                    ft.ProgressBar(width=200, color="amber", bgcolor="#222222")
+                ],
+                height=80, width=300, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            )
+            self.dlg_carga_filtros = ft.AlertDialog(content=loading_content, modal=True)
+            self.page.open(self.dlg_carga_filtros)
+
             def _cargar_rivales_modal():
+                time.sleep(0.5)
+                
+                # Se cambia de ListView a Column con scroll=ALWAYS para forzar la barra visible
+                self.lv_equipos = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5, expand=True)
+                self.btn_ver_equipo = ft.ElevatedButton("Ver", icon=ft.Icons.VISIBILITY, disabled=True, on_click=self._confirmar_filtro_equipo)
+                
                 try:
                     bd = BaseDeDatos()
                     rivales = bd.obtener_rivales() 
@@ -3968,13 +3938,39 @@ El Sistema.
                     for id_rival, nombre in rivales:
                         controles.append(ft.ListTile(title=ft.Text(nombre, size=14), data=id_rival, on_click=self._seleccionar_rival_modal, bgcolor="#2D2D2D", shape=ft.RoundedRectangleBorder(radius=5)))
                     self.lv_equipos.controls = controles
-                    self.lv_equipos.update()
                 except Exception as ex:
-                    self._mostrar_mensaje_general("Error cargando modal", f"No se pudieron cargar los equipos: {ex}", "error")
+                    self._mostrar_mensaje_admin("Error cargando modal", f"No se pudieron cargar los equipos: {ex}", "error")
 
-            contenido_modal = ft.Container(width=400, height=400, content=ft.Column(controls=[ft.Text("Seleccione un Equipo", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_equipos, border=ft.border.all(1, "white24"), border_radius=5, padding=5, expand=True)]))
-            self.dlg_modal_equipo = ft.AlertDialog(modal=True, title=ft.Text("Filtrar por Equipo"), content=contenido_modal, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_modal_equipo)), self.btn_ver_equipo], actions_alignment=ft.MainAxisAlignment.END)
-            self.page.open(self.dlg_modal_equipo)
+                ancho_pantalla = self.page.width if self.page.width else 600
+                ancho_modal = min(400, ancho_pantalla - 20)
+
+                contenido_modal = ft.Container(
+                    width=ancho_modal, height=400, 
+                    content=ft.Column(
+                        controls=[
+                            ft.Text("Seleccione un Equipo", weight=ft.FontWeight.BOLD), 
+                            ft.Container(
+                                content=self.lv_equipos, 
+                                border=ft.border.all(1, "white24"), 
+                                border_radius=5, 
+                                padding=5, 
+                                expand=True
+                            )
+                        ]
+                    )
+                )
+
+                self.dlg_modal_equipo = ft.AlertDialog(
+                    modal=True, 
+                    title=ft.Text("Filtrar por Equipo"), 
+                    content=contenido_modal, 
+                    actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_modal_equipo)), self.btn_ver_equipo], 
+                    actions_alignment=ft.MainAxisAlignment.END
+                )
+                
+                self.page.close(self.dlg_carga_filtros)
+                self.page.open(self.dlg_modal_equipo)
+                
             threading.Thread(target=_cargar_rivales_modal, daemon=True).start()
 
     def _seleccionar_rival_modal(self, e):
@@ -4472,32 +4468,33 @@ El Sistema.
         threading.Thread(target=_tarea, daemon=True).start()
 
     def _abrir_selector_torneo_ranking(self, e):
-        # --- 1. LÓGICA DE TOGGLE ---
-        # Si ya hay un torneo filtrado, lo quitamos
         if self.filtro_ranking_edicion_id is not None:
             self.filtro_ranking_edicion_id = None
             self.filtro_ranking_nombre = None
-            
-            # Restaurar títulos
             self.txt_titulo_ranking.value = "Tabla de posiciones histórica"
-            # OJO: No tocamos título de copas ni tabla de copas
             self.txt_titulo_ranking.update()
-            
-            # Apagar botón visualmente
             self.btn_ranking_torneo.bgcolor = "#333333"
             self.btn_ranking_torneo.update()
-            
-            # Recargar datos globales SIN TOCAR COPAS
             self._recargar_datos(actualizar_ranking=True, actualizar_copas=False)
             return
 
-        # --- 2. SI NO ESTÁ ACTIVO, ABRIMOS EL MODAL ---
-        self.lv_torneos = ft.ListView(expand=True, spacing=5, height=200)
-        self.lv_anios = ft.ListView(expand=True, spacing=5, height=200)
-        
-        self.btn_ver_torneo = ft.ElevatedButton("Ver", icon=ft.Icons.VISIBILITY, disabled=True, on_click=self._confirmar_filtro_torneo_ranking)
-        
+        loading_content = ft.Column(
+            controls=[
+                ft.Text("Cargando filtros...", size=16, weight="bold", color="white"),
+                ft.ProgressBar(width=200, color="amber", bgcolor="#222222")
+            ],
+            height=80, width=300, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
+        )
+        self.dlg_carga_filtros = ft.AlertDialog(content=loading_content, modal=True)
+        self.page.open(self.dlg_carga_filtros)
+
         def _cargar_datos_modal():
+            time.sleep(0.5)
+            self.lv_torneos = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5)
+            self.lv_anios = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5)
+            
+            self.btn_ver_torneo = ft.ElevatedButton("Ver", icon=ft.Icons.VISIBILITY, disabled=True, on_click=self._confirmar_filtro_torneo_ranking)
+            
             try:
                 bd = BaseDeDatos()
                 ediciones = bd.obtener_ediciones()
@@ -4508,46 +4505,35 @@ El Sistema.
                 for nombre in nombres_unicos:
                     controles.append(ft.ListTile(title=ft.Text(nombre, size=14), data=nombre, on_click=self._seleccionar_campeonato_modal, bgcolor="#2D2D2D", shape=ft.RoundedRectangleBorder(radius=5)))
                 self.lv_torneos.controls = controles
-                self.lv_torneos.update()
             except Exception as ex:
-                print(f"Error cargando modal: {ex}")
-                self._mostrar_mensaje_general("Error cargando modal", f"No se pudieron cargar los torneos: {ex}", "error")
+                self._mostrar_mensaje_admin("Error cargando modal", f"No se pudieron cargar los torneos: {ex}", "error")
 
-        # --- DISEÑO RESPONSIVO CON FLECHA ---
-        col_torneo = ft.Container(width=200, content=ft.Column(controls=[ft.Text("Torneo", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_torneos, border=ft.border.all(1, "white24"), border_radius=5, padding=5)]))
-        col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("Año", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_anios, border=ft.border.all(1, "white24"), border_radius=5, padding=5)]))
+            # --- DISEÑO RESPONSIVO ---
+            es_pc = (self.page.width >= 600) if self.page.width else True
+            ancho_pantalla = self.page.width if self.page.width else 600
+            ancho_modal = min(500, ancho_pantalla - 20)
+            ancho_caja = 200 if es_pc else (ancho_modal - 40)
 
-        es_celular = self.page.width < 750 if self.page.width else False
-        flecha_modal = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=0, right=10, visible=es_celular, ignore_interactions=True, data=False)
+            col_torneo = ft.Column(controls=[ft.Text("Torneo", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_torneos, height=180, width=ancho_caja, border=ft.border.all(1, "white24"), border_radius=5, padding=5)])
+            col_anio = ft.Column(controls=[ft.Text("Año", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_anios, height=180, width=ancho_caja, border=ft.border.all(1, "white24"), border_radius=5, padding=5)])
 
-        def _on_scroll_modal(e):
-            try:
-                if not flecha_modal.data:
-                    if float(e.pixels) >= (float(e.max_scroll_extent) - 10) and flecha_modal.visible:
-                        flecha_modal.visible = False
-                        flecha_modal.data = True # Muerte permanente
-                        flecha_modal.update()
-            except: pass
+            if es_pc:
+                layout_filtros = ft.Row(controls=[col_torneo, col_anio], spacing=20, alignment=ft.MainAxisAlignment.CENTER)
+                alto_contenedor = 250
+            else:
+                layout_filtros = ft.Column(controls=[col_torneo, col_anio], spacing=20, scroll=ft.ScrollMode.ALWAYS, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+                alto_contenedor = 450
 
-        contenido_modal = ft.Container(
-            width=500, height=350, 
-            content=ft.Stack(
-                expand=True,
-                controls=[
-                    ft.Column(
-                        scroll=ft.ScrollMode.AUTO,
-                        on_scroll=_on_scroll_modal,
-                        controls=[
-                            ft.Row(controls=[col_torneo, col_anio], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
-                            ft.Container(height=40) # Margen fantasma inferior
-                        ]
-                    ),
-                    flecha_modal
-                ]
+            contenido_modal = ft.Container(width=ancho_modal, height=alto_contenedor, content=layout_filtros)
+
+            self.dlg_modal = ft.AlertDialog(
+                modal=True, title=ft.Text("Filtrar Ranking por Torneo"), content=contenido_modal, 
+                actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_modal)), self.btn_ver_torneo], 
+                actions_alignment=ft.MainAxisAlignment.END
             )
-        )
-        self.dlg_modal = ft.AlertDialog(modal=True, title=ft.Text("Filtrar Ranking por Torneo"), content=contenido_modal, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_modal)), self.btn_ver_torneo], actions_alignment=ft.MainAxisAlignment.END)
-        self.page.open(self.dlg_modal)
+            self.page.close(self.dlg_carga_filtros)
+            self.page.open(self.dlg_modal)
+
         threading.Thread(target=_cargar_datos_modal, daemon=True).start()
 
     def _abrir_selector_anio_ranking(self, e):
@@ -5588,11 +5574,10 @@ El Sistema.
             # Variables temporales
             self.temp_camp_err = None
             self.temp_anio_err = None
-            # Ya no filtramos por usuario específico
 
-            # Listas
-            self.lv_torneos_err = ft.ListView(expand=True, spacing=5, height=200)
-            self.lv_anios_err = ft.ListView(expand=True, spacing=5, height=200)
+            # --- CORRECCIÓN: Usar la altura global y estándar ---
+            self.lv_torneos_err = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
+            self.lv_anios_err = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
             
             # Botón de acción
             self.btn_ver_errores = ft.ElevatedButton(
@@ -5620,11 +5605,27 @@ El Sistema.
                 ctls_a.append(ft.ListTile(title=ft.Text(str(num), size=14), data=num, on_click=self._sel_anio_err, bgcolor="#2D2D2D"))
             self.lv_anios_err.controls = ctls_a
 
-            # Layout simplificado (Solo 2 columnas)
-            col_tor = ft.Column(expand=1, controls=[ft.Text("1. Torneo (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_torneos_err, border=ft.border.all(1, "white24"), border_radius=5)])
-            col_anio = ft.Column(expand=1, controls=[ft.Text("2. Año (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_anios_err, border=ft.border.all(1, "white24"), border_radius=5)])
+            # --- ESTRUCTURA RESPONSIVA (Lado a lado en PC, Apilado en Celular) ---
+            es_pc = (self.page.width >= 600) if self.page.width else True
+            
+            col_tor = ft.Column(expand=1 if es_pc else 0, controls=[ft.Text("1. Torneo (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_torneos_err, border=ft.border.all(1, "white24"), border_radius=5)])
+            col_anio = ft.Column(expand=1 if es_pc else 0, controls=[ft.Text("2. Año (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_anios_err, border=ft.border.all(1, "white24"), border_radius=5)])
 
-            contenido = ft.Container(width=500, height=350, content=ft.Row(controls=[col_tor, col_anio], spacing=20))
+            if es_pc:
+                layout_filtros = ft.Row(controls=[col_tor, col_anio], spacing=20)
+                alto_contenedor = 350
+            else:
+                layout_filtros = ft.Column(controls=[col_tor, col_anio], spacing=20, scroll=ft.ScrollMode.ALWAYS)
+                alto_contenedor = min(500, self.page.height - 100) if self.page.height else 500
+
+            ancho_pantalla = self.page.width if self.page.width else 600
+            ancho_modal = min(500, ancho_pantalla - 20)
+
+            contenido = ft.Container(
+                width=ancho_modal, 
+                height=alto_contenedor, 
+                content=layout_filtros
+            )
 
             self.dlg_selector_errores = ft.AlertDialog(
                 modal=True, 
@@ -5683,7 +5684,7 @@ El Sistema.
     def _generar_tabla_mayores_errores(self, e):
         """
         Genera la tabla de mayores errores (Top Payasos).
-        Usa directamente GestorMensajes y la nueva estructura SQL.
+        Diseño responsivo con barras siempre visibles.
         """
         
         # 1. Filtros
@@ -5760,18 +5761,16 @@ El Sistema.
                 previous_error = None
 
                 for fila in filas_filtradas:
-                    # Desempaquetado seguro basado en SQL
                     user = fila[0]
                     rival = fila[1]
                     
-                    # Manejo de fechas (datetime o str)
                     f_part_raw = fila[2]
                     f_pron_raw = fila[3]
                     f_part = f_part_raw.strftime("%d/%m %H:%M") if hasattr(f_part_raw, 'strftime') else str(f_part_raw)[:16]
                     f_pron = f_pron_raw.strftime("%d/%m %H:%M") if hasattr(f_pron_raw, 'strftime') else str(f_pron_raw)[:16]
                     
-                    pc, pr = fila[4], fila[5] # Predicciones
-                    rc, rr = fila[6], fila[7] # Goles Reales
+                    pc, pr = fila[4], fila[5] 
+                    rc, rr = fila[6], fila[7] 
                     err_abs = fila[8]
                     
                     pron_str = f"{pc}-{pr}"
@@ -5781,7 +5780,6 @@ El Sistema.
                     if previous_error is not None and err_abs == previous_error: pass 
                     previous_error = err_abs
 
-                    # Color condicional
                     if err_abs == 0: color_error = "#00FF00"
                     elif err_abs <= 2: color_error = "cyan"
                     elif err_abs <= 4: color_error = "yellow"
@@ -5817,51 +5815,83 @@ El Sistema.
                     )
                     rows_controls.append(row_visual)
 
-                body_column = ft.Column(controls=rows_controls, scroll=ft.ScrollMode.AUTO, expand=True, spacing=0)
+                # Liberamos el cuerpo de la tabla para que se ajuste a su tamaño natural
+                body_column = ft.Column(controls=rows_controls, spacing=0)
 
                 # --- 3. ENSAMBLADO ---
                 tabla_simulada = ft.Container(
-                    content=ft.Column(controls=[header_row, body_column], spacing=0, expand=True),
-                    border=borde_gris, width=ancho_tabla_neto, expand=True
+                    content=ft.Column(controls=[header_row, body_column], spacing=0),
+                    border=borde_gris, width=ancho_tabla_neto
+                )
+                
+                # Barra horizontal nativa para la tabla
+                contenedor_tabla_nativa = ft.Row(
+                    scroll=ft.ScrollMode.ALWAYS,
+                    controls=[tabla_simulada]
                 )
 
-                contenido_final = ft.Column(
+                # Contenedor con scroll vertical para el contenido
+                contenido_scroll = ft.Column(
                     controls=[
                         ft.Row(
                             controls=[
-                                ft.Text("Ranking de Mayores Errores 🤡", size=20, weight="bold", color="white"),
-                                ft.IconButton(icon=ft.Icons.CLOSE, icon_color="white", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_tabla_errores))
+                                ft.Container(
+                                    content=ft.Text("Ranking de Mayores Errores 🤡", size=20, weight="bold", color="white"),
+                                    expand=True
+                                ),
+                                ft.IconButton(
+                                    icon=ft.Icons.CLOSE, 
+                                    icon_color="white", 
+                                    on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_tabla_errores)
+                                ),
+                                ft.Container(width=15) # Espacio protector extra para evitar que la barra vertical tape la X
                             ],
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         ),
                         ft.Text("Top 10 (con empates) - Ordenado por error absoluto", size=12, color="white54"),
                         ft.Divider(color="white24"),
-                        tabla_simulada
+                        contenedor_tabla_nativa,
+                        ft.Container(height=10),
+                        # Nuevo botón Cerrar en la esquina inferior derecha
+                        ft.Row([ft.ElevatedButton("Cerrar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_tabla_errores))], alignment=ft.MainAxisAlignment.END)
                     ],
-                    spacing=10, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True
+                    spacing=10, 
+                    scroll=ft.ScrollMode.ALWAYS # Barra vertical para todo el diálogo
                 )
 
-                # --- 4. CIERRE Y APERTURA ---
+                # --- 4. CIERRE Y APERTURA DINÁMICA ---
                 self.page.close(self.dlg_selector_errores)
                 
+                ancho_pantalla = self.page.width if self.page.width else 600
                 alto_pantalla = self.page.height if self.page.height else 700
-                alto_dialogo = int(alto_pantalla - 100)
+                
+                # Limitamos el ancho para que quepa en la pantalla (provoca scroll horizontal si es necesario)
+                ancho_dialogo = min(800, ancho_pantalla - 20)
+                
+                # Altura matemática perfecta: Cabecera + Filas + Títulos + Botón (~220px extra)
+                altura_estimada = 60 + (len(filas_filtradas) * 50) + 220
+                alto_dialogo = min(alto_pantalla - 50, altura_estimada)
 
                 contenedor_dialogo = ft.Container(
-                    content=contenido_final,
-                    width=ancho_tabla_neto + 40,
+                    content=contenido_scroll,
+                    width=ancho_dialogo,
                     height=alto_dialogo,
                     bgcolor="#1E1E1E", padding=20, border_radius=10, alignment=ft.alignment.center
                 )
                 
+                # IMPORTANTE: scroll horizontal para el diálogo entero si la pantalla es muy fina
+                dialogo_con_scroll_h = ft.Row(
+                    controls=[contenedor_dialogo],
+                    scroll=ft.ScrollMode.ALWAYS
+                )
+
                 self.dlg_tabla_errores = ft.AlertDialog(
-                    content=contenedor_dialogo, modal=True, content_padding=0, bgcolor=ft.Colors.TRANSPARENT 
+                    content=dialogo_con_scroll_h, modal=True, content_padding=0, bgcolor=ft.Colors.TRANSPARENT 
                 )
                 self.page.open(self.dlg_tabla_errores)
 
             except Exception as ex:
                 self.page.close(self.dlg_selector_errores)
-                # --- CAMBIO: Llamada directa a GestorMensajes ---
                 GestorMensajes.mostrar(self.page, "Error", f"Error al generar tabla: {ex}", "error")
 
         threading.Thread(target=_tarea, daemon=True).start()
