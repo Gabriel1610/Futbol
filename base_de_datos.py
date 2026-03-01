@@ -2124,9 +2124,9 @@ class BaseDeDatos:
 
     def obtener_pendientes_notificacion(self, dias=5):
         """
-        Obtiene una lista de usuarios que tienen partidos sin pronosticar 
-        en los próximos 'dias' y que NO han sido notificados hoy.
-        Retorna: Lista de tuplas (id_usuario, username, email, rival_nombre, fecha_partido)
+        Obtiene una lista de usuarios que tienen partidos sin pronosticar.
+        Si faltan varios días, notifica 1 vez al día.
+        Si falta menos de 1 hora, envía una alerta urgente (máximo 1 vez por hora para no hacer spam).
         
         AJUSTE HORARIO: Se resta 3 horas a NOW() para compensar el horario de TiDB.
         """
@@ -2136,12 +2136,6 @@ class BaseDeDatos:
             conexion = self.abrir()
             cursor = conexion.cursor()
 
-            # La lógica es:
-            # 1. Traer partidos futuros dentro del rango de días.
-            # 2. Cruzar con usuarios que tienen email.
-            # 3. Filtrar usuarios notificados HOY (usando hora ajustada).
-            # 4. Excluir combinaciones (Usuario-Partido) que YA tienen pronóstico.
-            
             sql = f"""
             SELECT 
                 DISTINCT u.id, 
@@ -2154,18 +2148,37 @@ class BaseDeDatos:
             CROSS JOIN usuarios u
             LEFT JOIN pronosticos pr ON p.id = pr.partido_id AND u.id = pr.usuario_id
             WHERE 
-                -- Filtro de partidos próximos (Ajustado a hora ARG)
-                p.fecha_hora >= DATE_SUB(NOW(), INTERVAL 3 HOUR)
-                AND p.fecha_hora <= DATE_ADD(DATE_SUB(NOW(), INTERVAL 3 HOUR), INTERVAL %s DAY)
-                
-                AND pr.id IS NULL -- Que NO tenga pronóstico
+                pr.id IS NULL -- Que NO tenga pronóstico
                 AND u.email IS NOT NULL -- Que tenga email
                 
-                -- Verificación de última notificación (Ajustado a fecha ARG)
-                -- Si 'fecha_ultima_notificacion' es NULL O es de un día anterior al "Hoy Argentino"
                 AND (
-                    u.fecha_ultima_notificacion IS NULL 
-                    OR DATE(u.fecha_ultima_notificacion) < DATE(DATE_SUB(NOW(), INTERVAL 3 HOUR))
+                    -- =========================================================
+                    -- CASO 1: Alerta diaria normal (dentro de los %s días)
+                    -- Solo se envía si HOY no se le mandó nada.
+                    -- =========================================================
+                    (
+                        p.fecha_hora >= DATE_SUB(NOW(), INTERVAL 3 HOUR)
+                        AND p.fecha_hora <= DATE_ADD(DATE_SUB(NOW(), INTERVAL 3 HOUR), INTERVAL %s DAY)
+                        AND (
+                            u.fecha_ultima_notificacion IS NULL 
+                            OR DATE(u.fecha_ultima_notificacion) < DATE(DATE_SUB(NOW(), INTERVAL 3 HOUR))
+                        )
+                    )
+                    OR 
+                    -- =========================================================
+                    -- CASO 2: Alerta URGENTE (Falta menos de 1 hora)
+                    -- Se envía AUNQUE ya se le haya avisado hoy a la mañana,
+                    -- pero verificamos que haya pasado al menos 1 hora desde
+                    -- el último aviso para no bombardearle la bandeja de entrada.
+                    -- =========================================================
+                    (
+                        p.fecha_hora >= DATE_SUB(NOW(), INTERVAL 3 HOUR)
+                        AND p.fecha_hora <= DATE_ADD(DATE_SUB(NOW(), INTERVAL 3 HOUR), INTERVAL 1 HOUR)
+                        AND (
+                            u.fecha_ultima_notificacion IS NULL 
+                            OR u.fecha_ultima_notificacion <= DATE_SUB(DATE_SUB(NOW(), INTERVAL 3 HOUR), INTERVAL 1 HOUR)
+                        )
+                    )
                 )
             ORDER BY u.id, p.fecha_hora ASC
             """
@@ -2179,7 +2192,7 @@ class BaseDeDatos:
         finally:
             if cursor: cursor.close()
             if conexion: conexion.close()
-
+            
     def marcar_usuario_notificado(self, usuario_id):
         """Actualiza la fecha de última notificación a 'ahora'."""
         conexion = None

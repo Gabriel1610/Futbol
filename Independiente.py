@@ -60,6 +60,9 @@ class SistemaIndependiente:
         """
         time.sleep(5) 
         
+        # Aseguramos que timedelta y datetime estén disponibles localmente para los cálculos
+        from datetime import datetime, timedelta
+        
         try:
             print("🔔 Verificando notificaciones pendientes...")
             bd = BaseDeDatos()
@@ -71,6 +74,7 @@ class SistemaIndependiente:
 
             usuarios_a_notificar = {}
             
+            # 1. Agrupamos todos los datos (incluyendo el objeto fecha original)
             for fila in pendientes:
                 uid, uname, email, rival, fecha = fila
                 
@@ -81,29 +85,72 @@ class SistemaIndependiente:
                         'partidos': []
                     }
                 
-                fecha_str = fecha.strftime('%d/%m %H:%M')
-                usuarios_a_notificar[uid]['partidos'].append(f"{rival} ({fecha_str})")
+                usuarios_a_notificar[uid]['partidos'].append({
+                    'rival': rival,
+                    'fecha': fecha
+                })
 
             cantidad_enviados = 0
+            ahora = datetime.now()
             
+            # 2. Armamos el correo analizando partido por partido
             for uid, datos in usuarios_a_notificar.items():
                 destinatario = datos['email']
                 username = datos['username']
-                lista_partidos = "\n".join([f"- {p}" for p in datos['partidos']])
                 
+                mensajes_hoy = []
+                mensajes_alarma = []
+                lineas_partidos = []
+                
+                for p in datos['partidos']:
+                    rival = p['rival']
+                    fecha = p['fecha']
+                    fecha_str = fecha.strftime('%d/%m %H:%M')
+                    
+                    diferencia = fecha - ahora
+                    segundos_restantes = diferencia.total_seconds()
+                    
+                    # Verificaciones lógicas exactas por calendario
+                    es_hoy = fecha.date() == ahora.date()
+                    es_manana = fecha.date() == (ahora + timedelta(days=1)).date()
+                    dias_faltantes = (fecha.date() - ahora.date()).days
+                    
+                    # Construcción de los bloques de alerta
+                    if es_hoy:
+                        mensajes_hoy.append(f"📌 ¡ATENCIÓN! Hoy es el partido contra {rival.upper()}.")
+                        
+                        # Mensaje alarmante si falta menos de 1 hora y el partido no empezó
+                        if 0 < segundos_restantes <= 3600:
+                            horas = int(segundos_restantes // 3600)
+                            minutos = int((segundos_restantes % 3600) // 60)
+                            mensajes_alarma.append(f"🚨 ¡URGENTE! Falta {horas:02d}:{minutos:02d} horas para el partido contra {rival}.")
+                            
+                        detalle_tiempo = "¡Es HOY!"
+                    elif es_manana:
+                        detalle_tiempo = "Falta 1 día (Mañana)"
+                    elif dias_faltantes > 1:
+                        detalle_tiempo = f"Faltan {dias_faltantes} días"
+                    else:
+                        detalle_tiempo = "Partido en curso o finalizado"
+                        
+                    # Lista con el nuevo formato detallado
+                    lineas_partidos.append(f"- {rival} ({fecha_str}) -> {detalle_tiempo}")
+
+                # 3. Ensamblamos el cuerpo del correo dinámicamente
+                cuerpo = f"Hola {username},\n\n"
+                
+                if mensajes_hoy:
+                    cuerpo += "\n".join(mensajes_hoy) + "\n\n"
+                    
+                if mensajes_alarma:
+                    cuerpo += "\n".join(mensajes_alarma) + "\n\n"
+                    
+                cuerpo += "Aún no has cargado tu pronóstico para los siguientes encuentros:\n\n"
+                cuerpo += "\n".join(lineas_partidos) + "\n\n"
+                cuerpo += "¡No te olvides de sumar puntos!\nIngresa a la aplicación para dejar tu resultado.\n\nSaludos,\nEl Sistema."
+
                 asunto = "⚠️ Recordatorio: Partidos sin pronosticar - CAI"
-                cuerpo = f"""Hola {username},
-
-Te recordamos que faltan menos de {DÍAS_NOTIFICACIÓN} días para los siguientes partidos y aún no has cargado tu pronóstico:
-
-{lista_partidos}
-
-¡No te olvides de sumar puntos!
-Ingresa a la aplicación para dejar tu resultado.
-
-Saludos,
-El Sistema.
-                        """
+                
                 try:
                     msg = MIMEMultipart()
                     msg['From'] = REMITENTE
@@ -123,8 +170,6 @@ El Sistema.
                 except Exception as e_mail:
                     mensaje_log = f"Error enviando a {username}: {e_mail}"
                     print(f"   [!] {mensaje_log}")
-                    
-                    # --- LLAMADA A LA NUEVA FUNCIÓN (Error SMTP) ---
                     self._mostrar_mensaje_admin("Error SMTP", mensaje_log, "error")
 
             if cantidad_enviados > 0:
@@ -133,8 +178,6 @@ El Sistema.
         except Exception as e:
             mensaje_log = f"Error en servicio de notificaciones: {e}"
             print(mensaje_log)
-            
-            # --- LLAMADA A LA NUEVA FUNCIÓN (Error General) ---
             self._mostrar_mensaje_admin("Error de Sistema", mensaje_log, "error")
 
     def _mostrar_mensaje_admin(self, titulo, mensaje, tipo="error"):
@@ -2481,26 +2524,65 @@ El Sistema.
             self._recargar_datos(actualizar_pronosticos=True)
 
     def _abrir_selector_equipo_pronosticos(self, e):
-        self.lv_equipos = ft.ListView(expand=True, spacing=5, height=300)
-        # El botón llama a _confirmar_filtro_equipo_pronosticos
-        self.btn_ver_equipo = ft.ElevatedButton("Ver", icon=ft.Icons.VISIBILITY, disabled=True, on_click=self._confirmar_filtro_equipo_pronosticos)
-        
+        # 1. Animación de carga inicial
+        loading_content = ft.Column(
+            controls=[
+                ft.Text("Cargando equipos...", size=16, weight="bold", color="white"),
+                ft.ProgressBar(width=200, color="amber", bgcolor="#222222")
+            ],
+            height=80, width=300, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
+        )
+        self.dlg_carga_filtros = ft.AlertDialog(content=loading_content, modal=True)
+        self.page.open(self.dlg_carga_filtros)
+
         def _cargar_rivales_modal():
+            time.sleep(0.5)
+            
+            # Barra vertical nativa siempre visible
+            self.lv_equipos = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5)
+            self.btn_ver_equipo = ft.ElevatedButton("Ver", icon=ft.Icons.VISIBILITY, disabled=True, on_click=self._confirmar_filtro_equipo_pronosticos)
+            
             try:
                 bd = BaseDeDatos()
                 rivales = bd.obtener_rivales() 
                 controles = []
                 for id_rival, nombre in rivales:
-                    controles.append(ft.ListTile(title=ft.Text(nombre, size=14), data=id_rival, on_click=self._seleccionar_rival_modal, bgcolor="#2D2D2D", shape=ft.RoundedRectangleBorder(radius=5)))
+                    # CLAVE: no_wrap=False permite que los nombres largos bajen a una segunda línea en lugar de cortarse
+                    controles.append(ft.ListTile(title=ft.Text(nombre, size=14, no_wrap=False), data=id_rival, on_click=self._seleccionar_rival_modal, bgcolor="#2D2D2D", shape=ft.RoundedRectangleBorder(radius=5)))
                 self.lv_equipos.controls = controles
-                self.lv_equipos.update()
             except Exception as ex:
                 self._mostrar_mensaje_admin("Error cargando modal equipos", f"{ex}", "error")
 
-        contenido_modal = ft.Container(width=400, height=400, content=ft.Column(controls=[ft.Text("Seleccione un Equipo", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_equipos, border=ft.border.all(1, "white24"), border_radius=5, padding=5, expand=True)]))
+            ancho_pantalla = self.page.width if self.page.width else 600
+            ancho_modal = min(400, ancho_pantalla - 20)
 
-        self.dlg_modal_equipo = ft.AlertDialog(modal=True, title=ft.Text("Filtrar por Equipo"), content=contenido_modal, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_modal_equipo)), self.btn_ver_equipo], actions_alignment=ft.MainAxisAlignment.END)
-        self.page.open(self.dlg_modal_equipo)
+            contenido_modal = ft.Container(
+                width=ancho_modal, height=400, 
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Seleccione un Equipo", weight=ft.FontWeight.BOLD), 
+                        ft.Container(
+                            content=self.lv_equipos, # Contenido directo, sin fila horizontal externa
+                            border=ft.border.all(1, "white24"), 
+                            border_radius=5, 
+                            padding=5, 
+                            expand=True
+                        )
+                    ]
+                )
+            )
+
+            self.dlg_modal_equipo = ft.AlertDialog(
+                modal=True, 
+                title=ft.Text("Filtrar por Equipo"), 
+                content=contenido_modal, 
+                actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_modal_equipo)), self.btn_ver_equipo], 
+                actions_alignment=ft.MainAxisAlignment.END
+            )
+            
+            self.page.close(self.dlg_carga_filtros)
+            self.page.open(self.dlg_modal_equipo)
+
         threading.Thread(target=_cargar_rivales_modal, daemon=True).start()
 
     def _seleccionar_anio_ranking_modal(self, e):
@@ -3926,8 +4008,8 @@ El Sistema.
             def _cargar_rivales_modal():
                 time.sleep(0.5)
                 
-                # Se cambia de ListView a Column con scroll=ALWAYS para forzar la barra visible
-                self.lv_equipos = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5, expand=True)
+                # Barra vertical nativa siempre visible
+                self.lv_equipos = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5)
                 self.btn_ver_equipo = ft.ElevatedButton("Ver", icon=ft.Icons.VISIBILITY, disabled=True, on_click=self._confirmar_filtro_equipo)
                 
                 try:
@@ -3936,7 +4018,8 @@ El Sistema.
                     self.cache_rivales_modal = rivales 
                     controles = []
                     for id_rival, nombre in rivales:
-                        controles.append(ft.ListTile(title=ft.Text(nombre, size=14), data=id_rival, on_click=self._seleccionar_rival_modal, bgcolor="#2D2D2D", shape=ft.RoundedRectangleBorder(radius=5)))
+                        # CLAVE: no_wrap=False permite que los nombres largos bajen a una segunda línea en lugar de cortarse
+                        controles.append(ft.ListTile(title=ft.Text(nombre, size=14, no_wrap=False), data=id_rival, on_click=self._seleccionar_rival_modal, bgcolor="#2D2D2D", shape=ft.RoundedRectangleBorder(radius=5)))
                     self.lv_equipos.controls = controles
                 except Exception as ex:
                     self._mostrar_mensaje_admin("Error cargando modal", f"No se pudieron cargar los equipos: {ex}", "error")
@@ -3950,7 +4033,7 @@ El Sistema.
                         controls=[
                             ft.Text("Seleccione un Equipo", weight=ft.FontWeight.BOLD), 
                             ft.Container(
-                                content=self.lv_equipos, 
+                                content=self.lv_equipos, # Contenido directo, sin fila horizontal externa
                                 border=ft.border.all(1, "white24"), 
                                 border_radius=5, 
                                 padding=5, 
@@ -5957,4 +6040,4 @@ if __name__ == "__main__":
         
     else:
         # MODO 3: DEPURACIÓN LOCAL (Navegador)
-        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir=ruta_assets)
+        ft.app(target=main)#, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir=ruta_assets)
