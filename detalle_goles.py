@@ -1,6 +1,6 @@
 import requests
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # --- CONFIGURACIÓN ---
 ID_INDEPENDIENTE = 10078
@@ -12,35 +12,37 @@ URL_API_TEAMS = "https://www.fotmob.com/api/teams"
 URL_API_LEAGUES = "https://www.fotmob.com/api/leagues"
 URL_API_DETALLE = "https://www.fotmob.com/api/matchDetails"
 
-# HEADERS (Copiados de tu Independiente.py que funciona bien)
+# HEADERS 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Accept": "application/json"
 }
 
-def buscar_partidos_historicos():
+def buscar_partidos():
     """
-    Busca partidos retrocediendo desde 2025 hasta 2023.
-    Maneja errores de API vacía (None) para no romperse.
+    Busca partidos del historial y próximos a jugar.
+    Separa los resultados en dos listas distintas.
     """
-    print("🔍 Iniciando búsqueda de historial...")
+    print("🔍 Iniciando búsqueda de historial y próximos partidos...")
     
-    todos_los_partidos = []
+    jugados = []
+    futuros = []
     
-    # 1. Intentamos primero con la API de Equipos (Por si trae historial reciente)
+    # 1. Intentamos primero con la API de Equipos (Trae tanto pasados como futuros)
     try:
         resp = requests.get(URL_API_TEAMS, headers=HEADERS, params={"id": ID_INDEPENDIENTE, "ccode3": "ARG"}, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
             if data:
                 fixtures = data.get("fixtures") or {}
+                
                 # Buscamos en todas las listas posibles
                 fuentes = [
                     fixtures.get("results", []),
                     fixtures.get("fixtures", []),
                     fixtures.get("allFixtures", [])
                 ]
-                # A veces allFixtures es dict
+                
                 if isinstance(fixtures.get("allFixtures"), dict):
                     for v in fixtures.get("allFixtures").values():
                         if isinstance(v, list): fuentes.append(v)
@@ -48,15 +50,30 @@ def buscar_partidos_historicos():
                 for lista in fuentes:
                     if not lista: continue
                     for m in lista:
-                        if isinstance(m, dict) and m.get("status", {}).get("finished"):
-                            # Verificar que sea de Independiente (ID 10078)
-                            if m.get("home", {}).get("id") == ID_INDEPENDIENTE or m.get("away", {}).get("id") == ID_INDEPENDIENTE:
-                                todos_los_partidos.append(m)
+                        if isinstance(m, dict):
+                            # Verificar que sea de Independiente
+                            hid = m.get("home", {}).get("id")
+                            aid = m.get("away", {}).get("id")
+                            
+                            if hid == ID_INDEPENDIENTE or aid == ID_INDEPENDIENTE:
+                                status = m.get("status", {})
+                                finished = status.get("finished", False)
+                                cancelled = status.get("cancelled", False)
+                                
+                                if cancelled: continue
+                                
+                                # Separar jugados de futuros sin duplicados
+                                if finished:
+                                    if not any(p['id'] == m['id'] for p in jugados):
+                                        jugados.append(m)
+                                else:
+                                    if not any(p['id'] == m['id'] for p in futuros):
+                                        futuros.append(m)
     except Exception as e:
         print(f"   [!] Error en carga standard: {e}")
 
-    # 2. Si no encontramos suficientes (menos de 5), buscamos en LIGAS ESPECÍFICAS (2025, 2024)
-    if len(todos_los_partidos) < 5:
+    # 2. Si no encontramos suficientes jugados, buscamos en el archivo histórico
+    if len(jugados) < 5:
         anios_a_buscar = ["2025", "2024", "2023"]
         torneos = [
             (ID_LIGA_PROFESIONAL, "Liga Profesional"), 
@@ -64,7 +81,7 @@ def buscar_partidos_historicos():
         ]
         
         for anio in anios_a_buscar:
-            if len(todos_los_partidos) >= 5: break
+            if len(jugados) >= 5: break
             print(f"   -> Buscando en temporada {anio}...")
             
             for id_liga, nombre_torneo in torneos:
@@ -72,7 +89,7 @@ def buscar_partidos_historicos():
                     params = {
                         "id": id_liga, 
                         "season": anio, 
-                        "ccode3": "ARG", # Importante para evitar null
+                        "ccode3": "ARG",
                         "timezone": "America/Argentina/Buenos_Aires"
                     }
                     resp = requests.get(URL_API_LEAGUES, headers=HEADERS, params=params, timeout=10)
@@ -80,11 +97,7 @@ def buscar_partidos_historicos():
                     if resp.status_code != 200: continue
                     
                     data = resp.json()
-                    
-                    # --- CORRECCIÓN CRÍTICA: SI DATA ES NONE, SALTAR ---
-                    if not data: 
-                        # print(f"      (API vacía para {nombre_torneo} {anio})")
-                        continue
+                    if not data: continue
                         
                     matches_obj = data.get("matches") or {}
                     all_matches = matches_obj.get("allMatches") or []
@@ -92,7 +105,6 @@ def buscar_partidos_historicos():
                     for m in all_matches:
                         if not isinstance(m, dict): continue
                         
-                        # Filtro ID Independiente
                         try:
                             hid = int(m.get("home", {}).get("id") or 0)
                             aid = int(m.get("away", {}).get("id") or 0)
@@ -100,18 +112,20 @@ def buscar_partidos_historicos():
                         
                         if hid == ID_INDEPENDIENTE or aid == ID_INDEPENDIENTE:
                             if m.get("status", {}).get("finished"):
-                                # Evitar duplicados
-                                if not any(p['id'] == m['id'] for p in todos_los_partidos):
+                                if not any(p['id'] == m['id'] for p in jugados):
                                     m['torneo_nombre'] = f"{nombre_torneo} {anio}"
-                                    todos_los_partidos.append(m)
+                                    jugados.append(m)
                                     
                 except Exception as e:
                     print(f"      Error leyendo {nombre_torneo} {anio}: {e}")
                     continue
 
-    # Ordenar por fecha (UTC time string) descendente
-    todos_los_partidos.sort(key=lambda x: x.get("status", {}).get("utcTime", ""), reverse=True)
-    return todos_los_partidos
+    # Ordenar jugados (descendente, el más reciente arriba)
+    jugados.sort(key=lambda x: x.get("status", {}).get("utcTime", ""), reverse=True)
+    # Ordenar futuros (ascendente, el más próximo arriba)
+    futuros.sort(key=lambda x: x.get("status", {}).get("utcTime", ""), reverse=False)
+    
+    return jugados, futuros
 
 def obtener_detalle_goles(match_id):
     """Consulta el endpoint de detalle para sacar minuto y autor."""
@@ -120,7 +134,7 @@ def obtener_detalle_goles(match_id):
         if resp.status_code != 200: return
 
         data = resp.json()
-        if not data: return # Validación anti-crash
+        if not data: return 
 
         content = data.get("content") or {}
         match_facts = content.get("matchFacts") or {}
@@ -138,16 +152,13 @@ def obtener_detalle_goles(match_id):
                 hubo_goles = True
                 minuto = ev.get("time", 0)
                 
-                # Nombre jugador seguro
                 p_obj = ev.get("player") or {}
                 if isinstance(p_obj, dict): jugador = p_obj.get("name", "Desconocido")
                 else: jugador = "Desconocido"
                 
-                # Equipo
                 es_local = ev.get("isHome", False)
                 tag = "(L)" if es_local else "(V)"
                 
-                # Extra
                 extra = ""
                 if tipo == "PenaltyGoal": extra = " (Penal)"
                 if tipo == "OwnGoal": extra = " (En contra)"
@@ -161,40 +172,67 @@ def obtener_detalle_goles(match_id):
         print(f"      [Error recuperando goles: {e}]")
 
 def main():
-    partidos = buscar_partidos_historicos()
+    jugados, futuros = buscar_partidos()
     
-    if not partidos:
+    if not jugados and not futuros:
         print("\n❌ No se encontraron partidos tras escanear 2023-2026.")
         return
 
-    # Tomar los últimos 5
-    ultimos_5 = partidos[:5]
+    # Tomar los últimos 5 y los próximos 5
+    ultimos_5 = jugados[:10]
+    proximos_5 = futuros[:10]
     
-    print(f"\n✅ Se encontraron {len(partidos)} partidos.")
-    print(f"📊 Detalle de los últimos {len(ultimos_5)} partidos:\n")
+    print(f"\n✅ Se encontraron {len(jugados)} partidos jugados y {len(futuros)} por jugar.")
     
-    for match in ultimos_5:
-        match_id = match.get('id')
-        if not match_id: continue
+    # --- 1. MOSTRAR JUGADOS ---
+    if ultimos_5:
+        print(f"\n📊 Detalle de los últimos {len(ultimos_5)} partidos JUGADOS:\n")
         
-        # Datos visuales
-        torneo = match.get("torneo_nombre")
-        if not torneo:
-            torneo = match.get("league", {}).get("name", "Torneo")
+        for match in ultimos_5:
+            match_id = match.get('id')
+            if not match_id: continue
             
-        home = match.get("home", {}).get("name", "Local")
-        away = match.get("away", {}).get("name", "Visita")
-        score = match.get("status", {}).get("scoreStr", "-")
-        
-        # Fecha simple
-        fecha_raw = match.get("status", {}).get("utcTime", "")
-        fecha_str = fecha_raw.split("T")[0] if "T" in fecha_raw else fecha_raw
+            torneo = match.get("torneo_nombre") or match.get("tournament", {}).get("name") or match.get("league", {}).get("name", "Torneo")
+            home = match.get("home", {}).get("name", "Local")
+            away = match.get("away", {}).get("name", "Visita")
+            score = match.get("status", {}).get("scoreStr", "-")
+            
+            # Fecha procesada
+            fecha_raw = match.get("status", {}).get("utcTime", "")
+            try:
+                dt_utc = datetime.fromisoformat(fecha_raw.replace("Z", "+00:00"))
+                dt_local = dt_utc.replace(tzinfo=None) - timedelta(hours=3)
+                fecha_str = dt_local.strftime("%d/%m/%Y")
+            except:
+                fecha_str = fecha_raw.split("T")[0] if "T" in fecha_raw else fecha_raw
 
-        print(f"📅 {fecha_str} | {home} vs {away} ({score})")
-        print(f"   🏆 {torneo}")
+            print(f"📅 {fecha_str} | {home} vs {away} ({score})")
+            print(f"   🏆 {torneo}")
+            
+            obtener_detalle_goles(match_id)
+            print("-" * 50)
+
+    # --- 2. MOSTRAR PRÓXIMOS ---
+    if proximos_5:
+        print(f"\n🔜 Detalle de los próximos {len(proximos_5)} partidos POR JUGAR:\n")
         
-        obtener_detalle_goles(match_id)
-        print("-" * 50)
+        for match in proximos_5:
+            torneo = match.get("torneo_nombre") or match.get("tournament", {}).get("name") or match.get("league", {}).get("name", "Torneo")
+            home = match.get("home", {}).get("name", "Local")
+            away = match.get("away", {}).get("name", "Visita")
+            
+            # Fecha procesada al horario de Argentina con la Hora incluida
+            fecha_raw = match.get("status", {}).get("utcTime", "")
+            try:
+                dt_utc = datetime.fromisoformat(fecha_raw.replace("Z", "+00:00"))
+                dt_local = dt_utc.replace(tzinfo=None) - timedelta(hours=3)
+                fecha_str = dt_local.strftime("%d/%m/%Y a las %H:%M hs")
+            except:
+                fecha_str = fecha_raw.split("T")[0] if "T" in fecha_raw else fecha_raw
+
+            print(f"📅 {fecha_str} | {home} vs {away}")
+            print(f"   🏆 {torneo}")
+            print("-" * 50)
 
 if __name__ == "__main__":
     main()

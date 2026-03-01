@@ -195,8 +195,8 @@ class SistemaIndependiente:
     def _sincronizar_fixture_api(self):
         """
         Sincronización Inteligente:
-        1. Pasado: Actualiza resultados SOLO si faltan.
-        2. Futuro: Sincroniza próximos partidos.
+        1. Pasado: Actualiza resultados de los partidos jugados.
+        2. General: Sincroniza torneos y fechas de los últimos 5 y próximos 5 partidos.
         3. Finalización: Si un torneo tiene partidos jugados pero ya no tiene futuros, se marca como finalizado.
         """
         print("Iniciando sincronización (Lógica Estricta)...")
@@ -265,61 +265,52 @@ class SistemaIndependiente:
             jugados.sort(key=lambda x: x['fecha'], reverse=True)
             por_jugar.sort(key=lambda x: x['fecha'], reverse=False)
             
-            # --- NUEVA LÓGICA: REGLA DE 21:00 H (PLACEHOLDER) ---
+            # --- LÓGICA DE REGLA DE 21:00 H (PLACEHOLDER) ---
             ahora = datetime.now()
-            
             for i, p in enumerate(por_jugar):
                 fecha = p['fecha']
                 
-                # Verificamos si la hora es exactamente 21:00:00
                 if fecha.hour == 21 and fecha.minute == 0 and fecha.second == 0:
-                    
-                    # Condición 1: NO está en los próximos 3 partidos (índices 0, 1, 2 son los próximos)
                     no_es_proximo = (i >= 3)
-                    
-                    # Condición 2: Faltan más de 7 días
                     dias_faltantes = (fecha - ahora).days
                     es_lejano = (dias_faltantes > 7)
                     
                     if no_es_proximo or es_lejano:
-                        # Cumple ambas condiciones: Es un placeholder -> Guardar como 00:00:00
                         p['fecha'] = fecha.replace(hour=0, minute=0, second=0, microsecond=0)
-                        # print(f"DEBUG: Partido vs {p['rival']} marcado como S/H (Indice {i}, faltan {dias_faltantes} días)")
 
-            # --- 1. ACTUALIZACIÓN DE PARTIDOS ---
+            # --- 1. ACTUALIZACIÓN DE GOLES Y RESULTADOS ---
             if jugados:
-                print(f"Procesando {len(jugados)} partidos jugados...")
+                print(f"Procesando resultados de {len(jugados)} partidos jugados...")
                 bd.actualizar_resultados_pendientes(jugados)
 
+            # --- 2. SINCRONIZACIÓN DE TORNEOS Y FECHAS (Pasado y Futuro) ---
+            ultimos_5 = jugados[:5] if len(jugados) >= 5 else jugados
             proximos_5 = por_jugar[:CANT_PARTIDOS_A_SINCRONIZAR]
-            if proximos_5:
-                print(f"Sincronizando próximos {len(proximos_5)} partidos...")
-                bd.sincronizar_proximos_partidos(proximos_5)
             
-            # --- 2. LÓGICA DE FINALIZACIÓN DE TORNEOS ---
-            # Identificamos qué torneos tienen partidos en el futuro
+            partidos_a_sincronizar = ultimos_5 + proximos_5
+            if partidos_a_sincronizar:
+                print(f"Sincronizando torneos y fechas de {len(partidos_a_sincronizar)} partidos...")
+                bd.sincronizar_partidos(partidos_a_sincronizar)
+            
+            # --- 3. LÓGICA DE FINALIZACIÓN DE TORNEOS ---
             torneos_con_futuro = set()
             for p in por_jugar:
                 torneos_con_futuro.add((p['torneo'], p['anio']))
             
-            # Identificamos qué torneos tienen partidos en el pasado
             torneos_con_pasado = set()
             for p in jugados:
                 torneos_con_pasado.add((p['torneo'], p['anio']))
             
-            # Si un torneo está en el pasado pero NO en el futuro, asumimos que terminó
             posibles_finalizados = torneos_con_pasado - torneos_con_futuro
             
             if posibles_finalizados:
                 print(f"Verificando finalización de {len(posibles_finalizados)} torneos...")
                 for nombre, anio in posibles_finalizados:
-                    # Llamamos a la BD para marcarlo como TRUE si existe
                     bd.marcar_edicion_finalizada(nombre, anio)
 
             print("Sincronización completada.")
             
         except Exception as e:
-            # --- CAMBIO AQUÍ: Llamada a la función de error admin ---
             self._mostrar_mensaje_admin("Error Sincronización", f"Error crítico sincronizando FotMob: {e}", "error")
         
         finally:
@@ -334,7 +325,7 @@ class SistemaIndependiente:
                 actualizar_copas=True, 
                 actualizar_admin=True 
             )
-            
+
     def _configurar_ventana(self):
         self.page.title = "Sistema Club Atlético Independiente"
         
@@ -1452,7 +1443,7 @@ class SistemaIndependiente:
     # --- FUNCIONES GRÁFICO DE BARRAS (PUNTOS) ---
 
     def _abrir_selector_grafico_barras(self, e):
-        """Abre el modal para configurar el gráfico de barras de puntos con carga inicial."""
+        """Abre el modal para configurar el gráfico de barras de puntos con carga inicial y lógica dinámica."""
         
         # 1. Animación de carga inicial
         loading_content = ft.Column(
@@ -1468,7 +1459,11 @@ class SistemaIndependiente:
         self.page.open(self.dlg_carga_filtros)
 
         def _cargar_datos():
-            time.sleep(0.5) # Pausa estética para ver la carga
+            time.sleep(0.5) 
+            
+            # --- Títulos Dinámicos ---
+            self.txt_titulo_torneo_barra = ft.Text("1. Torneo (Opcional)", weight="bold", size=12, color="white")
+            self.txt_titulo_anio_barra = ft.Text("2. Año (Opcional)", weight="bold", size=12, color="white")
             
             self.lv_torneos_barra = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
             self.lv_anios_barra = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
@@ -1478,7 +1473,12 @@ class SistemaIndependiente:
             self.temp_anio_barra = None
             self.usuario_grafico_barra_sel = None 
             
-            self.btn_generar_grafico_barras = ft.ElevatedButton("Generar Gráfico", icon=ft.Icons.BAR_CHART, disabled=True, on_click=self._generar_grafico_barras)
+            self.btn_generar_grafico_barras = ft.ElevatedButton(
+                "Generar Gráfico", 
+                icon=ft.Icons.BAR_CHART, 
+                disabled=True, 
+                on_click=self._generar_grafico_barras
+            )
 
             bd = BaseDeDatos()
             # 1. Torneos
@@ -1491,7 +1491,10 @@ class SistemaIndependiente:
                 controles_tor.append(ft.ListTile(title=ft.Text(nombre, size=14), data=nombre, on_click=self._sel_torneo_barra_modal, bgcolor="#2D2D2D"))
             self.lv_torneos_barra.controls = controles_tor
             
-            # 2. Usuarios
+            # 2. Años (Nace vacía)
+            self.lv_anios_barra.controls = []
+            
+            # 3. Usuarios
             usuarios = bd.obtener_usuarios()
             controles_usu = []
             for usu in usuarios:
@@ -1500,9 +1503,43 @@ class SistemaIndependiente:
                 )
             self.lv_usuarios_barra.controls = controles_usu
             
-            col_tor = ft.Container(width=200, content=ft.Column(controls=[ft.Text("1. Torneo (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_torneos_barra, border=ft.border.all(1, "white24"), border_radius=5)]))
-            col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("2. Año (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_anios_barra, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_tor = ft.Container(width=200, content=ft.Column(controls=[self.txt_titulo_torneo_barra, ft.Container(content=self.lv_torneos_barra, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_anio = ft.Container(width=200, content=ft.Column(controls=[self.txt_titulo_anio_barra, ft.Container(content=self.lv_anios_barra, border=ft.border.all(1, "white24"), border_radius=5)]))
             col_usu = ft.Container(width=200, content=ft.Column(controls=[ft.Text("3. Usuario (Obligatorio)", weight="bold", size=12, color="cyan"), ft.Container(content=self.lv_usuarios_barra, border=ft.border.all(1, "white24"), border_radius=5)]))
+
+            # Diseño responsivo y flechas
+            es_celular = self.page.width < 750 if self.page.width else False
+            
+            flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=0, right=10, visible=False, ignore_interactions=True, data=False)
+            flecha_abajo = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_DOWN, color="amber", size=35), bottom=0, right=10, visible=es_celular, ignore_interactions=True, data=False)
+
+            def _on_scroll_modal(e):
+                try:
+                    pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
+                    if max_pos <= 0:
+                        if not flecha_arriba.data or not flecha_abajo.data:
+                            flecha_arriba.visible, flecha_arriba.data = False, True
+                            flecha_abajo.visible, flecha_abajo.data = False, True
+                            flecha_arriba.update()
+                            flecha_abajo.update()
+                        return
+
+                    if not flecha_arriba.data:
+                        if pos <= 10 and flecha_arriba.visible:
+                            flecha_arriba.visible, flecha_arriba.data = False, True
+                            flecha_arriba.update()
+                        elif pos > 10 and not flecha_arriba.visible:
+                            flecha_arriba.visible = True
+                            flecha_arriba.update()
+                            
+                    if not flecha_abajo.data:
+                        if pos >= (max_pos - 10) and flecha_abajo.visible:
+                            flecha_abajo.visible, flecha_abajo.data = False, True
+                            flecha_abajo.update()
+                        elif pos < (max_pos - 10) and not flecha_abajo.visible:
+                            flecha_abajo.visible = True
+                            flecha_abajo.update()
+                except: pass
 
             contenido = ft.Container(
                 width=750, height=350, 
@@ -1515,9 +1552,13 @@ class SistemaIndependiente:
                 )
             )
 
-            self.dlg_grafico_barras = ft.AlertDialog(modal=True, title=ft.Text("Configurar Gráfico de Puntos"), content=contenido, actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_barras)), self.btn_generar_grafico_barras])
+            self.dlg_grafico_barras = ft.AlertDialog(
+                modal=True, 
+                title=ft.Text("Configurar Gráfico de Puntos"), 
+                content=contenido, 
+                actions=[ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_grafico_barras)), self.btn_generar_grafico_barras]
+            )
             
-            # Cerrar carga y abrir modal definitivo
             self.page.close(self.dlg_carga_filtros)
             self.page.open(self.dlg_grafico_barras)
 
@@ -1884,36 +1925,96 @@ class SistemaIndependiente:
         threading.Thread(target=_tarea, daemon=True).start()
 
     def _sel_torneo_barra_modal(self, e):
+        """Selecciona o deselecciona torneo. Filtra los años y ajusta los títulos."""
         nombre = e.control.data
-        self.temp_camp_barra = nombre
         
-        for c in self.lv_torneos_barra.controls: c.bgcolor = "blue" if c.data == nombre else "#2D2D2D"
+        # Lógica de deselección (Toggle)
+        if self.temp_camp_barra == nombre:
+            self.temp_camp_barra = None 
+            
+            if hasattr(self, 'txt_titulo_anio_barra'):
+                self.txt_titulo_torneo_barra.value = "1. Torneo (Opcional)"
+                self.txt_titulo_torneo_barra.color = "white"
+                self.txt_titulo_anio_barra.value = "2. Año (Opcional)"
+                self.txt_titulo_anio_barra.color = "white"
+                self.txt_titulo_torneo_barra.update()
+                self.txt_titulo_anio_barra.update()
+        else:
+            self.temp_camp_barra = nombre
+            
+            if hasattr(self, 'txt_titulo_anio_barra'):
+                self.txt_titulo_torneo_barra.value = "1. Torneo (Obligatorio)"
+                self.txt_titulo_torneo_barra.color = "cyan"
+                self.txt_titulo_anio_barra.value = "2. Año (Obligatorio)"
+                self.txt_titulo_anio_barra.color = "cyan"
+                self.txt_titulo_torneo_barra.update()
+                self.txt_titulo_anio_barra.update()
+        
+        # Actualización visual de la lista de torneos
+        for c in self.lv_torneos_barra.controls: 
+            c.bgcolor = "blue" if c.data == self.temp_camp_barra else "#2D2D2D"
         self.lv_torneos_barra.update()
         
-        anios = sorted([ed[2] for ed in self.cache_ediciones_modal if ed[1] == nombre], reverse=True)
-        ctls = []
-        for a in anios:
-            ctls.append(ft.ListTile(title=ft.Text(str(a), size=14), data=a, on_click=self._sel_anio_barra_modal, bgcolor="#2D2D2D"))
-        self.lv_anios_barra.controls = ctls
-        self.lv_anios_barra.update()
+        # Lógica de filtrado dinámico de Años
+        if self.temp_camp_barra:
+            anios_filtrados = sorted([ed[2] for ed in self.cache_ediciones_modal if ed[1] == self.temp_camp_barra], reverse=True)
+            ctls = []
+            for a in anios_filtrados:
+                ctls.append(ft.ListTile(title=ft.Text(str(a), size=14), data=a, on_click=self._sel_anio_barra_modal, bgcolor="#2D2D2D"))
+            self.lv_anios_barra.controls = ctls
+        else:
+            anios_filtrados = []
+            self.lv_anios_barra.controls.clear()
         
-        self.temp_anio_barra = None
+        if self.temp_anio_barra not in anios_filtrados:
+            self.temp_anio_barra = None
+        else:
+            for c in self.lv_anios_barra.controls:
+                if c.data == self.temp_anio_barra: c.bgcolor = "blue"
+
+        self.lv_anios_barra.update()
         self._validar_btn_grafico_barras()
 
     def _sel_anio_barra_modal(self, e):
-        self.temp_anio_barra = e.control.data
-        for c in self.lv_anios_barra.controls: c.bgcolor = "blue" if c.data == self.temp_anio_barra else "#2D2D2D"
+        """Selecciona o deselecciona año."""
+        anio = e.control.data
+        if self.temp_anio_barra == anio:
+            self.temp_anio_barra = None
+        else:
+            self.temp_anio_barra = anio
+            
+        for c in self.lv_anios_barra.controls: 
+            c.bgcolor = "blue" if c.data == self.temp_anio_barra else "#2D2D2D"
         self.lv_anios_barra.update()
         self._validar_btn_grafico_barras()
 
     def _sel_usuario_barra_modal(self, e):
-        self.usuario_grafico_barra_sel = e.control.data
-        for c in self.lv_usuarios_barra.controls: c.bgcolor = "blue" if c.data == self.usuario_grafico_barra_sel else "#2D2D2D"
+        """Selecciona o deselecciona usuario (obligatorio)."""
+        usuario = e.control.data
+        if self.usuario_grafico_barra_sel == usuario:
+            self.usuario_grafico_barra_sel = None
+        else:
+            self.usuario_grafico_barra_sel = usuario
+            
+        for c in self.lv_usuarios_barra.controls: 
+            c.bgcolor = "blue" if c.data == self.usuario_grafico_barra_sel else "#2D2D2D"
         self.lv_usuarios_barra.update()
         self._validar_btn_grafico_barras()
 
     def _validar_btn_grafico_barras(self):
-        habilitar = self.temp_camp_barra and self.temp_anio_barra and self.usuario_grafico_barra_sel
+        """
+        Reglas:
+        1. Usuario obligatorio.
+        2. Si hay Torneo seleccionado, Año es obligatorio.
+        """
+        usuario_ok = self.usuario_grafico_barra_sel is not None
+        
+        logica_torneo_anio = True
+        if self.temp_camp_barra is not None:
+            if self.temp_anio_barra is None:
+                logica_torneo_anio = False
+        
+        habilitar = usuario_ok and logica_torneo_anio
         self.btn_generar_grafico_barras.disabled = not habilitar
         self.btn_generar_grafico_barras.update()
 
@@ -2436,12 +2537,52 @@ class SistemaIndependiente:
             nombre_completo = f"{self.temp_campeonato_sel} {self.temp_anio_sel}"
             self.filtro_pron_torneo = nombre_completo
             
-            # Actualizamos visual
             self._actualizar_botones_pronosticos_visual()
-            
             self._actualizar_titulo_pronosticos()
-            self.page.close(self.dlg_modal)
+            self._limpiar_memoria_dialogo(self.dlg_modal)
             self._recargar_datos(actualizar_pronosticos=True)
+
+    def _confirmar_filtro_torneo(self, e):
+        """Confirma la selección del torneo y lo aplica (sumándose a otros filtros)."""
+        if self.temp_campeonato_sel and self.temp_anio_sel:
+            edicion_encontrada = None
+            for ed in self.cache_ediciones_modal:
+                if ed[1] == self.temp_campeonato_sel and ed[2] == self.temp_anio_sel:
+                    edicion_encontrada = ed[0] 
+                    break
+            
+            if edicion_encontrada:
+                self.filtro_edicion_id = edicion_encontrada
+                
+                self._actualizar_titulo_partidos()
+                self._actualizar_botones_partidos_visual()
+                self._limpiar_memoria_dialogo(self.dlg_modal)
+                self._recargar_datos(actualizar_partidos=True, actualizar_copas=False)
+
+    def _confirmar_filtro_torneo_ranking(self, e):
+        """Busca el ID de la edición seleccionada y aplica el filtro al ranking"""
+        if self.temp_campeonato_sel and self.temp_anio_sel:
+            edicion_encontrada = None
+            for ed in self.cache_ediciones_modal:
+                if ed[1] == self.temp_campeonato_sel and ed[2] == self.temp_anio_sel:
+                    edicion_encontrada = ed[0] 
+                    break
+            
+            if edicion_encontrada:
+                self.filtro_ranking_edicion_id = edicion_encontrada
+                self.filtro_ranking_nombre = f"{self.temp_campeonato_sel} {self.temp_anio_sel}"
+                self.filtro_ranking_anio = None
+                
+                self.txt_titulo_ranking.value = f"Tabla de posiciones {self.filtro_ranking_nombre}"
+                self.txt_titulo_ranking.update()
+                
+                self.btn_ranking_torneo.bgcolor = "blue"
+                self.btn_ranking_anio.bgcolor = "#333333" 
+                self.btn_ranking_torneo.update()
+                self.btn_ranking_anio.update()
+                
+                self._limpiar_memoria_dialogo(self.dlg_modal)
+                self._recargar_datos(actualizar_ranking=True, actualizar_copas=False)
 
     def _abrir_selector_torneo_pronosticos(self, e):
         loading_content = ft.Column(
@@ -2456,6 +2597,13 @@ class SistemaIndependiente:
 
         def _cargar_datos_modal():
             time.sleep(0.5)
+            
+            # --- NUEVO: Textos ESTRICTOS obligatorios ---
+            self.temp_campeonato_sel = None
+            self.modal_torneo_es_opcional = False
+            self.txt_titulo_torneo_modal = ft.Text("1. Torneo (Obligatorio)", weight=ft.FontWeight.BOLD, color="white")
+            self.txt_titulo_anio_modal = ft.Text("2. Año (Obligatorio)", weight=ft.FontWeight.BOLD, color="white")
+            
             self.lv_torneos = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5)
             self.lv_anios = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5)
             
@@ -2474,14 +2622,23 @@ class SistemaIndependiente:
             except Exception as ex:
                 self._mostrar_mensaje_admin("Error cargando modal", f"{ex}", "error")
 
-            # --- DISEÑO RESPONSIVO ---
             es_pc = (self.page.width >= 600) if self.page.width else True
             ancho_pantalla = self.page.width if self.page.width else 600
             ancho_modal = min(500, ancho_pantalla - 20)
             ancho_caja = 200 if es_pc else (ancho_modal - 40)
 
-            col_torneo = ft.Column(controls=[ft.Text("Torneo", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_torneos, height=180, width=ancho_caja, border=ft.border.all(1, "white24"), border_radius=5, padding=5)])
-            col_anio = ft.Column(controls=[ft.Text("Año", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_anios, height=180, width=ancho_caja, border=ft.border.all(1, "white24"), border_radius=5, padding=5)])
+            col_torneo = ft.Column(
+                controls=[
+                    self.txt_titulo_torneo_modal, 
+                    ft.Container(content=self.lv_torneos, height=180, width=ancho_caja, border=ft.border.all(1, "white24"), border_radius=5, padding=5)
+                ]
+            )
+            col_anio = ft.Column(
+                controls=[
+                    self.txt_titulo_anio_modal, 
+                    ft.Container(content=self.lv_anios, height=180, width=ancho_caja, border=ft.border.all(1, "white24"), border_radius=5, padding=5)
+                ]
+            )
 
             if es_pc:
                 layout_filtros = ft.Row(controls=[col_torneo, col_anio], spacing=20, alignment=ft.MainAxisAlignment.CENTER)
@@ -3872,11 +4029,6 @@ class SistemaIndependiente:
         threading.Thread(target=_tarea_verificacion, daemon=True).start()
 
     def _abrir_selector_torneo(self, e):
-        """
-        Lógica TOGGLE:
-        - Si ya hay un torneo filtrado, se DESAPLICA (vuelve a gris).
-        - Si no hay torneo, abre el modal para elegir uno.
-        """
         if self.filtro_edicion_id is not None:
             self.filtro_edicion_id = None
             self._actualizar_botones_partidos_visual()
@@ -3896,7 +4048,12 @@ class SistemaIndependiente:
             def _cargar_datos_modal():
                 time.sleep(0.5)
                 
-                # ¡CLAVE! Usamos Column con scroll y quitamos el expand=True
+                # --- NUEVO: Textos ESTRICTOS obligatorios ---
+                self.temp_campeonato_sel = None
+                self.modal_torneo_es_opcional = False
+                self.txt_titulo_torneo_modal = ft.Text("1. Torneo (Obligatorio)", weight=ft.FontWeight.BOLD, color="white")
+                self.txt_titulo_anio_modal = ft.Text("2. Año (Obligatorio)", weight=ft.FontWeight.BOLD, color="white")
+                
                 self.lv_torneos = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5)
                 self.lv_anios = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5)
                 
@@ -3915,23 +4072,20 @@ class SistemaIndependiente:
                 except Exception as ex:
                     self._mostrar_mensaje_admin("Error cargando modal", f"No se pudieron cargar los torneos: {ex}", "error")
 
-                # --- DISEÑO RESPONSIVO CON MEDIDAS EXACTAS ---
                 es_pc = (self.page.width >= 600) if self.page.width else True
                 ancho_pantalla = self.page.width if self.page.width else 600
                 ancho_modal = min(500, ancho_pantalla - 20)
-                
-                # En PC los cuadros miden 200px. En celular ocupan todo el ancho disponible.
                 ancho_caja = 200 if es_pc else (ancho_modal - 40)
 
                 col_torneo = ft.Column(
                     controls=[
-                        ft.Text("Torneo", weight=ft.FontWeight.BOLD), 
+                        self.txt_titulo_torneo_modal, 
                         ft.Container(content=self.lv_torneos, height=180, width=ancho_caja, border=ft.border.all(1, "white24"), border_radius=5, padding=5)
                     ]
                 )
                 col_anio = ft.Column(
                     controls=[
-                        ft.Text("Año", weight=ft.FontWeight.BOLD), 
+                        self.txt_titulo_anio_modal, 
                         ft.Container(content=self.lv_anios, height=180, width=ancho_caja, border=ft.border.all(1, "white24"), border_radius=5, padding=5)
                     ]
                 )
@@ -3961,24 +4115,6 @@ class SistemaIndependiente:
                 self.page.open(self.dlg_modal)
 
             threading.Thread(target=_cargar_datos_modal, daemon=True).start()
-
-    def _confirmar_filtro_torneo(self, e):
-        """Confirma la selección del torneo y lo aplica (sumándose a otros filtros)."""
-        if self.temp_campeonato_sel and self.temp_anio_sel:
-            edicion_encontrada = None
-            for ed in self.cache_ediciones_modal:
-                if ed[1] == self.temp_campeonato_sel and ed[2] == self.temp_anio_sel:
-                    edicion_encontrada = ed[0] 
-                    break
-            
-            if edicion_encontrada:
-                self.filtro_edicion_id = edicion_encontrada
-                # NO reseteamos los otros filtros
-                
-                self._actualizar_titulo_partidos()
-                self._actualizar_botones_partidos_visual()
-                self.page.close(self.dlg_modal)
-                self._recargar_datos(actualizar_partidos=True, actualizar_copas=False)
 
     def _abrir_selector_equipo(self, e):
         """
@@ -4573,6 +4709,13 @@ class SistemaIndependiente:
 
         def _cargar_datos_modal():
             time.sleep(0.5)
+            
+            # --- NUEVO: Textos dinámicos y bandera opcional ACTIVADA ---
+            self.temp_campeonato_sel = None
+            self.modal_torneo_es_opcional = True
+            self.txt_titulo_torneo_modal = ft.Text("1. Torneo (Opcional)", weight=ft.FontWeight.BOLD, color="white")
+            self.txt_titulo_anio_modal = ft.Text("2. Año (Opcional)", weight=ft.FontWeight.BOLD, color="white")
+            
             self.lv_torneos = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5)
             self.lv_anios = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5)
             
@@ -4591,14 +4734,23 @@ class SistemaIndependiente:
             except Exception as ex:
                 self._mostrar_mensaje_admin("Error cargando modal", f"No se pudieron cargar los torneos: {ex}", "error")
 
-            # --- DISEÑO RESPONSIVO ---
             es_pc = (self.page.width >= 600) if self.page.width else True
             ancho_pantalla = self.page.width if self.page.width else 600
             ancho_modal = min(500, ancho_pantalla - 20)
             ancho_caja = 200 if es_pc else (ancho_modal - 40)
 
-            col_torneo = ft.Column(controls=[ft.Text("Torneo", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_torneos, height=180, width=ancho_caja, border=ft.border.all(1, "white24"), border_radius=5, padding=5)])
-            col_anio = ft.Column(controls=[ft.Text("Año", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_anios, height=180, width=ancho_caja, border=ft.border.all(1, "white24"), border_radius=5, padding=5)])
+            col_torneo = ft.Column(
+                controls=[
+                    self.txt_titulo_torneo_modal, 
+                    ft.Container(content=self.lv_torneos, height=180, width=ancho_caja, border=ft.border.all(1, "white24"), border_radius=5, padding=5)
+                ]
+            )
+            col_anio = ft.Column(
+                controls=[
+                    self.txt_titulo_anio_modal, 
+                    ft.Container(content=self.lv_anios, height=180, width=ancho_caja, border=ft.border.all(1, "white24"), border_radius=5, padding=5)
+                ]
+            )
 
             if es_pc:
                 layout_filtros = ft.Row(controls=[col_torneo, col_anio], spacing=20, alignment=ft.MainAxisAlignment.CENTER)
@@ -4696,37 +4848,90 @@ class SistemaIndependiente:
         threading.Thread(target=_cargar_anios, daemon=True).start()
 
     def _seleccionar_campeonato_modal(self, e):
-        """Al clickear un torneo, filtra y muestra sus años disponibles"""
-        nombre_sel = e.control.data
-        self.temp_campeonato_sel = nombre_sel
+        """
+        Maneja la selección y deselección de un torneo en las listas.
+        Respeta si el modal actual es opcional (Estadísticas) o estricto (Partidos/Pronósticos).
+        """
+        nombre_campeonato = e.control.data
+        es_opcional = getattr(self, 'modal_torneo_es_opcional', False)
         
-        # Resaltar selección visualmente
-        for c in self.lv_torneos.controls:
-            c.bgcolor = "blue" if c.data == nombre_sel else "#2D2D2D"
+        # 1. Lógica de DESELECCIÓN (Si toca el torneo que ya estaba seleccionado)
+        if hasattr(self, 'temp_campeonato_sel') and self.temp_campeonato_sel == nombre_campeonato:
+            self.temp_campeonato_sel = None
+            
+            # Restaurar colores de la lista de torneos a gris
+            for control in self.lv_torneos.controls:
+                control.bgcolor = "#2D2D2D"
+            self.lv_torneos.update()
+            
+            # Limpiar la lista de años
+            self.lv_anios.controls.clear()
+            self.lv_anios.update()
+            
+            # Deshabilitar el botón "Ver"
+            if hasattr(self, 'btn_ver_torneo'):
+                self.btn_ver_torneo.disabled = True
+                self.btn_ver_torneo.update()
+                
+            # Restaurar los títulos a color blanco y el texto que corresponda
+            if hasattr(self, 'txt_titulo_torneo_modal'):
+                self.txt_titulo_torneo_modal.value = "1. Torneo (Opcional)" if es_opcional else "1. Torneo (Obligatorio)"
+                self.txt_titulo_torneo_modal.color = "white"
+                self.txt_titulo_torneo_modal.update()
+                
+            if hasattr(self, 'txt_titulo_anio_modal'):
+                self.txt_titulo_anio_modal.value = "2. Año (Opcional)" if es_opcional else "2. Año (Obligatorio)"
+                self.txt_titulo_anio_modal.color = "white"
+                self.txt_titulo_anio_modal.update()
+                
+            return
+
+        # 2. Lógica de SELECCIÓN NUEVA
+        self.temp_campeonato_sel = nombre_campeonato
+        
+        # SOLUCIÓN WARNING FLET: ft.Colors (con C mayúscula)
+        for control in self.lv_torneos.controls:
+            if control.data == nombre_campeonato:
+                control.bgcolor = ft.Colors.BLUE_700 
+            else:
+                control.bgcolor = "#2D2D2D"
         self.lv_torneos.update()
-        
-        # Filtrar años
-        anios = sorted([ed[2] for ed in self.cache_ediciones_modal if ed[1] == nombre_sel], reverse=True)
-        
-        # Llenar lista de años
-        controles_anios = []
-        for anio in anios:
-            controles_anios.append(
-                ft.ListTile(
-                    title=ft.Text(str(anio), size=14),
-                    data=anio,
-                    on_click=self._seleccionar_anio_modal,
-                    bgcolor="#2D2D2D",
-                    shape=ft.RoundedRectangleBorder(radius=5)
+
+        # Cambiar los títulos a color celeste y texto "(Obligatorio)" SIEMPRE al seleccionar
+        if hasattr(self, 'txt_titulo_torneo_modal'):
+            self.txt_titulo_torneo_modal.value = "1. Torneo (Obligatorio)"
+            self.txt_titulo_torneo_modal.color = "cyan"
+            self.txt_titulo_torneo_modal.update()
+            
+        if hasattr(self, 'txt_titulo_anio_modal'):
+            self.txt_titulo_anio_modal.value = "2. Año (Obligatorio)"
+            self.txt_titulo_anio_modal.color = "cyan"
+            self.txt_titulo_anio_modal.update()
+
+        # Cargar los años correspondientes a este torneo
+        try:
+            anios_disponibles = sorted(list(set(ed[2] for ed in self.cache_ediciones_modal if ed[1] == nombre_campeonato)), reverse=True)
+            
+            controles_anios = []
+            for anio in anios_disponibles:
+                controles_anios.append(
+                    ft.ListTile(
+                        title=ft.Text(str(anio), size=14), 
+                        data=anio, 
+                        on_click=self._seleccionar_anio_modal, 
+                        bgcolor="#2D2D2D", 
+                        shape=ft.RoundedRectangleBorder(radius=5)
+                    )
                 )
-            )
-        self.lv_anios.controls = controles_anios
-        self.lv_anios.update()
-        
-        # Resetear selección de año y botón
-        self.temp_anio_sel = None
-        self.btn_ver_torneo.disabled = True
-        self.btn_ver_torneo.update()
+            self.lv_anios.controls = controles_anios
+            self.lv_anios.update()
+            
+            if hasattr(self, 'btn_ver_torneo'):
+                self.btn_ver_torneo.disabled = True
+                self.btn_ver_torneo.update()
+                
+        except Exception as ex:
+            self._mostrar_mensaje_admin("Error", f"Error al cargar años: {ex}", "error")
 
     def _seleccionar_anio_modal(self, e):
         """Al clickear un año, habilita el botón Ver"""
@@ -4740,38 +4945,6 @@ class SistemaIndependiente:
         
         self.btn_ver_torneo.disabled = False
         self.btn_ver_torneo.update()
-
-    def _confirmar_filtro_torneo_ranking(self, e):
-        """Busca el ID de la edición seleccionada y aplica el filtro al ranking"""
-        if self.temp_campeonato_sel and self.temp_anio_sel:
-            edicion_encontrada = None
-            for ed in self.cache_ediciones_modal:
-                if ed[1] == self.temp_campeonato_sel and ed[2] == self.temp_anio_sel:
-                    edicion_encontrada = ed[0] 
-                    break
-            
-            if edicion_encontrada:
-                # 1. Establecer filtro Torneo
-                self.filtro_ranking_edicion_id = edicion_encontrada
-                self.filtro_ranking_nombre = f"{self.temp_campeonato_sel} {self.temp_anio_sel}"
-                
-                # 2. BORRAR filtro Año (Exclusividad)
-                self.filtro_ranking_anio = None
-                
-                # 3. Actualizar Título
-                self.txt_titulo_ranking.value = f"Tabla de posiciones {self.filtro_ranking_nombre}"
-                self.txt_titulo_ranking.update()
-                
-                # 4. Actualizar Botones (Uno azul, el otro negro)
-                self.btn_ranking_torneo.bgcolor = "blue"
-                self.btn_ranking_anio.bgcolor = "#333333" # Apagar el otro
-                
-                self.btn_ranking_torneo.update()
-                self.btn_ranking_anio.update()
-                
-                self.page.close(self.dlg_modal)
-                # IMPORTANTE: No actualizar Copas
-                self._recargar_datos(actualizar_ranking=True, actualizar_copas=False)
 
     def _confirmar_filtro_anio_ranking(self, e):
         """Confirma el filtro por año y borra el de torneo"""
@@ -4839,6 +5012,10 @@ class SistemaIndependiente:
             # Pausa estética breve
             time.sleep(0.5)
             
+            # --- NUEVO: Títulos Dinámicos ---
+            self.txt_titulo_torneo_torta = ft.Text("1. Torneo (Opcional)", weight="bold", size=12, color="white")
+            self.txt_titulo_anio_torta = ft.Text("2. Año (Opcional)", weight="bold", size=12, color="white")
+            
             # Inicializar listas
             self.lv_torneos_torta = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
             self.lv_anios_torta = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
@@ -4867,12 +5044,8 @@ class SistemaIndependiente:
                 controles_tor.append(ft.ListTile(title=ft.Text(nombre, size=14), data=nombre, on_click=self._sel_torneo_torta_modal, bgcolor="#2D2D2D"))
             self.lv_torneos_torta.controls = controles_tor
             
-            # 2. Años 
-            anios = bd.obtener_anios()
-            controles_anios = []
-            for id_a, num in anios:
-                controles_anios.append(ft.ListTile(title=ft.Text(str(num), size=14), data=num, on_click=self._sel_anio_torta_modal, bgcolor="#2D2D2D"))
-            self.lv_anios_torta.controls = controles_anios
+            # 2. Años (¡AQUÍ ESTÁ EL CAMBIO! Nace vacía para que no aparezca nada al principio)
+            self.lv_anios_torta.controls = []
 
             # 3. Usuarios
             usuarios = bd.obtener_usuarios()
@@ -4888,8 +5061,9 @@ class SistemaIndependiente:
                 )
             self.lv_usuarios_torta.controls = controles_usu
             
-            col_tor = ft.Container(width=200, content=ft.Column(controls=[ft.Text("1. Torneo (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_torneos_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
-            col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("2. Año (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_anios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
+            # Se inyectan los textos dinámicos
+            col_tor = ft.Container(width=200, content=ft.Column(controls=[self.txt_titulo_torneo_torta, ft.Container(content=self.lv_torneos_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_anio = ft.Container(width=200, content=ft.Column(controls=[self.txt_titulo_anio_torta, ft.Container(content=self.lv_anios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
             col_usu = ft.Container(width=200, content=ft.Column(controls=[ft.Text("3. Usuario (Obligatorio)", weight="bold", size=12, color="cyan"), ft.Container(content=self.lv_usuarios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
 
             es_celular = self.page.width < 750 if self.page.width else False
@@ -4900,8 +5074,6 @@ class SistemaIndependiente:
             def _on_scroll_modal(e):
                 try:
                     pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
-                    
-                    # SEGURIDAD ABSOLUTA: Si no hay barra de scroll (PC), mata ambas flechas al instante
                     if max_pos <= 0:
                         if not flecha_arriba.data or not flecha_abajo.data:
                             flecha_arriba.visible, flecha_arriba.data = False, True
@@ -4933,7 +5105,7 @@ class SistemaIndependiente:
                     scroll=ft.ScrollMode.ALWAYS,
                     controls=[
                         ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
-                        ft.Container(height=40) # Margen fantasma inferior
+                        ft.Container(height=40) 
                     ]
                 )
             )
@@ -4948,7 +5120,6 @@ class SistemaIndependiente:
                 ]
             )
             
-            # Cerrar carga y abrir selector
             self.page.close(self.dlg_carga_filtros)
             self.page.open(self.dlg_grafico_torta)
 
@@ -5070,14 +5241,32 @@ class SistemaIndependiente:
         threading.Thread(target=_tarea, daemon=True).start()
 
     def _sel_torneo_torta_modal(self, e):
-        """Selecciona o deselecciona torneo. Filtra los años."""
+        """Selecciona o deselecciona torneo. Filtra los años y ajusta los títulos."""
         nombre = e.control.data
         
         # Toggle selection
         if self.temp_camp_torta == nombre:
             self.temp_camp_torta = None # Deseleccionar
+            
+            # Restaurar título a opcional si se deselecciona
+            if hasattr(self, 'txt_titulo_anio_torta'):
+                self.txt_titulo_torneo_torta.value = "1. Torneo (Opcional)"
+                self.txt_titulo_torneo_torta.color = "white"
+                self.txt_titulo_anio_torta.value = "2. Año (Opcional)"
+                self.txt_titulo_anio_torta.color = "white"
+                self.txt_titulo_torneo_torta.update()
+                self.txt_titulo_anio_torta.update()
         else:
             self.temp_camp_torta = nombre
+            
+            # Cambiar título a obligatorio si se selecciona un torneo
+            if hasattr(self, 'txt_titulo_anio_torta'):
+                self.txt_titulo_torneo_torta.value = "1. Torneo (Obligatorio)"
+                self.txt_titulo_torneo_torta.color = "cyan"
+                self.txt_titulo_anio_torta.value = "2. Año (Obligatorio)"
+                self.txt_titulo_anio_torta.color = "cyan"
+                self.txt_titulo_torneo_torta.update()
+                self.txt_titulo_anio_torta.update()
         
         # Visual Update Torneos
         for c in self.lv_torneos_torta.controls: 
@@ -5088,14 +5277,14 @@ class SistemaIndependiente:
         if self.temp_camp_torta:
             # Mostrar solo años de este torneo
             anios_filtrados = sorted([ed[2] for ed in self.cache_ediciones_modal if ed[1] == self.temp_camp_torta], reverse=True)
+            ctls = []
+            for a in anios_filtrados:
+                ctls.append(ft.ListTile(title=ft.Text(str(a), size=14), data=a, on_click=self._sel_anio_torta_modal, bgcolor="#2D2D2D"))
+            self.lv_anios_torta.controls = ctls
         else:
-            # Mostrar todos los años disponibles en BD si no hay torneo seleccionado
-            anios_filtrados = sorted(list(set(ed[2] for ed in self.cache_ediciones_modal)), reverse=True)
-
-        ctls = []
-        for a in anios_filtrados:
-            ctls.append(ft.ListTile(title=ft.Text(str(a), size=14), data=a, on_click=self._sel_anio_torta_modal, bgcolor="#2D2D2D"))
-        self.lv_anios_torta.controls = ctls
+            # ¡EL CAMBIO!: Si no hay torneo seleccionado, la lista de años debe quedar totalmente vacía.
+            anios_filtrados = []
+            self.lv_anios_torta.controls.clear()
         
         # Si el año seleccionado ya no está en la lista filtrada, deseleccionarlo
         if self.temp_anio_torta not in anios_filtrados:
@@ -5151,19 +5340,17 @@ class SistemaIndependiente:
         self.btn_generar_grafico_torta.update()
     
     def _abrir_selector_grafico_torta_tendencia(self, e):
-        """Abre el modal para configurar el gráfico de tendencia (Optimismo/Pesimismo)."""
+        """Abre el modal para configurar el gráfico de tendencia (Optimismo/Pesimismo) con lógica dinámica."""
         
+        # 1. Animación de carga inicial
         loading_content = ft.Column(
             controls=[
                 ft.Text("Cargando filtros...", size=16, weight="bold", color="white"),
                 ft.Container(height=10),
                 ft.ProgressBar(width=200, color="amber", bgcolor="#222222"),
-                ft.Text("Obteniendo usuarios...", size=12, color="white70")
+                ft.Text("Obteniendo torneos y usuarios...", size=12, color="white70")
             ],
-            height=100,
-            width=300,
-            alignment=ft.MainAxisAlignment.CENTER,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER
+            height=100, width=300, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
         )
         self.dlg_carga_filtros = ft.AlertDialog(content=loading_content, modal=True)
         self.page.open(self.dlg_carga_filtros)
@@ -5171,7 +5358,11 @@ class SistemaIndependiente:
         def _cargar_datos_torta():
             time.sleep(0.5)
             
-            # Reutilizamos las variables de listas para no duplicar lógica de selección
+            # --- Títulos Dinámicos ---
+            self.txt_titulo_torneo_torta = ft.Text("1. Torneo (Opcional)", weight="bold", size=12, color="white")
+            self.txt_titulo_anio_torta = ft.Text("2. Año (Opcional)", weight="bold", size=12, color="white")
+            
+            # Inicializar listas
             self.lv_torneos_torta = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
             self.lv_anios_torta = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
             self.lv_usuarios_torta = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
@@ -5180,15 +5371,16 @@ class SistemaIndependiente:
             self.temp_anio_torta = None
             self.temp_usuario_torta = None 
             
-            # Botón específico que llama a _generar_grafico_torta_tendencia
             self.btn_generar_grafico_torta = ft.ElevatedButton(
                 "Generar Gráfico", 
                 icon=ft.Icons.PIE_CHART, 
                 disabled=True, 
-                on_click=self._generar_grafico_torta_tendencia
+                on_click=self._generar_grafico_torta_tendencia # Apunta a su propio generador
             )
 
             bd = BaseDeDatos()
+            
+            # 1. Torneos
             ediciones = bd.obtener_ediciones()
             self.cache_ediciones_modal = ediciones
             nombres_unicos = sorted(list(set(e[1] for e in ediciones)))
@@ -5198,12 +5390,10 @@ class SistemaIndependiente:
                 controles_tor.append(ft.ListTile(title=ft.Text(nombre, size=14), data=nombre, on_click=self._sel_torneo_torta_modal, bgcolor="#2D2D2D"))
             self.lv_torneos_torta.controls = controles_tor
             
-            anios = bd.obtener_anios()
-            controles_anios = []
-            for id_a, num in anios:
-                controles_anios.append(ft.ListTile(title=ft.Text(str(num), size=14), data=num, on_click=self._sel_anio_torta_modal, bgcolor="#2D2D2D"))
-            self.lv_anios_torta.controls = controles_anios
+            # 2. Años (Nace vacía)
+            self.lv_anios_torta.controls = []
 
+            # 3. Usuarios
             usuarios = bd.obtener_usuarios()
             controles_usu = []
             for usu in usuarios:
@@ -5217,11 +5407,12 @@ class SistemaIndependiente:
                 )
             self.lv_usuarios_torta.controls = controles_usu
             
-            # --- DISEÑO RESPONSIVO CON FLECHAS (ARRIBA Y ABAJO) ---
-            col_tor = ft.Container(width=200, content=ft.Column(controls=[ft.Text("1. Torneo (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_torneos_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
-            col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("2. Año (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_anios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
+            # Construcción de las columnas
+            col_tor = ft.Container(width=200, content=ft.Column(controls=[self.txt_titulo_torneo_torta, ft.Container(content=self.lv_torneos_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_anio = ft.Container(width=200, content=ft.Column(controls=[self.txt_titulo_anio_torta, ft.Container(content=self.lv_anios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
             col_usu = ft.Container(width=200, content=ft.Column(controls=[ft.Text("3. Usuario (Obligatorio)", weight="bold", size=12, color="cyan"), ft.Container(content=self.lv_usuarios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
 
+            # Diseño responsivo y flechas
             es_celular = self.page.width < 750 if self.page.width else False
             
             flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=0, right=10, visible=False, ignore_interactions=True, data=False)
@@ -5230,8 +5421,6 @@ class SistemaIndependiente:
             def _on_scroll_modal(e):
                 try:
                     pos, max_pos = float(e.pixels), float(e.max_scroll_extent)
-                    
-                    # SEGURIDAD ABSOLUTA: Si no hay barra de scroll (PC), mata ambas flechas al instante
                     if max_pos <= 0:
                         if not flecha_arriba.data or not flecha_abajo.data:
                             flecha_arriba.visible, flecha_arriba.data = False, True
@@ -5263,7 +5452,7 @@ class SistemaIndependiente:
                     scroll=ft.ScrollMode.ALWAYS,
                     controls=[
                         ft.Row(controls=[col_tor, col_anio, col_usu], wrap=True, alignment=ft.MainAxisAlignment.CENTER, spacing=20, run_spacing=20),
-                        ft.Container(height=40) # Margen fantasma inferior
+                        ft.Container(height=40) 
                     ]
                 )
             )
@@ -5396,14 +5585,15 @@ class SistemaIndependiente:
         threading.Thread(target=_tarea, daemon=True).start()
 
     def _abrir_selector_grafico_torta_firmeza(self, e):
-        """Abre el modal para configurar el gráfico de Grado de Firmeza."""
+        """Abre el modal para configurar el gráfico de Grado de Firmeza con lógica dinámica."""
         
+        # 1. Animación de carga inicial
         loading_content = ft.Column(
             controls=[
                 ft.Text("Cargando filtros...", size=16, weight="bold", color="white"),
                 ft.Container(height=10),
                 ft.ProgressBar(width=200, color="amber", bgcolor="#222222"),
-                ft.Text("Preparando selectores...", size=12, color="white70")
+                ft.Text("Obteniendo torneos y usuarios...", size=12, color="white70")
             ],
             height=100,
             width=300,
@@ -5415,6 +5605,10 @@ class SistemaIndependiente:
 
         def _cargar_datos_torta():
             time.sleep(0.5)
+            
+            # --- Títulos Dinámicos ---
+            self.txt_titulo_torneo_torta = ft.Text("1. Torneo (Opcional)", weight="bold", size=12, color="white")
+            self.txt_titulo_anio_torta = ft.Text("2. Año (Opcional)", weight="bold", size=12, color="white")
             
             # Reutilizamos las variables de listas para no duplicar lógica de selección
             self.lv_torneos_torta = ft.ListView(expand=True, spacing=5, height=ALTURA_LISTAS_DIALOGO)
@@ -5434,6 +5628,8 @@ class SistemaIndependiente:
             )
 
             bd = BaseDeDatos()
+            
+            # 1. Torneos
             ediciones = bd.obtener_ediciones()
             self.cache_ediciones_modal = ediciones
             nombres_unicos = sorted(list(set(e[1] for e in ediciones)))
@@ -5443,12 +5639,10 @@ class SistemaIndependiente:
                 controles_tor.append(ft.ListTile(title=ft.Text(nombre, size=14), data=nombre, on_click=self._sel_torneo_torta_modal, bgcolor="#2D2D2D"))
             self.lv_torneos_torta.controls = controles_tor
             
-            anios = bd.obtener_anios()
-            controles_anios = []
-            for id_a, num in anios:
-                controles_anios.append(ft.ListTile(title=ft.Text(str(num), size=14), data=num, on_click=self._sel_anio_torta_modal, bgcolor="#2D2D2D"))
-            self.lv_anios_torta.controls = controles_anios
+            # 2. Años (Nace vacía)
+            self.lv_anios_torta.controls = []
 
+            # 3. Usuarios
             usuarios = bd.obtener_usuarios()
             controles_usu = []
             for usu in usuarios:
@@ -5462,11 +5656,12 @@ class SistemaIndependiente:
                 )
             self.lv_usuarios_torta.controls = controles_usu
             
-            # --- DISEÑO RESPONSIVO CON FLECHAS (ARRIBA Y ABAJO) ---
-            col_tor = ft.Container(width=200, content=ft.Column(controls=[ft.Text("1. Torneo (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_torneos_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
-            col_anio = ft.Container(width=200, content=ft.Column(controls=[ft.Text("2. Año (Opcional)", weight="bold", size=12), ft.Container(content=self.lv_anios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
+            # Construcción de las columnas con los Textos dinámicos
+            col_tor = ft.Container(width=200, content=ft.Column(controls=[self.txt_titulo_torneo_torta, ft.Container(content=self.lv_torneos_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
+            col_anio = ft.Container(width=200, content=ft.Column(controls=[self.txt_titulo_anio_torta, ft.Container(content=self.lv_anios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
             col_usu = ft.Container(width=200, content=ft.Column(controls=[ft.Text("3. Usuario (Obligatorio)", weight="bold", size=12, color="cyan"), ft.Container(content=self.lv_usuarios_torta, border=ft.border.all(1, "white24"), border_radius=5)]))
 
+            # Diseño responsivo y flechas
             es_celular = self.page.width < 750 if self.page.width else False
             
             flecha_arriba = ft.Container(content=ft.Icon(ft.Icons.KEYBOARD_DOUBLE_ARROW_UP, color="amber", size=35), top=0, right=10, visible=False, ignore_interactions=True, data=False)

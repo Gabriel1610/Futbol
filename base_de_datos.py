@@ -388,10 +388,13 @@ class BaseDeDatos:
             if cursor: cursor.close()
             if conexion: conexion.close()
 
-    def sincronizar_proximos_partidos(self, lista_futuros):
+    def sincronizar_partidos(self, lista):
         """
-        Regla Futuro: Procesamiento monolítico en bloque para MÁXIMA VELOCIDAD.
-        Abre UNA sola conexión, procesa todos los partidos y cierra.
+        Procesamiento monolítico en bloque.
+        - Identifica el partido por su rival y cercanía de fecha (pasados o futuros).
+        - Actualiza el torneo y la hora exacta si la API reporta un cambio.
+        - Inserta si es un partido nuevo.
+        - Al finalizar, borra cualquier torneo que haya quedado huérfano.
         """
         conexion = None
         cursor = None
@@ -400,7 +403,7 @@ class BaseDeDatos:
             conexion = self.abrir()
             cursor = conexion.cursor()
 
-            for datos in lista_futuros:
+            for datos in lista:
                 rival_nombre = datos['rival']
                 torneo_nombre = datos['torneo']
                 anio_numero = str(datos['anio']).split("-")[0]
@@ -416,7 +419,6 @@ class BaseDeDatos:
                         cursor.execute("INSERT INTO rivales (nombre) VALUES (%s)", (rival_nombre,))
                         rival_id = cursor.lastrowid
                     except mysql.connector.IntegrityError:
-                        # Si alguien lo insertó una fracción de segundo antes
                         cursor.execute("SELECT id FROM rivales WHERE nombre = %s OR otro_nombre = %s LIMIT 1", (rival_nombre, rival_nombre))
                         rival_id = cursor.fetchone()[0]
 
@@ -459,22 +461,58 @@ class BaseDeDatos:
                         cursor.execute("SELECT id FROM ediciones WHERE campeonato_id = %s AND anio_id = %s", (camp_id, anio_id))
                         edicion_id = cursor.fetchone()[0]
 
-                # --- 5. GESTIÓN DE PARTIDO (Con el escudo de "fecha_unica") ---
-                try:
-                    # Intentamos insertarlo como un partido totalmente nuevo
-                    cursor.execute("INSERT INTO partidos (rival_id, edicion_id, fecha_hora) VALUES (%s, %s, %s)", (rival_id, edicion_id, fecha_hora))
-                    hubo_cambios = True
-                except mysql.connector.IntegrityError:
-                    # EL ESCUDO ACTUÓ: Ya hay un partido en esa fecha_unica. Lo actualizamos (por si FotMob cambió la hora exacta o de torneo).
+                # --- 5. GESTIÓN DE PARTIDO (Búsqueda Inteligente y Actualización) ---
+                # Buscamos si existe un partido contra este rival en fechas cercanas (+/- 5 días)
+                # NOTA: Se quitó la restricción de "goles_independiente IS NULL" para que pueda corregir torneos de partidos ya jugados
+                cursor.execute("""
+                    SELECT id FROM partidos 
+                    WHERE rival_id = %s 
+                      AND ABS(DATEDIFF(fecha_hora, %s)) <= 5 
+                    LIMIT 1
+                """, (rival_id, fecha_hora))
+                
+                partido_existente = cursor.fetchone()
+
+                if partido_existente:
+                    # El partido ya existe: Forzamos la actualización de la edición y la fecha
+                    partido_id = partido_existente[0]
+                    
                     cursor.execute("""
                         UPDATE partidos 
-                        SET edicion_id = %s, rival_id = %s, fecha_hora = %s 
-                        WHERE DATE(fecha_hora) = DATE(%s)
-                    """, (edicion_id, rival_id, fecha_hora, fecha_hora))
-                    if cursor.rowcount > 0: 
+                        SET edicion_id = %s, fecha_hora = %s 
+                        WHERE id = %s
+                    """, (edicion_id, fecha_hora, partido_id))
+                    
+                    if cursor.rowcount > 0:
                         hubo_cambios = True
+                else:
+                    # El partido no existe: Lo insertamos
+                    try:
+                        cursor.execute("INSERT INTO partidos (rival_id, edicion_id, fecha_hora) VALUES (%s, %s, %s)", (rival_id, edicion_id, fecha_hora))
+                        hubo_cambios = True
+                    except mysql.connector.IntegrityError:
+                        # Fallback por si la base tiene alguna restricción oculta de fechas duplicadas
+                        cursor.execute("""
+                            UPDATE partidos 
+                            SET edicion_id = %s, rival_id = %s, fecha_hora = %s 
+                            WHERE DATE(fecha_hora) = DATE(%s)
+                        """, (edicion_id, rival_id, fecha_hora, fecha_hora))
+                        if cursor.rowcount > 0:
+                            hubo_cambios = True
 
-            # Guardamos todos los cambios de golpe al final del bucle
+            # --- 6. LIMPIEZA DE TORNEOS HUÉRFANOS ---
+            # Si un torneo cambió de nombre, el anterior quedará vacío. 
+            # Estas 3 consultas borran la basura en cascada sin romper las llaves foráneas.
+            
+            # Borrar ediciones vacías
+            cursor.execute("DELETE FROM ediciones WHERE id NOT IN (SELECT DISTINCT edicion_id FROM partidos WHERE edicion_id IS NOT NULL)")
+            
+            # Borrar campeonatos vacíos
+            cursor.execute("DELETE FROM campeonatos WHERE id NOT IN (SELECT DISTINCT campeonato_id FROM ediciones WHERE campeonato_id IS NOT NULL)")
+            
+            # Borrar años vacíos
+            cursor.execute("DELETE FROM anios WHERE id NOT IN (SELECT DISTINCT anio_id FROM ediciones WHERE anio_id IS NOT NULL)")
+
             conexion.commit()
             return hubo_cambios
             
@@ -484,7 +522,7 @@ class BaseDeDatos:
         finally:
             if cursor: cursor.close()
             if conexion: conexion.close()
-    
+
     def obtener_partidos(self, usuario, filtro_tiempo='futuros', edicion_id=None, rival_id=None, solo_sin_pronosticar=False):
         """
         Obtiene la lista de partidos aplicando filtros acumulativos.
@@ -603,11 +641,8 @@ class BaseDeDatos:
 
     def obtener_datos_evolucion_puestos(self, edicion_id, usuarios_seleccionados):
         """
-        Calcula la evolución del ranking aplicando los NUEVOS CRITERIOS:
-        1. Puntos (Mayor).
-        2. Partidos Jugados (Mayor).
-        3. Error Promedio (Menor).
-        4. Anticipación Promedio (Mayor).
+        Calcula la evolución del ranking aplicando los NUEVOS CRITERIOS.
+        Corrección: Se elimina el filtro defectuoso de NOW().
         """
         conexion = None
         cursor = None
@@ -620,14 +655,13 @@ class BaseDeDatos:
             total_usuarios = cursor.fetchone()[0]
 
             # 2. Obtener partidos TERMINADOS ordenados por fecha
-            # Filtro estricto: Goles no nulos y fecha pasada
+            # FILTRO CORREGIDO: Eliminamos "AND fecha_hora < NOW()"
             sql_partidos = """
                 SELECT id 
                 FROM partidos 
                 WHERE edicion_id = %s 
                   AND goles_independiente IS NOT NULL 
                   AND goles_rival IS NOT NULL
-                  AND fecha_hora < NOW()
                 ORDER BY fecha_hora ASC
             """
             cursor.execute(sql_partidos, (edicion_id,))
@@ -653,8 +687,6 @@ class BaseDeDatos:
 
             # 4. Iterar partido a partido
             for partido_id in partidos:
-                # Consulta para obtener: Puntos, Error y Anticipación en ESTE partido
-                # Usa la variable global PUNTOS
                 sql_datos_partido = f"""
                     SELECT 
                         pr.usuario_id,
@@ -673,7 +705,6 @@ class BaseDeDatos:
                         TIMESTAMPDIFF(SECOND, pr.fecha_prediccion, p.fecha_hora) as segundos_anticipacion
                     
                     FROM pronosticos pr
-                    -- FILTRO ÚLTIMO PRONÓSTICO
                     JOIN (
                         SELECT usuario_id, MAX(id) as max_id
                         FROM pronosticos
@@ -710,11 +741,6 @@ class BaseDeDatos:
                         avg_error = 999.0 # Castigo por no jugar
                         avg_ant = 0.0
 
-                    # Tupla de Ordenamiento (Python ordena Ascendente por defecto):
-                    # 1. Puntos (Mayor -> Negativo)
-                    # 2. PJ (Mayor -> Negativo)
-                    # 3. Error (Menor -> Positivo tal cual)
-                    # 4. Anticipación (Mayor -> Negativo)
                     return (-pts, -partidos_jug, avg_error, -avg_ant)
 
                 # Ordenar
@@ -742,8 +768,6 @@ class BaseDeDatos:
             return len(partidos), total_usuarios, historial_grafico
 
         except Exception as e:
-            # logger.error(f"Error evolución: {e}") 
-            # Si no usas logger, solo imprime o ignora
             print(f"Error evolución: {e}")
             return 0, 0, {}
         finally:
@@ -753,7 +777,7 @@ class BaseDeDatos:
     def obtener_datos_evolucion_puntos(self, edicion_id, usuarios_seleccionados):
         """
         Obtiene el historial de puntos acumulados partido a partido para graficar.
-        Corrección: Se aplica filtro para leer solo el ÚLTIMO pronóstico.
+        Corrección: Se elimina el filtro defectuoso de NOW() para mostrar todos los partidos finalizados.
         """
         if not usuarios_seleccionados:
             return 0, 0, {}
@@ -766,11 +790,11 @@ class BaseDeDatos:
         
         try:
             # 1. Obtener la lista de partidos finalizados de esta edición
+            # FILTRO CORREGIDO: Eliminamos "AND fecha_hora < NOW()"
             sql_partidos = """
                 SELECT id FROM partidos 
                 WHERE goles_independiente IS NOT NULL 
                   AND goles_rival IS NOT NULL 
-                  AND fecha_hora < NOW()
                   AND edicion_id = %s
                 ORDER BY fecha_hora ASC
             """
@@ -780,13 +804,14 @@ class BaseDeDatos:
             if not lista_partidos:
                 return 0, len(usuarios_seleccionados), {u: [] for u in usuarios_seleccionados}
                 
-            # Diccionario base para los puntos de cada partido
+            # Diccionario base para los puntos de cada partido (Esto ya asegura los 0 puntos a los que faltan)
             historial_por_partido = {p_id: {u: 0 for u in usuarios_seleccionados} for p_id in lista_partidos}
             
             # 2. Consultar los puntos calculados de cada usuario
             placeholders = ', '.join(['%s'] * len(usuarios_seleccionados))
             params_puntos = [edicion_id] + usuarios_seleccionados
             
+            # FILTRO CORREGIDO: Eliminamos "AND p.fecha_hora < NOW()"
             sql_puntos = f"""
                 SELECT 
                     pr.partido_id,
@@ -798,7 +823,6 @@ class BaseDeDatos:
                     (CASE WHEN p.goles_rival = pr.pred_goles_rival THEN {PUNTOS} ELSE 0 END) as puntos_partido
                 FROM pronosticos pr
                 
-                -- FILTRO CLAVE AÑADIDO: SOLO EL ÚLTIMO PRONÓSTICO DE CADA USUARIO
                 INNER JOIN (
                     SELECT MAX(id) as max_id
                     FROM pronosticos
@@ -810,7 +834,6 @@ class BaseDeDatos:
                 
                 WHERE p.goles_independiente IS NOT NULL 
                   AND p.goles_rival IS NOT NULL 
-                  AND p.fecha_hora < NOW()
                   AND p.edicion_id = %s
                   AND u.username IN ({placeholders})
             """
@@ -1884,10 +1907,7 @@ class BaseDeDatos:
     def obtener_ranking(self, edicion_id=None, anio=None):
         """
         Ranking Definitivo:
-        1. Solo partidos FINALIZADOS (fecha < NOW y goles cargados).
-        2. Solo el ÚLTIMO pronóstico de cada usuario (evita duplicados por ediciones).
-        3. Cálculo de puntos con la variable global PUNTOS.
-        4. Agregado: Efectividad (porcentaje de resultados exactos, 2 decimales).
+        Corrección: Eliminado el filtro fecha_hora < NOW()
         """
         conexion = self.abrir()
         if not conexion:
@@ -1907,7 +1927,7 @@ class BaseDeDatos:
 
         sql = f"""
             SELECT 
-                u.username,                                                     -- 0
+                u.username,                                                     
                 
                 -- 1. TOTAL PUNTOS
                 COALESCE(SUM(
@@ -1955,7 +1975,6 @@ class BaseDeDatos:
             FROM usuarios u
             JOIN pronosticos pr ON u.id = pr.usuario_id
             
-            -- FILTRO CLAVE: SOLO EL ÚLTIMO PRONÓSTICO
             INNER JOIN (
                 SELECT MAX(id) as max_id
                 FROM pronosticos
@@ -1964,9 +1983,9 @@ class BaseDeDatos:
             
             JOIN partidos p ON pr.partido_id = p.id
             
+            -- FILTRO CORREGIDO: Eliminamos AND p.fecha_hora < NOW()
             WHERE p.goles_independiente IS NOT NULL 
               AND p.goles_rival IS NOT NULL
-              AND p.fecha_hora < NOW()
             {filtro_sql}
             GROUP BY u.id
             ORDER BY 
@@ -1986,7 +2005,7 @@ class BaseDeDatos:
         cursor.close()
         conexion.close()
         return ranking
-    
+
     def obtener_indice_optimismo_pesimismo(self, edicion_id=None, anio=None):
         """
         Calcula el índice unificado de Optimismo/Pesimismo mostrando a TODOS los usuarios.
@@ -2153,7 +2172,7 @@ class BaseDeDatos:
                 
                 AND (
                     -- =========================================================
-                    -- CASO 1: Alerta diaria normal (dentro de los %s días)
+                    -- CASO 1: Alerta diaria normal (dentro del rango de días)
                     -- Solo se envía si HOY no se le mandó nada.
                     -- =========================================================
                     (
@@ -2192,7 +2211,7 @@ class BaseDeDatos:
         finally:
             if cursor: cursor.close()
             if conexion: conexion.close()
-            
+
     def marcar_usuario_notificado(self, usuario_id):
         """Actualiza la fecha de última notificación a 'ahora'."""
         conexion = None
