@@ -1678,10 +1678,10 @@ class BaseDeDatos:
             if cursor: cursor.close()
             if conexion: conexion.close()
 
-    def obtener_ediciones(self):
+    def obtener_ediciones(self, solo_finalizados=False):
         """
         Obtiene las ediciones de torneos (ID, Nombre, Año, Finalizado).
-        Solo trae ediciones que tengan al menos un partido con goles_independiente IS NOT NULL.
+        Si solo_finalizados es True, filtra para mostrar SOLO aquellas que tienen partidos jugados.
         Ordenado por año descendente y nombre.
         """
         conexion = None
@@ -1690,30 +1690,38 @@ class BaseDeDatos:
             conexion = self.abrir()
             cursor = conexion.cursor()
             
-            # AGREGAMOS la condición EXISTS apuntando a la tabla partidos
-            sql = """
-            SELECT e.id, c.nombre, a.numero, e.finalizado
-            FROM ediciones e
-            JOIN campeonatos c ON e.campeonato_id = c.id
-            JOIN anios a ON e.anio_id = a.id
-            WHERE EXISTS (
-                SELECT 1 
-                FROM partidos p 
-                WHERE p.edicion_id = e.id 
-                  AND p.goles_independiente IS NOT NULL
-            )
-            ORDER BY a.numero DESC, c.nombre ASC
-            """
-            
+            if solo_finalizados:
+                sql = """
+                SELECT e.id, c.nombre, a.numero, e.finalizado
+                FROM ediciones e
+                JOIN campeonatos c ON e.campeonato_id = c.id
+                JOIN anios a ON e.anio_id = a.id
+                WHERE EXISTS (
+                    SELECT 1 
+                    FROM partidos p 
+                    WHERE p.edicion_id = e.id 
+                      AND p.goles_independiente IS NOT NULL
+                )
+                ORDER BY a.numero DESC, c.nombre ASC
+                """
+            else:
+                sql = """
+                SELECT e.id, c.nombre, a.numero, e.finalizado
+                FROM ediciones e
+                JOIN campeonatos c ON e.campeonato_id = c.id
+                JOIN anios a ON e.anio_id = a.id
+                ORDER BY a.numero DESC, c.nombre ASC
+                """
+                
             cursor.execute(sql)
             return cursor.fetchall()
         except Exception as e:
-            logger.error(f"Error obteniendo ediciones: {e}")
+            print(f"Error obteniendo ediciones: {e}")
             return []
         finally:
             if cursor: cursor.close()
-            if conexion: conexion.close()
-            
+            if conexion: conexion.close() 
+
     def obtener_anios(self):
         """Obtiene la lista de años disponibles en la base de datos."""
         conexion = None

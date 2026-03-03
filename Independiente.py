@@ -148,7 +148,9 @@ class SistemaIndependiente:
                     
                 cuerpo += "Aún no has cargado tu pronóstico para los siguientes encuentros:\n\n"
                 cuerpo += "\n".join(lineas_partidos) + "\n\n"
-                cuerpo += "¡No te olvides de sumar puntos!\nIngresa a la aplicación para dejar tu resultado.\n\nSaludos,\nEl Sistema."
+                
+                # --- AQUÍ SE AGREGA EL ENLACE A RENDER ---
+                cuerpo += "¡No te olvides de sumar puntos!\nIngresa a la aplicación para dejar tu resultado: https://independiente.onrender.com\n\nSaludos,\nEl Sistema."
 
                 asunto = "⚠️ Recordatorio: Partidos sin pronosticar - CAI"
                 
@@ -902,27 +904,27 @@ class SistemaIndependiente:
             email_actual_display = "Error de conexión"
 
         self.txt_info_user_actual = ft.Text(f"Usuario: {self.usuario_actual}", size=14, color="cyan", weight=ft.FontWeight.BOLD)
-        self.txt_info_email_actual = ft.Text(f"Email: {email_actual_display}", size=14, color="cyan", weight=ft.FontWeight.BOLD)
         
-        # --- NUEVO DISEÑO: ÍCONOS SOLDADOS AL TEXTO ---
-        bloque_usuario = ft.Row([ft.Icon("info_outline", color="cyan"), self.txt_info_user_actual], spacing=5)
-        bloque_email = ft.Row([ft.Icon("email_outlined", color="cyan"), self.txt_info_email_actual], spacing=5)
+        # CAMBIO 1: expand=True obliga al texto a no salirse de la pantalla y bajar de renglón
+        self.txt_info_email_actual = ft.Text(f"Email: {email_actual_display}", size=14, color="cyan", weight=ft.FontWeight.BOLD, expand=True)
+        
+        # CAMBIO 2: Alineación START para que el ícono quede pegado arriba si el texto baja
+        bloque_usuario = ft.Row([ft.Icon("info_outline", color="cyan"), self.txt_info_user_actual], spacing=5, vertical_alignment=ft.CrossAxisAlignment.START)
+        bloque_email = ft.Row([ft.Icon("email_outlined", color="cyan"), self.txt_info_email_actual], spacing=5, vertical_alignment=ft.CrossAxisAlignment.START)
 
-        # Envolvemos el Container dentro de un Row principal para evitar que se estire al 100%
-        contenedor_info_actual = ft.Row(
-            controls=[
-                ft.Container(
-                    content=ft.Row(
-                        controls=[
-                            bloque_usuario,
-                            ft.Container(width=10), # Pequeño separador si entran en la misma línea
-                            bloque_email
-                        ],
-                        wrap=True # Si la pantalla es chica, bajará el "bloque_email" entero
-                    ),
-                    bgcolor="#2D2D2D", padding=10, border_radius=8, border=ft.border.all(1, "white10")
-                )
-            ]
+        # CAMBIO 3: Usamos Column para asegurar los límites de pantalla de forma estricta
+        contenedor_info_actual = ft.Container(
+            content=ft.Column(
+                controls=[
+                    bloque_usuario,
+                    bloque_email
+                ],
+                spacing=12  # Separación vertical entre el usuario y el correo
+            ),
+            bgcolor="#2D2D2D", 
+            padding=15, 
+            border_radius=8, 
+            border=ft.border.all(1, "white10")
         )
 
         # 1. PANEL CONTRASEÑA
@@ -2283,7 +2285,6 @@ class SistemaIndependiente:
         def _cargar_datos_modal():
             time.sleep(0.5)
             
-            # --- NUEVO: Textos ESTRICTOS obligatorios ---
             self.temp_campeonato_sel = None
             self.modal_torneo_es_opcional = False
             self.txt_titulo_torneo_modal = ft.Text("1. Torneo (Obligatorio)", weight=ft.FontWeight.BOLD, color="white")
@@ -2296,7 +2297,8 @@ class SistemaIndependiente:
             
             try:
                 bd = BaseDeDatos()
-                ediciones = bd.obtener_ediciones()
+                # --- CAMBIO APLICADO: TODOS LOS TORNEOS ---
+                ediciones = bd.obtener_ediciones(solo_finalizados=False)
                 self.cache_ediciones_modal = ediciones
                 nombres_unicos = sorted(list(set(e[1] for e in ediciones)))
                 
@@ -3741,7 +3743,6 @@ class SistemaIndependiente:
             def _cargar_datos_modal():
                 time.sleep(0.5)
                 
-                # --- NUEVO: Textos ESTRICTOS obligatorios ---
                 self.temp_campeonato_sel = None
                 self.modal_torneo_es_opcional = False
                 self.txt_titulo_torneo_modal = ft.Text("1. Torneo (Obligatorio)", weight=ft.FontWeight.BOLD, color="white")
@@ -3754,7 +3755,8 @@ class SistemaIndependiente:
                 
                 try:
                     bd = BaseDeDatos()
-                    ediciones = bd.obtener_ediciones()
+                    # --- CAMBIO APLICADO: TODOS LOS TORNEOS ---
+                    ediciones = bd.obtener_ediciones(solo_finalizados=False)
                     self.cache_ediciones_modal = ediciones
                     nombres_unicos = sorted(list(set(e[1] for e in ediciones)))
                     
@@ -4004,7 +4006,7 @@ class SistemaIndependiente:
         # 2. ABRIR UN NUEVO DIÁLOGO EXCLUSIVO PARA LA CARGA
         loading_content = ft.Column(
             controls=[
-                ft.Text("Procesando historia...", size=16, weight="bold", color="white"),
+                ft.Text("Procesando torneo...", size=16, weight="bold", color="white"),
                 ft.Container(height=10),
                 ft.ProgressBar(width=200, color="red", bgcolor="#222222")
             ],
@@ -4172,7 +4174,6 @@ class SistemaIndependiente:
         self.dlg_carga_filtros = ft.AlertDialog(content=loading_content, modal=True)
         self.page.open(self.dlg_carga_filtros)
 
-        # --- AQUI EMPIEZA EL CÓDIGO QUE SE HABÍA BORRADO ---
         def _cargar_datos_modal():
             time.sleep(0.5)
             
@@ -4188,7 +4189,8 @@ class SistemaIndependiente:
             
             try:
                 bd = BaseDeDatos()
-                ediciones = bd.obtener_ediciones()
+                # --- CAMBIO APLICADO: SOLO TORNEOS FINALIZADOS ---
+                ediciones = bd.obtener_ediciones(solo_finalizados=True)
                 self.cache_ediciones_modal = ediciones
                 nombres_unicos = sorted(list(set(e[1] for e in ediciones)))
                 
