@@ -719,16 +719,60 @@ class SistemaIndependiente:
         )
 
         # --- CONTENEDOR 4: RANKINGS ---
-        self.btn_indice_opt_pes = ft.ElevatedButton("Optimismo/Pesimismo", icon="assessment", bgcolor="#333333", color="white", width=180, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_opt_pes)
-        self.btn_ranking_fp = ft.ElevatedButton("Falso profeta", icon="new_releases", bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_falso_profeta)
-        self.btn_estilo_decision = ft.ElevatedButton("Estilo de decisión", icon=ft.Icons.PSYCHOLOGY, bgcolor="#333333", color="white", width=180, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_estilo_decision)
-        self.btn_mufa = ft.ElevatedButton("Mufa", icon="flash_on", bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_mufa)
-        self.btn_mejor_predictor = ft.ElevatedButton("Mejor predictor", icon="precision_manufacturing", bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_mejor_predictor)
-        self.btn_cambios_pronostico = ft.ElevatedButton("Cambios de pronóstico", icon=ft.Icons.EDIT_NOTE, bgcolor="#333333", color="white", width=180, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_cambios_pronostico)
-        self.btn_racha_actual = ft.ElevatedButton("Racha actual", icon="trending_up", bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_racha_actual)
-        self.btn_racha_record = ft.ElevatedButton("Racha récord", icon="military_tech", bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_racha_record)
-        self.btn_mayores_errores = ft.ElevatedButton("Mayores errores", icon=ft.Icons.ERROR_OUTLINE, bgcolor="#333333", color="white", width=140, height=45, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=self._generar_tabla_mayores_errores)
-        
+        self.btn_indice_opt_pes = ft.ElevatedButton(
+            "Optimismo/Pesimismo", icon="assessment", bgcolor="#333333", color="white", width=180, height=45, 
+            style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), 
+            tooltip="Mide tu tendencia a pronosticar resultados a favor (Optimista) o en contra (Pesimista) del Rojo.",
+            on_click=self._abrir_modal_opt_pes
+        )
+        self.btn_ranking_fp = ft.ElevatedButton(
+            "Falso profeta", icon="new_releases", bgcolor="#333333", color="white", width=140, height=45, 
+            style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), 
+            tooltip="Usuarios que más se equivocan cuando dicen que Independiente va a ganar.",
+            on_click=self._abrir_modal_falso_profeta
+        )
+        self.btn_estilo_decision = ft.ElevatedButton(
+            "Estilo de decisión", icon=ft.Icons.PSYCHOLOGY, bgcolor="#333333", color="white", width=180, height=45, 
+            style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), 
+            tooltip="Clasifica tu estilo según el tiempo de anticipación con el que guardas tus pronósticos.",
+            on_click=self._abrir_modal_estilo_decision
+        )
+        self.btn_mufa = ft.ElevatedButton(
+            "Mufa", icon="flash_on", bgcolor="#333333", color="white", width=140, height=45, 
+            style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), 
+            tooltip="Usuarios que más aciertan el resultado cuando pronostican que el Rojo pierde.",
+            on_click=self._abrir_modal_mufa
+        )
+        self.btn_mejor_predictor = ft.ElevatedButton(
+            "Mejor predictor", icon="precision_manufacturing", bgcolor="#333333", color="white", width=140, height=45, 
+            style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), 
+            tooltip="Premia a quienes tienen el menor margen de error en la cantidad de goles pronosticados.",
+            on_click=self._abrir_modal_mejor_predictor
+        )
+        self.btn_cambios_pronostico = ft.ElevatedButton(
+            "Cambios de pronóstico", icon=ft.Icons.EDIT_NOTE, bgcolor="#333333", color="white", width=180, height=45, 
+            style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), 
+            tooltip="Muestra quiénes dudan más y cambian su resultado constantemente antes del partido.",
+            on_click=self._abrir_modal_cambios_pronostico
+        )
+        self.btn_racha_actual = ft.ElevatedButton(
+            "Racha actual", icon="trending_up", bgcolor="#333333", color="white", width=140, height=45, 
+            style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), 
+            tooltip="Cantidad de partidos consecutivos actuales en los que sumaste al menos 3 puntos.",
+            on_click=self._abrir_modal_racha_actual
+        )
+        self.btn_racha_record = ft.ElevatedButton(
+            "Racha récord", icon="military_tech", bgcolor="#333333", color="white", width=140, height=45, 
+            style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), 
+            tooltip="La mejor racha histórica de partidos consecutivos sumando puntos por jugador.",
+            on_click=self._abrir_modal_racha_record
+        )
+        self.btn_mayores_errores = ft.ElevatedButton(
+            "Mayores errores", icon=ft.Icons.ERROR_OUTLINE, bgcolor="#333333", color="white", width=140, height=45, 
+            style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), 
+            tooltip="El top 10 histórico de los peores pronósticos (mayor diferencia absoluta de goles).",
+            on_click=self._generar_tabla_mayores_errores
+        )
 
         # --- CONTENEDOR 5: GRÁFICOS DE TORTA ---
         self.btn_grafico_torta_estilo = ft.ElevatedButton("Resultados pronosticados", icon=ft.Icons.PIE_CHART, bgcolor="#333333", color="white", width=215, height=30, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=lambda e: self._abrir_selector_usuarios_generico("Resultados pronosticados", False, "Ver Gráfico", ft.Icons.PIE_CHART, self._generar_grafico_torta_estilo_pronostico))
@@ -5285,4 +5329,4 @@ if __name__ == "__main__":
         
     else:
         # MODO 3: DEPURACIÓN LOCAL (Navegador)
-        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir=ruta_assets)
+        ft.app(target=main)#, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir=ruta_assets)
