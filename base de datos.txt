@@ -6,7 +6,7 @@ USE independiente;
 -- Se separa para no repetir nombre y anio en cada partido
 CREATE TABLE campeonatos (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    nombre VARCHAR(50) NOT NULL
+    nombre VARCHAR(50) NOT NULL UNIQUE
 );
 
 -- 2. Tabla de Anios
@@ -37,11 +37,10 @@ CREATE TABLE usuarios (
     username VARCHAR(50) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
-    email VARCHAR(255) NULL,
+    email VARCHAR(255) NULL UNIQUE,
     token_recuperacion VARCHAR(6) NULL,
     token_expiracion DATETIME NULL,
     fecha_ultima_notificacion DATETIME DEFAULT NULL,
-    UNIQUE INDEX uq_email (email),
     tipo VARCHAR(20) NOT NULL DEFAULT 'comun',
     CONSTRAINT chk_tipo_usuario
         CHECK (tipo IN ('comun', 'administrador')),
@@ -92,7 +91,7 @@ CREATE TABLE partidos (
     rival_id INT NOT NULL,
     fecha_hora DATETIME NOT NULL,
     
-    -- LA MAGIA: Crea una columna invisible que extrae solo el día (YYYY-MM-DD) y no permite duplicados
+    -- LA MAGIA: Crea una columna invisible que extrae solo el día (YYYY-MM-DD) y no permite duplicados ya que Independiente no puede jugar más de 1 partido en una misma fecha
     fecha_unica DATE GENERATED ALWAYS AS (DATE(fecha_hora)) STORED UNIQUE,
 
     goles_independiente INT DEFAULT NULL, -- NULL porque al crearlo quizas no se jugo aun
