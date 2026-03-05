@@ -85,7 +85,8 @@ class BaseDeDatos:
     def actualizar_rival(self, id_rival, nuevo_nombre, nuevo_otro_nombre):
         """
         Actualiza el nombre y el nombre alternativo de un rival.
-        Maneja la conversión de cadena vacía a NULL para la base de datos.
+        Maneja la conversión de cadena vacía a NULL para la base de datos,
+        y captura las reglas CHECK establecidas.
         """
         conexion = None
         cursor = None
@@ -100,10 +101,27 @@ class BaseDeDatos:
             cursor.execute(sql, (nuevo_nombre, val_otro, id_rival))
             conexion.commit()
             return True
-        except mysql.connector.IntegrityError as e:
+            
+        except mysql.connector.Error as e:
+            # 1062 = Error de registro duplicado (UNIQUE)
             if e.errno == 1062:
-                raise Exception("Ya existe un equipo con ese nombre u otro nombre.")
+                raise Exception("Ya existe un equipo con ese nombre u otro nombre en la base de datos.")
+            
+            # 3819 = Error de validación CHECK (ER_CHECK_CONSTRAINT_VIOLATED)
+            elif e.errno == 3819:
+                mensaje_error = str(e).lower()
+                
+                # Leemos qué candado saltó para dar un mensaje exacto
+                if 'chk_rival_nombre_no_vacio' in mensaje_error:
+                    raise Exception("El nombre principal del equipo no puede estar compuesto solo por espacios en blanco.")
+                elif 'chk_nombres_diferentes' in mensaje_error:
+                    raise Exception("Regla de BD: El 'Otro nombre' no puede ser idéntico al nombre principal.")
+                else:
+                    raise Exception("Los datos ingresados no cumplen con las reglas de seguridad de la base de datos.")
+            
+            # Si es otro error de base de datos, lo lanzamos tal cual
             raise e
+            
         except Exception as e:
             logger.error(f"Error actualizando rival: {e}")
             raise e
@@ -111,12 +129,8 @@ class BaseDeDatos:
             if cursor: cursor.close()
             if conexion: conexion.close()
 
-    # --- REEMPLAZAR ESTA FUNCIÓN ---
     def insertar_usuario(self, username, password, email):
-        """
-        Inserta usuario con email. 
-        Se asume que la validación del código ya se hizo en el frontend antes de llamar a esto.
-        """
+        """Inserta un nuevo usuario capturando múltiples restricciones CHECK."""
         conexion = None
         cursor = None
         try:
@@ -126,7 +140,7 @@ class BaseDeDatos:
             password_hash = self.ph.hash(password)
             fecha_actual = datetime.now()
 
-            # AHORA INCLUIMOS EL EMAIL
+            # Insertamos. El 'tipo' se completa solo por defecto a 'comun' en TiDB.
             sql = "INSERT INTO usuarios (username, password, email, fecha_registro) VALUES (%s, %s, %s, %s)"
             valores = (username, password_hash, email, fecha_actual)
 
@@ -136,11 +150,20 @@ class BaseDeDatos:
             logger.info(f"Usuario '{username}' registrado exitosamente.")
             return True
 
-        except mysql.connector.IntegrityError as err:
-            if err.errno == 1062: 
+        except mysql.connector.Error as e:
+            if e.errno == 1062: 
                 raise Exception("El nombre de usuario o el correo ya están registrados.")
-            else:
-                raise Exception(f"Error de integridad: {err}")
+            elif e.errno == 3819:
+                msg = str(e).lower()
+                if 'chk_username_no_vacio' in msg:
+                    raise Exception("El nombre de usuario no puede estar vacío.")
+                elif 'chk_email_formato' in msg:
+                    raise Exception("El formato del correo electrónico es inválido.")
+                elif 'chk_tipo_usuario' in msg:
+                    raise Exception("Intento de asignar un rol no permitido por el sistema.")
+                else:
+                    raise Exception("Los datos no cumplen con las reglas de seguridad.")
+            raise e
         except Exception as e:
             raise e
         finally:
@@ -284,7 +307,7 @@ class BaseDeDatos:
     def insertar_pronostico(self, username, partido_id, pred_cai, pred_rival):
         """
         Inserta un nuevo pronóstico enviando explícitamente la fecha y hora 
-        del sistema local donde se ejecuta el programa.
+        del sistema local, y captura violaciones a las reglas CHECK (ej: goles negativos).
         """
         conexion = None
         cursor = None
@@ -292,17 +315,17 @@ class BaseDeDatos:
             conexion = self.abrir()
             cursor = conexion.cursor()
             
-            # 1. Obtener ID del Usuario a partir del username
+            # 1. Obtener ID del Usuario
             cursor.execute("SELECT id FROM usuarios WHERE username = %s", (username,))
             res_user = cursor.fetchone()
             if not res_user:
                 raise Exception("Usuario no encontrado.")
             usuario_id = res_user[0]
             
-            # 2. Capturar fecha y hora del sistema actual
+            # 2. Capturar fecha local
             fecha_local = datetime.now()
             
-            # 3. Insertar el pronóstico pasando la fecha local explícitamente
+            # 3. Insertar
             sql = """
                 INSERT INTO pronosticos (usuario_id, partido_id, pred_goles_independiente, pred_goles_rival, fecha_prediccion)
                 VALUES (%s, %s, %s, %s, %s)
@@ -311,17 +334,28 @@ class BaseDeDatos:
             conexion.commit()
             return True
 
+        except mysql.connector.Error as e:
+            # 3819 = ER_CHECK_CONSTRAINT_VIOLATED
+            if e.errno == 3819:
+                mensaje_error = str(e).lower()
+                if 'chk_pred_independiente' in mensaje_error or 'chk_pred_rival' in mensaje_error:
+                    raise Exception("Operación rechazada por BD: Los goles pronosticados no pueden ser números negativos.")
+                else:
+                    raise Exception("Los datos del pronóstico no cumplen con las reglas de seguridad.")
+            raise e
+            
         except Exception as e:
             logger.error(f"Error insertando pronóstico: {e}")
             raise e
         finally:
             if cursor: cursor.close()
             if conexion: conexion.close()
-    
+            
     def actualizar_resultados_pendientes(self, lista_jugados):
         """
         Regla Pasado: Solo actualiza resultados si el partido YA existe en la BD
         y tiene los goles en NULL. Diferencia partidos por su ventana de fecha.
+        Maneja posibles errores de validación CHECK si la API envía datos corruptos.
         """
         conexion = None
         cursor = None
@@ -352,31 +386,38 @@ class BaseDeDatos:
                 if not res_edicion: continue
                 edicion_id = res_edicion[0]
 
-                # 3. ACTUALIZACIÓN CON TU LÓGICA DE FECHAS Y AMORTIGUADOR
+                # 3. ACTUALIZACIÓN DE GOLES
                 if datos['goles_cai'] is not None:
                     try:
                         sql = """
                             UPDATE partidos 
                             SET goles_independiente = %s, goles_rival = %s, fecha_hora = %s
                             WHERE rival_id = %s 
-                              AND edicion_id = %s  -- <--- FILTRO ESTRICTO DE TORNEO AGREGADO
+                              AND edicion_id = %s  
                               AND ABS(DATEDIFF(fecha_hora, %s)) <= 4 
                               AND goles_independiente IS NULL
                         """
-                        # ATENCIÓN: Se cambió el orden de las variables para coincidir con el nuevo SQL
                         cursor.execute(sql, (
                             datos['goles_cai'], 
                             datos['goles_rival'], 
                             datos['fecha'], 
                             rival_id, 
-                            edicion_id,  # <--- SE USA COMO FILTRO, NO COMO SET
+                            edicion_id,  
                             datos['fecha']
                         ))
                         
                         if cursor.rowcount > 0:
                             count += 1
-                    except mysql.connector.IntegrityError:
-                        pass # Si choca con una fecha existente, simplemente ignoramos el guardado
+                            
+                    except mysql.connector.Error as err:
+                        # 3819: CHECK CONSTRAINT VIOLATED
+                        if err.errno == 3819:
+                            logger.warning(f"⚠️ ALERTA API: FotMob envió goles negativos para el partido vs {datos['rival']}. La base de datos bloqueó el ingreso.")
+                        # 1062: UNIQUE CONSTRAINT (fecha_unica duplicada, etc)
+                        elif err.errno == 1062:
+                            pass # Ignoramos silenciosamente si choca con un duplicado
+                        else:
+                            logger.error(f"Error inesperado SQL al actualizar partido: {err}")
 
             conexion.commit()
             return count > 0
@@ -2306,7 +2347,7 @@ class BaseDeDatos:
             if conexion: conexion.close()
 
     def actualizar_username(self, id_usuario, nuevo_username):
-        """Actualiza el nombre de usuario."""
+        """Actualiza el nombre de usuario capturando restricciones CHECK."""
         conexion = None
         cursor = None
         try:
@@ -2316,6 +2357,14 @@ class BaseDeDatos:
             cursor.execute(sql, (nuevo_username, id_usuario))
             conexion.commit()
             return True
+            
+        except mysql.connector.Error as e:
+            if e.errno == 1062:
+                raise Exception("El nombre de usuario ya está en uso.")
+            elif e.errno == 3819:
+                if 'chk_username_no_vacio' in str(e).lower():
+                    raise Exception("El nombre de usuario no puede estar compuesto solo por espacios en blanco.")
+            raise e
         except Exception as e:
             raise e
         finally:
@@ -2386,7 +2435,7 @@ class BaseDeDatos:
         return datos
             
     def actualizar_email_usuario(self, username, nuevo_email):
-        """Actualiza el correo electrónico del usuario."""
+        """Actualiza el correo electrónico del usuario capturando restricciones CHECK."""
         conexion = None
         cursor = None
         try:
@@ -2403,12 +2452,20 @@ class BaseDeDatos:
             cursor.execute(sql, (nuevo_email, username))
             conexion.commit()
             return True
+            
+        except mysql.connector.Error as e:
+            if e.errno == 1062:
+                raise Exception("El correo electrónico ya está registrado.")
+            elif e.errno == 3819:
+                if 'chk_email_formato' in str(e).lower():
+                    raise Exception("El formato del correo electrónico es inválido según la seguridad de la base de datos.")
+            raise e
         except Exception as e:
             raise e
         finally:
             if cursor: cursor.close()
             if conexion: conexion.close()
-    
+
     def verificar_email_libre(self, nuevo_email, usuario_actual):
         """
         Verifica si un email está disponible para cambio (que no lo tenga OTRO usuario).

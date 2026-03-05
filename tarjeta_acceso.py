@@ -166,19 +166,47 @@ class TarjetaAcceso(ft.Container):
         contra1 = self.pass_reg.value
         contra2 = self.pass_rep.value
         
+        # --- 1. VALIDACIONES BÁSICAS Y DE USUARIO ---
         if not usuario or not email or not contra1 or not contra2:
             GestorMensajes.mostrar(self.page_principal, "Atención", "Por favor, complete todos los campos de registro.", "error")
+            return
+            
+        if len(usuario) < 3:
+            GestorMensajes.mostrar(self.page_principal, "Error", "El nombre de usuario debe tener al menos 3 caracteres.", "error")
             return
         
         if contra1 != contra2:
             GestorMensajes.mostrar(self.page_principal, "Error", "Las contraseñas no coinciden.", "error")
             return
+            
+        # --- 2. VALIDACIÓN ESTRICTA DE CORREO (RÉPLICA DEL CHECK DE BD) ---
+        if " " in email:
+            GestorMensajes.mostrar(self.page_principal, "Error", "El correo no puede contener espacios en blanco.", "error")
+            return
+            
+        if email.count('@') != 1:
+            GestorMensajes.mostrar(self.page_principal, "Error", "El correo debe tener exactamente un '@'.", "error")
+            return
+            
+        usuario_correo, dominio = email.split('@')
         
-        if "@" not in email or "." not in email:
-            GestorMensajes.mostrar(self.page_principal, "Error", "Formato de correo inválido.", "error")
+        if not usuario_correo or not dominio or '.' not in dominio:
+            GestorMensajes.mostrar(self.page_principal, "Error", "Estructura de correo incompleta (falta usuario o dominio).", "error")
+            return
+            
+        if usuario_correo.startswith('.') or usuario_correo.endswith('.'):
+            GestorMensajes.mostrar(self.page_principal, "Error", "El nombre del correo no puede empezar ni terminar con un punto.", "error")
+            return
+            
+        if dominio.startswith('-') or dominio.endswith('-'):
+            GestorMensajes.mostrar(self.page_principal, "Error", "El dominio no puede empezar ni terminar con un guion.", "error")
+            return
+            
+        if '-.' in dominio or '.-' in dominio:
+            GestorMensajes.mostrar(self.page_principal, "Error", "El guion no puede estar pegado al punto en el dominio.", "error")
             return
 
-        # Función interna para proceso asíncrono
+        # --- 3. PROCESO ASÍNCRONO ---
         def _proceso():
             try:
                 VentanaCarga.mostrar(self.page_principal, "Verificando disponibilidad...")
@@ -193,7 +221,7 @@ class TarjetaAcceso(ft.Container):
                 # 3. Enviar Correo
                 VentanaCarga.mostrar(self.page_principal, "Enviando código de verificación...")
                 
-                # --- CAMBIO AQUÍ: Usamos es_registro=True ---
+                # Usamos es_registro=True
                 gestor.enviar_codigo(email, codigo, es_registro=True)
                 
                 VentanaCarga.cerrar(self.page_principal)

@@ -1149,14 +1149,12 @@ class SistemaIndependiente:
         threading.Thread(target=self._sincronizar_fixture_api, daemon=True).start()
 
     def _guardar_nuevo_usuario(self, e):
-        """
-        Cambia el nombre de usuario directamente (sin email) verificando disponibilidad.
-        """
-        nuevo_user = self.input_conf_usuario.value.strip()
+        """Cambia el nombre de usuario directamente verificando restricciones."""
+        nuevo_user = self.input_conf_usuario.value.strip() if self.input_conf_usuario.value else ""
         
-        # 1. Validaciones básicas
+        # --- VALIDACIONES FRONTEND ---
         if not nuevo_user:
-            GestorMensajes.mostrar(self.page, "Atención", "Escriba un nombre.", "error")
+            GestorMensajes.mostrar(self.page, "Atención", "El nombre no puede estar vacío ni formado solo por espacios.", "error")
             return
             
         if len(nuevo_user) < 3:
@@ -1168,48 +1166,36 @@ class SistemaIndependiente:
             return
 
         def _tarea():
-            # 2. Estado de Carga: "Verificando..."
             self.btn_conf_guardar_usuario.disabled = True
-            self.btn_conf_guardar_usuario.text = "Verificando..." # <--- TEXTO SOLICITADO
+            self.btn_conf_guardar_usuario.text = "Verificando..." 
             self.btn_conf_guardar_usuario.update()
             
             try:
                 bd = BaseDeDatos()
-                
-                # A. Verificar disponibilidad
                 bd.verificar_username_libre(nuevo_user)
-                
-                # B. Obtener ID del usuario actual para hacer el update
                 id_user = bd.obtener_id_por_username(self.usuario_actual)
                 
                 if id_user:
-                    # C. Realizar el cambio
                     bd.actualizar_username(id_user, nuevo_user)
                     
-                    # D. Actualizar sesión y UI
                     old_name = self.usuario_actual
                     self.usuario_actual = nuevo_user
                     
-                    # Actualizar título de ventana y etiqueta de info
                     self.page.appbar.title.value = f"Bienvenido, {self.usuario_actual}"
                     self.txt_info_user_actual.value = f"Usuario: {self.usuario_actual}"
-                    
                     self.page.appbar.update()
                     self.txt_info_user_actual.update()
                     
                     GestorMensajes.mostrar(self.page, "Éxito", f"Nombre cambiado de {old_name} a {self.usuario_actual}", "exito")
-                    
-                    # Limpiar campo
                     self.input_conf_usuario.value = ""
                     self.input_conf_usuario.update()
                 else:
                     raise Exception("No se pudo identificar al usuario actual.")
                     
             except Exception as ex:
-                GestorMensajes.mostrar(self.page, "Error", f"No se pudo guardar: {ex}", "error")
+                GestorMensajes.mostrar(self.page, "Error", str(ex), "error")
             
             finally:
-                # 3. Restaurar botón
                 self.btn_conf_guardar_usuario.disabled = False
                 self.btn_conf_guardar_usuario.text = "Guardar cambio"
                 self.btn_conf_guardar_usuario.update()
@@ -3042,21 +3028,19 @@ class SistemaIndependiente:
         nombre = self.input_admin_nombre.value.strip()
         otro = self.input_admin_otro.value.strip()
         
-        # VALIDACIONES
+        # --- VALIDACIONES FRONTEND ---
         if not nombre:
             GestorMensajes.mostrar(self.page, "Error", "El nombre es obligatorio.", "error")
             return
 
-        if not otro:
-            GestorMensajes.mostrar(self.page, "Error", "El 'Otro nombre' no puede estar vacío.", "error")
-            return
-
-        if nombre.lower() == otro.lower():
+        # Quitamos la restricción "if not otro" para permitir que guarden equipos sin apodo (NULL).
+        # Solo verificamos que sean distintos si es que el administrador escribió un apodo.
+        if otro and nombre.lower() == otro.lower():
             GestorMensajes.mostrar(self.page, "Error", "El 'Otro nombre' debe ser distinto al 'Nombre'.", "error")
             return
 
         def _guardar():
-            # 1. Mostrar animaciones de carga INMEDIATAMENTE (sin vaciar tablas aún)
+            # 1. Mostrar animaciones de carga INMEDIATAMENTE
             self.loading_partidos.visible = True
             self.loading_pronosticos.visible = True
             self.loading_admin.visible = True
@@ -3074,19 +3058,20 @@ class SistemaIndependiente:
                 self.input_admin_nombre.value = ""
                 self.input_admin_otro.value = ""
                 
-                # 3. Recargar tablas afectadas (Partidos, Pronósticos, Equipos)
-                # IMPORTANTE: actualizar_ranking=False para no tocar la tabla de posiciones
+                # 3. Recargar tablas afectadas
                 self._recargar_datos(
                     actualizar_partidos=True, 
                     actualizar_pronosticos=True, 
-                    actualizar_ranking=False, # No recargar ranking
-                    actualizar_admin=True,    # Recargar tabla de equipos
+                    actualizar_ranking=False, 
+                    actualizar_admin=True,    
                     actualizar_copas=False
                 )
                 
             except Exception as ex:
-                GestorMensajes.mostrar(self.page, "Error", f"No se pudo guardar: {ex}", "error")
-                # Si hubo error, ocultamos las barras que prendimos
+                # Aquí el UI recibe el rechazo de la base de datos y lo muestra
+                GestorMensajes.mostrar(self.page, "Error al guardar", str(ex), "error")
+                
+                # Ocultamos las barras tras el error
                 self.loading_partidos.visible = False
                 self.loading_pronosticos.visible = False
                 self.loading_admin.visible = False
@@ -3618,12 +3603,38 @@ class SistemaIndependiente:
         threading.Thread(target=_cargar, daemon=True).start()
 
     def _iniciar_cambio_email(self, e):
-        """Valida el email, verifica disponibilidad y envía código."""
-        nuevo_email = self.input_conf_email.value.strip()
+        """Valida el email replicando los CHECK de SQL, verifica disponibilidad y envía código."""
+        nuevo_email = self.input_conf_email.value.strip() if self.input_conf_email.value else ""
         
-        # 1. Validaciones
-        if not nuevo_email or "@" not in nuevo_email or "." not in nuevo_email:
+        # --- 1. VALIDACIONES FRONTEND (REPLICA DE CHECK SQL) ---
+        if not nuevo_email:
             GestorMensajes.mostrar(self.page, "Error", "Ingrese un correo válido.", "error")
+            return
+            
+        if " " in nuevo_email:
+            GestorMensajes.mostrar(self.page, "Error", "El correo no puede contener espacios en blanco.", "error")
+            return
+            
+        if nuevo_email.count('@') != 1:
+            GestorMensajes.mostrar(self.page, "Error", "El correo debe tener exactamente un '@'.", "error")
+            return
+            
+        usuario_correo, dominio = nuevo_email.split('@')
+        
+        if not usuario_correo or not dominio or '.' not in dominio:
+            GestorMensajes.mostrar(self.page, "Error", "Estructura de correo incompleta (falta usuario o dominio).", "error")
+            return
+            
+        if usuario_correo.startswith('.') or usuario_correo.endswith('.'):
+            GestorMensajes.mostrar(self.page, "Error", "El nombre del correo no puede empezar ni terminar con un punto.", "error")
+            return
+            
+        if dominio.startswith('-') or dominio.endswith('-'):
+            GestorMensajes.mostrar(self.page, "Error", "El dominio no puede empezar ni terminar con un guion.", "error")
+            return
+            
+        if '-.' in dominio or '.-' in dominio:
+            GestorMensajes.mostrar(self.page, "Error", "El guion no puede estar pegado al punto en el dominio.", "error")
             return
 
         def _tarea_envio():
@@ -3633,9 +3644,6 @@ class SistemaIndependiente:
             
             try:
                 bd = BaseDeDatos()
-                
-                # --- CORRECCIÓN AQUÍ ---
-                # Usamos la nueva función que ignora tu propio usuario y solo mira si el email está ocupado por otros
                 bd.verificar_email_libre(nuevo_email, self.usuario_actual) 
                 
                 # Generar código
@@ -3662,7 +3670,7 @@ class SistemaIndependiente:
                 self._abrir_modal_codigo_email()
                 
             except Exception as ex:
-                GestorMensajes.mostrar(self.page, "Error", f"No se pudo enviar: {ex}", "error")
+                GestorMensajes.mostrar(self.page, "Error", str(ex), "error")
             finally:
                 self.btn_conf_guardar_email.disabled = False
                 self.btn_conf_guardar_email.text = "Enviar código"

@@ -1,0 +1,135 @@
+CREATE DATABASE independiente;
+
+USE independiente;
+
+-- 1. Tabla de Campeonatos
+-- Se separa para no repetir nombre y anio en cada partido
+CREATE TABLE campeonatos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(50) NOT NULL
+);
+
+-- 2. Tabla de Anios
+CREATE TABLE anios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    numero SMALLINT NOT NULL UNIQUE, -- UNIQUE para no tener dos veces el anio 2026
+    -- Restringe el rango a años lógicos para tu aplicación
+    CONSTRAINT chk_anio_valido
+        CHECK (numero >= 2026 AND numero <= 2100)
+);
+
+-- 3. Tabla de Rivales (MOVIDA ARRIBA para que partidos pueda referenciarla)
+CREATE TABLE rivales (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL UNIQUE,
+    otro_nombre VARCHAR(100) DEFAULT NULL UNIQUE,
+    -- El nombre principal no puede estar en blanco (puros espacios)
+    CONSTRAINT chk_rival_nombre_no_vacio
+        CHECK (TRIM(nombre) <> ''),
+    -- Si tiene un nombre alternativo, no puede ser exactamente igual al principal
+    CONSTRAINT chk_nombres_diferentes
+        CHECK (nombre <> otro_nombre)
+);
+
+-- 4. Tabla de Usuarios
+CREATE TABLE usuarios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
+    email VARCHAR(255) NULL,
+    token_recuperacion VARCHAR(6) NULL,
+    token_expiracion DATETIME NULL,
+    fecha_ultima_notificacion DATETIME DEFAULT NULL,
+    UNIQUE INDEX uq_email (email),
+    tipo VARCHAR(20) NOT NULL DEFAULT 'comun',
+    CONSTRAINT chk_tipo_usuario
+        CHECK (tipo IN ('comun', 'administrador')),
+    CONSTRAINT chk_email_formato
+        CHECK (
+        -- 1. Estructura basica garantizada
+        email LIKE '_%@_%._%' 
+        
+        -- 2. Bloquea multiples arrobas
+        AND email NOT LIKE '%@%@%'  
+        
+        -- 3. Reglas del nombre de usuario (antes del arroba)
+        AND email NOT LIKE '.%'     -- El nombre no empieza con punto
+        AND email NOT LIKE '%.@%'   -- El nombre no termina con punto
+        
+        -- 4. Reglas exclusivas del dominio (despues del arroba)
+        AND email NOT LIKE '%@-%'   -- El dominio no empieza con guion
+        AND email NOT LIKE '%-'     -- El dominio no termina con guion
+        AND email NOT LIKE '%@%-.%' -- El dominio no tiene guion pegado a la izquierda de un punto
+        AND email NOT LIKE '%@%.-%' -- El dominio no tiene guion pegado a la derecha de un punto
+        
+        -- 5. Prohibido espacios en blanco en cualquier parte del correo
+        AND email NOT LIKE '% %'    
+        ),
+    CONSTRAINT chk_username_no_vacio
+        CHECK (TRIM(username) <> '')
+);
+
+-- 5. Tabla de Ediciones (La tabla intermedia nueva)
+-- Relaciona un Campeonato (ID) con un Anio (ID)
+CREATE TABLE ediciones (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    campeonato_id INT NOT NULL,
+    anio_id INT NOT NULL,
+    finalizado BOOLEAN DEFAULT FALSE,
+    
+    -- Claves foraneas
+    CONSTRAINT fk_edicion_campeonato FOREIGN KEY (campeonato_id) REFERENCES campeonatos(id),
+    CONSTRAINT fk_edicion_anio FOREIGN KEY (anio_id) REFERENCES anios(id),
+
+    -- Restriccion unica: No se puede crear la "Liga 2026" dos veces
+    CONSTRAINT uq_campeonato_anio UNIQUE(campeonato_id, anio_id)
+);
+
+-- 6. Tabla de Partidos
+CREATE TABLE partidos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    rival_id INT NOT NULL,
+    fecha_hora DATETIME NOT NULL,
+    
+    -- LA MAGIA: Crea una columna invisible que extrae solo el día (YYYY-MM-DD) y no permite duplicados
+    fecha_unica DATE GENERATED ALWAYS AS (DATE(fecha_hora)) STORED UNIQUE,
+
+    goles_independiente INT DEFAULT NULL, -- NULL porque al crearlo quizas no se jugo aun
+    goles_rival INT DEFAULT NULL,         -- NULL porque al crearlo quizas no se jugo aun
+    edicion_id INT NOT NULL,
+    
+    CONSTRAINT fk_partido_edicion
+        FOREIGN KEY (edicion_id) REFERENCES ediciones(id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_partido_rival
+        FOREIGN KEY (rival_id) REFERENCES rivales(id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT chk_goles_independiente
+        CHECK (goles_independiente >= 0),
+    CONSTRAINT chk_goles_rival
+        CHECK (goles_rival >= 0)
+);
+
+-- 7. Tabla de Pronosticos (Resultados tirados por usuarios)
+-- Esta estructura permite multiples registros por usuario y partido (historial de cambios)
+CREATE TABLE pronosticos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    usuario_id INT NOT NULL,
+    partido_id INT NOT NULL,
+    pred_goles_independiente INT NOT NULL,
+    pred_goles_rival INT NOT NULL,
+    fecha_prediccion DATETIME DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_pronostico_usuario 
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+        ON DELETE CASCADE,
+        
+    CONSTRAINT fk_pronostico_partido 
+        FOREIGN KEY (partido_id) REFERENCES partidos(id)
+        ON DELETE CASCADE,
+    CONSTRAINT chk_pred_independiente
+        CHECK (pred_goles_independiente >= 0),
+    CONSTRAINT chk_pred_rival
+        CHECK (pred_goles_rival >= 0)
+);
