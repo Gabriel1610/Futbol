@@ -286,13 +286,19 @@ class SistemaIndependiente:
                 print(f"Procesando resultados de {len(jugados)} partidos jugados...")
                 bd.actualizar_resultados_pendientes(jugados)
 
-            # --- 2. SINCRONIZACIÓN DE TORNEOS Y FECHAS (Pasado y Futuro) ---
-            ultimos_5 = jugados[:5] if len(jugados) >= 5 else jugados
-            proximos_5 = por_jugar[:CANT_PARTIDOS_A_SINCRONIZAR]
+            # --- 2. SINCRONIZACIÓN DE TORNEOS Y FECHAS (Pasado del año actual + Próximos 5) ---
+            anio_actual = ahora.year
             
-            partidos_a_sincronizar = ultimos_5 + proximos_5
+            # 1. Filtramos TODOS los partidos jugados que pertenezcan exclusivamente a este año
+            jugados_este_anio = [p for p in jugados if p['fecha'].year == anio_actual]
+            
+            # 2. Tomamos estrictamente los próximos 5 partidos a jugar (sean de este año o del próximo)
+            proximos_5 = por_jugar[:5]
+            
+            partidos_a_sincronizar = jugados_este_anio + proximos_5
+            
             if partidos_a_sincronizar:
-                print(f"Sincronizando torneos y fechas de {len(partidos_a_sincronizar)} partidos...")
+                print(f"Sincronizando {len(jugados_este_anio)} jugados este año y los próximos {len(proximos_5)} a jugar...")
                 bd.sincronizar_partidos(partidos_a_sincronizar)
             
             # --- 3. LÓGICA DE FINALIZACIÓN DE TORNEOS ---
@@ -1493,7 +1499,9 @@ class SistemaIndependiente:
                 
             anio_temporada = str(fecha_dt.year)
 
-            return {
+            # Preparamos el diccionario de retorno
+            datos_finales = {
+                'fotmob_id': match.get("id"),  # <--- ¡AGREGAMOS ESTO!
                 'rival': nombre_rival,
                 'torneo': nombre_torneo,
                 'anio': anio_temporada,
@@ -1501,6 +1509,7 @@ class SistemaIndependiente:
                 'goles_cai': goles_cai,
                 'goles_rival': goles_rival
             }
+            return datos_finales
 
         except Exception as e:
             print(f"Error procesando item individual: {e}")

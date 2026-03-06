@@ -179,7 +179,7 @@ def main():
         return
 
     # Tomar los últimos 5 y los próximos 5
-    ultimos_5 = jugados[:10]
+    ultimos_5 = jugados[:15]
     proximos_5 = futuros[:10]
     
     print(f"\n✅ Se encontraron {len(jugados)} partidos jugados y {len(futuros)} por jugar.")

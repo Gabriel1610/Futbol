@@ -352,78 +352,41 @@ class BaseDeDatos:
             if conexion: conexion.close()
             
     def actualizar_resultados_pendientes(self, lista_jugados):
-        """
-        Regla Pasado: Solo actualiza resultados si el partido YA existe en la BD
-        y tiene los goles en NULL. Diferencia partidos por su ventana de fecha.
-        Maneja posibles errores de validación CHECK si la API envía datos corruptos.
-        """
+        """Actualiza resultados usando directamente el ID de FotMob. Adiós a las búsquedas complejas."""
         conexion = None
         cursor = None
         try:
             conexion = self.abrir()
             cursor = conexion.cursor()
-
             count = 0
+
             for datos in lista_jugados:
-                # 1. Buscamos el Rival
-                cursor.execute("SELECT id FROM rivales WHERE nombre = %s OR otro_nombre = %s LIMIT 1", (datos['rival'], datos['rival']))
-                res_rival = cursor.fetchone()
-                if not res_rival: continue
-                rival_id = res_rival[0]
-
-                # 2. Buscamos la Edición
-                cursor.execute("SELECT id FROM campeonatos WHERE nombre = %s", (datos['torneo'],))
-                res_camp = cursor.fetchone()
-                if not res_camp: continue
-                
-                anio_str = str(datos['anio']).split("-")[0]
-                cursor.execute("SELECT id FROM anios WHERE numero = %s", (anio_str,))
-                res_anio = cursor.fetchone()
-                if not res_anio: continue
-
-                cursor.execute("SELECT id FROM ediciones WHERE campeonato_id = %s AND anio_id = %s", (res_camp[0], res_anio[0]))
-                res_edicion = cursor.fetchone()
-                if not res_edicion: continue
-                edicion_id = res_edicion[0]
-
-                # 3. ACTUALIZACIÓN DE GOLES
                 if datos['goles_cai'] is not None:
                     try:
+                        # Directo al grano: Actualizamos buscando por el ID
                         sql = """
                             UPDATE partidos 
                             SET goles_independiente = %s, goles_rival = %s, fecha_hora = %s
-                            WHERE rival_id = %s 
-                              AND edicion_id = %s  
-                              AND ABS(DATEDIFF(fecha_hora, %s)) <= 4 
-                              AND goles_independiente IS NULL
+                            WHERE id = %s AND goles_independiente IS NULL
                         """
                         cursor.execute(sql, (
                             datos['goles_cai'], 
                             datos['goles_rival'], 
-                            datos['fecha'], 
-                            rival_id, 
-                            edicion_id,  
-                            datos['fecha']
+                            datos['fecha'],
+                            datos['fotmob_id']  # Usamos el ID de FotMob
                         ))
                         
                         if cursor.rowcount > 0:
                             count += 1
                             
                     except mysql.connector.Error as err:
-                        # 3819: CHECK CONSTRAINT VIOLATED
                         if err.errno == 3819:
-                            logger.warning(f"⚠️ ALERTA API: FotMob envió goles negativos para el partido vs {datos['rival']}. La base de datos bloqueó el ingreso.")
-                        # 1062: UNIQUE CONSTRAINT (fecha_unica duplicada, etc)
-                        elif err.errno == 1062:
-                            pass # Ignoramos silenciosamente si choca con un duplicado
-                        else:
-                            logger.error(f"Error inesperado SQL al actualizar partido: {err}")
+                            logger.warning(f"⚠️ ALERTA API: FotMob envió goles negativos para el partido vs {datos['rival']}.")
 
             conexion.commit()
             return count > 0
 
         except Exception as e:
-            # logger.error(f"Error actualizando pendientes: {e}")
             return False
         finally:
             if cursor: cursor.close()
@@ -445,6 +408,7 @@ class BaseDeDatos:
             cursor = conexion.cursor()
 
             for datos in lista:
+                fotmob_id = datos['fotmob_id']
                 rival_nombre = datos['rival']
                 torneo_nombre = datos['torneo']
                 anio_numero = str(datos['anio']).split("-")[0]
@@ -502,44 +466,28 @@ class BaseDeDatos:
                         cursor.execute("SELECT id FROM ediciones WHERE campeonato_id = %s AND anio_id = %s", (camp_id, anio_id))
                         edicion_id = cursor.fetchone()[0]
 
-                # --- 5. GESTIÓN DE PARTIDO (Búsqueda Inteligente y Actualización) ---
-                # Buscamos si existe un partido contra este rival en fechas cercanas (+/- 5 días)
-                # NOTA: Se quitó la restricción de "goles_independiente IS NULL" para que pueda corregir torneos de partidos ya jugados
-                cursor.execute("""
-                    SELECT id FROM partidos 
-                    WHERE rival_id = %s 
-                      AND ABS(DATEDIFF(fecha_hora, %s)) <= 5 
-                    LIMIT 1
-                """, (rival_id, fecha_hora))
-                
-                partido_existente = cursor.fetchone()
-
-                if partido_existente:
-                    # El partido ya existe: Forzamos la actualización de la edición y la fecha
-                    partido_id = partido_existente[0]
+                # --- 5. GESTIÓN DE PARTIDO (Enfoque por FotMob ID) ---
+                sql_upsert = """
+                    INSERT INTO partidos (id, rival_id, edicion_id, fecha_hora) 
+                    VALUES (%s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE 
+                        rival_id = VALUES(rival_id),
+                        edicion_id = VALUES(edicion_id),
+                        fecha_hora = VALUES(fecha_hora)
+                """
+                try:
+                    cursor.execute(sql_upsert, (fotmob_id, rival_id, edicion_id, fecha_hora))
                     
-                    cursor.execute("""
-                        UPDATE partidos 
-                        SET edicion_id = %s, fecha_hora = %s 
-                        WHERE id = %s
-                    """, (edicion_id, fecha_hora, partido_id))
-                    
+                    # rowcount devuelve 1 si se insertó nuevo, o 2 si se actualizó uno existente
                     if cursor.rowcount > 0:
                         hubo_cambios = True
-                else:
-                    # El partido no existe: Lo insertamos
-                    try:
-                        cursor.execute("INSERT INTO partidos (rival_id, edicion_id, fecha_hora) VALUES (%s, %s, %s)", (rival_id, edicion_id, fecha_hora))
-                        hubo_cambios = True
-                    except mysql.connector.IntegrityError:
-                        # Fallback por si la base tiene alguna restricción oculta de fechas duplicadas
-                        cursor.execute("""
-                            UPDATE partidos 
-                            SET edicion_id = %s, rival_id = %s, fecha_hora = %s 
-                            WHERE DATE(fecha_hora) = DATE(%s)
-                        """, (edicion_id, rival_id, fecha_hora, fecha_hora))
-                        if cursor.rowcount > 0:
-                            hubo_cambios = True
+                        
+                except mysql.connector.Error as err:
+                    # Si choca con nuestra fecha_unica (dos IDs distintos en el mismo día), lo ignoramos
+                    if err.errno == 1062:
+                        pass 
+                    else:
+                        logger.error(f"Error sincronizando partido {fotmob_id}: {err}")
 
             # --- 6. LIMPIEZA DE TORNEOS HUÉRFANOS ---
             # Si un torneo cambió de nombre, el anterior quedará vacío. 
