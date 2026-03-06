@@ -63,67 +63,42 @@ class BaseDeDatos:
                 raise Exception(f"Error de Conexión: {msg}")
 
     def obtener_rivales_completo(self):
-        """
-        Obtiene ID, Nombre y Otro Nombre de todos los rivales.
-        Usado para la tabla de administración.
-        """
+        """Obtiene ID y Nombre de todos los rivales (Sin 'otro_nombre')."""
         conexion = None
         cursor = None
         try:
             conexion = self.abrir()
             cursor = conexion.cursor()
-            sql = "SELECT id, nombre, otro_nombre FROM rivales ORDER BY nombre ASC"
+            sql = "SELECT id, nombre FROM rivales ORDER BY nombre ASC"
             cursor.execute(sql)
             return cursor.fetchall()
         except Exception as e:
-            logger.error(f"Error obteniendo rivales completo: {e}")
             return []
         finally:
             if cursor: cursor.close()
             if conexion: conexion.close()
     
-    def actualizar_rival(self, id_rival, nuevo_nombre, nuevo_otro_nombre):
-        """
-        Actualiza el nombre y el nombre alternativo de un rival.
-        Maneja la conversión de cadena vacía a NULL para la base de datos,
-        y captura las reglas CHECK establecidas.
-        """
+    def actualizar_rival(self, id_rival, nuevo_nombre):
+        """Actualiza el nombre de un rival usando su ID."""
         conexion = None
         cursor = None
         try:
             conexion = self.abrir()
             cursor = conexion.cursor()
             
-            # Si el string está vacío, guardamos NULL (None en Python)
-            val_otro = nuevo_otro_nombre if nuevo_otro_nombre and nuevo_otro_nombre.strip() else None
-            
-            sql = "UPDATE rivales SET nombre = %s, otro_nombre = %s WHERE id = %s"
-            cursor.execute(sql, (nuevo_nombre, val_otro, id_rival))
+            sql = "UPDATE rivales SET nombre = %s WHERE id = %s"
+            cursor.execute(sql, (nuevo_nombre, id_rival))
             conexion.commit()
             return True
             
         except mysql.connector.Error as e:
-            # 1062 = Error de registro duplicado (UNIQUE)
             if e.errno == 1062:
-                raise Exception("Ya existe un equipo con ese nombre u otro nombre en la base de datos.")
-            
-            # 3819 = Error de validación CHECK (ER_CHECK_CONSTRAINT_VIOLATED)
+                raise Exception("Ya existe un equipo con ese nombre en la base de datos.")
             elif e.errno == 3819:
-                mensaje_error = str(e).lower()
-                
-                # Leemos qué candado saltó para dar un mensaje exacto
-                if 'chk_rival_nombre_no_vacio' in mensaje_error:
+                if 'chk_rival_nombre_no_vacio' in str(e).lower():
                     raise Exception("El nombre principal del equipo no puede estar compuesto solo por espacios en blanco.")
-                elif 'chk_nombres_diferentes' in mensaje_error:
-                    raise Exception("Regla de BD: El 'Otro nombre' no puede ser idéntico al nombre principal.")
-                else:
-                    raise Exception("Los datos ingresados no cumplen con las reglas de seguridad de la base de datos.")
-            
-            # Si es otro error de base de datos, lo lanzamos tal cual
             raise e
-            
         except Exception as e:
-            logger.error(f"Error actualizando rival: {e}")
             raise e
         finally:
             if cursor: cursor.close()
@@ -393,13 +368,6 @@ class BaseDeDatos:
             if conexion: conexion.close()
 
     def sincronizar_partidos(self, lista):
-        """
-        Procesamiento monolítico en bloque.
-        - Identifica el partido por su rival y cercanía de fecha (pasados o futuros).
-        - Actualiza el torneo y la hora exacta si la API reporta un cambio.
-        - Inserta si es un partido nuevo.
-        - Al finalizar, borra cualquier torneo que haya quedado huérfano.
-        """
         conexion = None
         cursor = None
         hubo_cambios = False
@@ -409,36 +377,25 @@ class BaseDeDatos:
 
             for datos in lista:
                 fotmob_id = datos['fotmob_id']
-                rival_nombre = datos['rival']
+                rival_id = datos['rival_id']
+                torneo_id = datos['torneo_id']
                 torneo_nombre = datos['torneo']
                 anio_numero = str(datos['anio']).split("-")[0]
                 fecha_hora = datos['fecha']
 
-                # --- 1. GESTIÓN DE RIVAL ---
-                cursor.execute("SELECT id FROM rivales WHERE nombre = %s OR otro_nombre = %s LIMIT 1", (rival_nombre, rival_nombre))
-                res_rival = cursor.fetchone()
-                if res_rival:
-                    rival_id = res_rival[0]
-                else:
-                    try:
-                        cursor.execute("INSERT INTO rivales (nombre) VALUES (%s)", (rival_nombre,))
-                        rival_id = cursor.lastrowid
-                    except mysql.connector.IntegrityError:
-                        cursor.execute("SELECT id FROM rivales WHERE nombre = %s OR otro_nombre = %s LIMIT 1", (rival_nombre, rival_nombre))
-                        rival_id = cursor.fetchone()[0]
-
-                # --- 2. GESTIÓN DE CAMPEONATO ---
-                cursor.execute("SELECT id FROM campeonatos WHERE nombre = %s", (torneo_nombre,))
-                res_camp = cursor.fetchone()
-                if res_camp: 
-                    camp_id = res_camp[0]
-                else:
-                    try:
-                        cursor.execute("INSERT INTO campeonatos (nombre) VALUES (%s)", (torneo_nombre,))
-                        camp_id = cursor.lastrowid
-                    except mysql.connector.IntegrityError:
-                        cursor.execute("SELECT id FROM campeonatos WHERE nombre = %s", (torneo_nombre,))
-                        camp_id = cursor.fetchone()[0]
+                # --- 1. GESTIÓN DE RIVAL (Por FotMob ID) ---
+                # (Ese código lo dejas igual a como lo actualizamos antes) ...
+                
+                # --- 2. GESTIÓN DE CAMPEONATO (Por FotMob ID) ---
+                # Intentamos insertarlo usando ON DUPLICATE KEY UPDATE por si 
+                # FotMob le llega a cambiar el nombre a la liga en pleno torneo
+                sql_camp = """
+                    INSERT INTO campeonatos (id, nombre) 
+                    VALUES (%s, %s)
+                    ON DUPLICATE KEY UPDATE nombre = VALUES(nombre)
+                """
+                cursor.execute(sql_camp, (torneo_id, torneo_nombre))
+                camp_id = torneo_id # Ya tenemos el ID asegurado
 
                 # --- 3. GESTIÓN DE AÑO ---
                 cursor.execute("SELECT id FROM anios WHERE numero = %s", (anio_numero,))

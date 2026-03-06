@@ -29,6 +29,7 @@ CANT_USUARIOS_EN_LISTA = 4
 ALTURA_POR_USUARIO_LISTA = 52
 ALTURA_LISTAS_DIALOGO = CANT_USUARIOS_EN_LISTA * ALTURA_POR_USUARIO_LISTA
 ANCHO_COLUMNA_USUARIO = 100
+NOTIFICACIONES_LANZADAS = False
 
 # --- CREDENCIALES SEGURAS ---
 # Lee el correo desde el sistema, si no lo encuentra usa el tuyo por defecto
@@ -52,7 +53,9 @@ class SistemaIndependiente:
             self.lista_administradores = []
 
         self._construir_interfaz_login()
-        threading.Thread(target=self._servicio_notificaciones_background, daemon=True).start()
+        if not NOTIFICACIONES_LANZADAS:
+            NOTIFICACIONES_LANZADAS = True
+            threading.Thread(target=self._servicio_notificaciones_background, daemon=True).start()
 
     def _servicio_notificaciones_background(self):
         """
@@ -918,8 +921,15 @@ class SistemaIndependiente:
             ft.DataColumn(ft.Container(content=ft.Text("Anticipación\npromedio", color="cyan", text_align=ft.TextAlign.CENTER), width=190, alignment=ft.alignment.center)), 
             ft.DataColumn(ft.Container(content=ft.Text("Efectividad", text_align="center", weight="bold"), width=80, alignment=ft.alignment.center)),
         ]
-        columnas_copas = [ft.DataColumn(ft.Container(content=ft.Text("Puesto", color="white", weight=ft.FontWeight.BOLD), width=60, alignment=ft.alignment.center)), ft.DataColumn(ft.Container(content=ft.Text("Usuario", color="white", weight=ft.FontWeight.BOLD), width=ancho_usuario, alignment=ft.alignment.center)), ft.DataColumn(ft.Container(content=ft.Text("Torneos ganados", color="yellow", weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER), width=120, alignment=ft.alignment.center))]
-        columnas_rivales = [ft.DataColumn(ft.Container(content=ft.Text("Nombre", color="white", weight=ft.FontWeight.BOLD), width=250, alignment=ft.alignment.center)), ft.DataColumn(ft.Container(content=ft.Text("Otro nombre", color="cyan", weight=ft.FontWeight.BOLD), width=250, alignment=ft.alignment.center))]
+        columnas_copas = [
+            ft.DataColumn(ft.Container(content=ft.Text("Puesto", color="white", weight=ft.FontWeight.BOLD), width=60, alignment=ft.alignment.center)), 
+            ft.DataColumn(ft.Container(content=ft.Text("Usuario", color="white", weight=ft.FontWeight.BOLD), width=ancho_usuario, alignment=ft.alignment.center)), 
+            ft.DataColumn(ft.Container(content=ft.Text("Torneos ganados", color="yellow", weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER), width=120, alignment=ft.alignment.center))
+        ]
+
+        columnas_rivales = [
+            ft.DataColumn(ft.Container(content=ft.Text("Nombre", color="white", weight=ft.FontWeight.BOLD), width=500, alignment=ft.alignment.center))
+        ]
         
         # --- DEFINICIÓN DE TABLAS ---
         self.tabla_estadisticas_header = ft.DataTable(width=1050, horizontal_margin=0, bgcolor="#2D2D2D", border=ft.border.all(1, "white10"), border_radius=ft.border_radius.only(top_left=8, top_right=8), vertical_lines=ft.border.BorderSide(1, "white10"), horizontal_lines=ft.border.BorderSide(1, "white10"), heading_row_color="black", heading_row_height=70, data_row_max_height=0, column_spacing=10, columns=columnas_estadisticas, rows=[])
@@ -938,10 +948,9 @@ class SistemaIndependiente:
         self.tabla_rivales = ft.DataTable(bgcolor="#2D2D2D", border=ft.border.all(1, "white10"), border_radius=ft.border_radius.only(bottom_left=8, bottom_right=8), vertical_lines=ft.border.BorderSide(1, "white10"), horizontal_lines=ft.border.BorderSide(1, "white10"), heading_row_height=0, data_row_max_height=60, column_spacing=20, columns=columnas_rivales, rows=[])
 
         self.input_admin_nombre = ft.TextField(label="Nombre", width=250, bgcolor="#2D2D2D", color="white", border_color="white24")
-        self.input_admin_otro = ft.TextField(label="Otro nombre", width=250, bgcolor="#2D2D2D", color="white", border_color="white24")
         self.btn_guardar_rival = ft.ElevatedButton("Guardar", icon=ft.Icons.SAVE, bgcolor="green", color="white", on_click=self._guardar_rival_admin)
 
-        self.contenedor_admin_rivales = ft.Container(content=ft.Column(controls=[self.input_admin_nombre, self.input_admin_otro, ft.Container(height=10), self.btn_guardar_rival], horizontal_alignment=ft.CrossAxisAlignment.CENTER), padding=20)
+        self.contenedor_admin_rivales = ft.Container(content=ft.Column(controls=[self.input_admin_nombre, ft.Container(height=10), self.btn_guardar_rival], horizontal_alignment=ft.CrossAxisAlignment.CENTER), padding=20)
 
         # 0. Obtener datos actuales para mostrar en Configuración
         email_actual_display = "Cargando..."
@@ -1463,16 +1472,17 @@ class SistemaIndependiente:
             if id_home != ID_INDEPENDIENTE and int(away.get("id") or 0) != ID_INDEPENDIENTE:
                 return None
 
-            # Extracción segura de nombres y goles
             score_str = status.get("scoreStr", "")
             finished = status.get("finished", False)
-            
             goles_cai = None
             goles_rival = None
+            
+            # --- NUEVA EXTRACCIÓN DE ID DE RIVAL ---
+            id_rival_fotmob = 0
 
             if id_home == ID_INDEPENDIENTE:
-                # LOCAL
                 nombre_rival = away.get("name", "Rival Desconocido")
+                id_rival_fotmob = int(away.get("id") or 0) # <--- EXTRAEMOS ID
                 if finished and score_str and " - " in score_str:
                     try:
                         partes = score_str.split(" - ")
@@ -1480,29 +1490,30 @@ class SistemaIndependiente:
                         goles_rival = int(partes[1])
                     except: pass
             else:
-                # VISITANTE
                 nombre_rival = home.get("name", "Rival Desconocido")
+                id_rival_fotmob = int(home.get("id") or 0) # <--- EXTRAEMOS ID
                 if finished and score_str and " - " in score_str:
                     try:
                         partes = score_str.split(" - ")
-                        goles_cai = int(partes[1]) # Invertido
+                        goles_cai = int(partes[1]) 
                         goles_rival = int(partes[0])
                     except: pass
 
             # 3. TORNEO
-            # Buscamos el nombre correcto en "tournament" (como dicta la API de FotMob actualmente)
-            nombre_torneo = match.get("tournament", {}).get("name")
+            tourney_dict = match.get("tournament", {})
+            league_dict = match.get("league", {})
             
-            # Plan B: Si FotMob llega a cambiar la estructura en el futuro o viene vacío, intentamos con "league"
-            if not nombre_torneo:
-                nombre_torneo = match.get("league", {}).get("name", "Liga Profesional")
+            nombre_torneo = tourney_dict.get("name") or league_dict.get("name", "Liga Profesional")
+            id_torneo = tourney_dict.get("leagueId") or league_dict.get("id", 0)
                 
             anio_temporada = str(fecha_dt.year)
 
             # Preparamos el diccionario de retorno
             datos_finales = {
-                'fotmob_id': match.get("id"),  # <--- ¡AGREGAMOS ESTO!
+                'fotmob_id': match.get("id"),
+                'rival_id': id_rival_fotmob,
                 'rival': nombre_rival,
+                'torneo_id': int(id_torneo),
                 'torneo': nombre_torneo,
                 'anio': anio_temporada,
                 'fecha': fecha_dt,
@@ -3005,89 +3016,50 @@ class SistemaIndependiente:
         threading.Thread(target=_cargar, daemon=True).start()
 
     def _seleccionar_rival_admin(self, id_rival):
-        """Maneja el clic en la tabla de administración de equipos (Sin Recarga de BD)."""
         self.rival_seleccionado_id = id_rival
-        
-        # Recorrer filas para pintar la correcta y extraer datos de la UI
         encontrado = False
         for row in self.tabla_rivales.rows:
             if row.data == id_rival:
-                row.color = "#8B0000" # Pintar Rojo Oscuro
-                
-                # Extraer datos visuales de las celdas (Cell 0: Nombre, Cell 1: Otro Nombre)
-                # Estructura visual: DataCell -> Container -> Text -> value
+                row.color = "#8B0000"
                 try:
                     nombre_ui = row.cells[0].content.content.value
-                    otro_ui = row.cells[1].content.content.value
-                    
                     self.input_admin_nombre.value = nombre_ui
-                    self.input_admin_otro.value = otro_ui
                     self.input_admin_nombre.update()
-                    self.input_admin_otro.update()
                 except Exception as e:
-                    print(f"Error leyendo datos de la fila: {e}")
-                    self._mostrar_mensaje_admin("No se pudieron cargar los datos del equipo seleccionado.", f"Error leyendo datos de la fila: {e}", "error")
-                
+                    pass
                 encontrado = True
             else:
-                row.color = None # Despintar las otras
-        
+                row.color = None
         if encontrado:
             self.tabla_rivales.update()
 
     def _guardar_rival_admin(self, e):
-        """Guarda los cambios con validaciones y recarga tablas (sin Ranking)."""
         if not self.rival_seleccionado_id:
             GestorMensajes.mostrar(self.page, "Error", "Seleccione un equipo de la tabla.", "error")
             return
             
         nombre = self.input_admin_nombre.value.strip()
-        otro = self.input_admin_otro.value.strip()
         
-        # --- VALIDACIONES FRONTEND ---
         if not nombre:
             GestorMensajes.mostrar(self.page, "Error", "El nombre es obligatorio.", "error")
             return
 
-        # Quitamos la restricción "if not otro" para permitir que guarden equipos sin apodo (NULL).
-        # Solo verificamos que sean distintos si es que el administrador escribió un apodo.
-        if otro and nombre.lower() == otro.lower():
-            GestorMensajes.mostrar(self.page, "Error", "El 'Otro nombre' debe ser distinto al 'Nombre'.", "error")
-            return
-
         def _guardar():
-            # 1. Mostrar animaciones de carga INMEDIATAMENTE
             self.loading_partidos.visible = True
             self.loading_pronosticos.visible = True
             self.loading_admin.visible = True
             self.page.update()
-            
-            # 2. Guardar en BD
             try:
                 bd = BaseDeDatos()
-                bd.actualizar_rival(self.rival_seleccionado_id, nombre, otro)
+                bd.actualizar_rival(self.rival_seleccionado_id, nombre) # <--- Ahora solo enviamos 2 parámetros
                 
                 GestorMensajes.mostrar(self.page, "Éxito", "Equipo actualizado.", "exito")
-                
-                # Limpiar formulario
                 self.rival_seleccionado_id = None
                 self.input_admin_nombre.value = ""
-                self.input_admin_otro.value = ""
                 
-                # 3. Recargar tablas afectadas
-                self._recargar_datos(
-                    actualizar_partidos=True, 
-                    actualizar_pronosticos=True, 
-                    actualizar_ranking=False, 
-                    actualizar_admin=True,    
-                    actualizar_copas=False
-                )
-                
+                self._recargar_datos(actualizar_partidos=True, actualizar_pronosticos=True, actualizar_ranking=False, actualizar_admin=True, actualizar_copas=False)
             except Exception as ex:
-                # Aquí el UI recibe el rechazo de la base de datos y lo muestra
                 GestorMensajes.mostrar(self.page, "Error al guardar", str(ex), "error")
-                
-                # Ocultamos las barras tras el error
                 self.loading_partidos.visible = False
                 self.loading_pronosticos.visible = False
                 self.loading_admin.visible = False
@@ -3486,13 +3458,11 @@ class SistemaIndependiente:
                 for fila in datos_rivales:
                     r_id = fila[0]
                     nombre = fila[1]
-                    otro = fila[2] if fila[2] else ""
                     color_row = "#8B0000" if r_id == self.rival_seleccionado_id else None
                     
                     filas_admin.append(ft.DataRow(
                         cells=[
-                            ft.DataCell(ft.Container(content=ft.Text(nombre, color="white"), width=250, alignment=ft.alignment.center_left, on_click=lambda e, id=r_id: self._seleccionar_rival_admin(id))),
-                            ft.DataCell(ft.Container(content=ft.Text(otro, color="cyan"), width=250, alignment=ft.alignment.center_left, on_click=lambda e, id=r_id: self._seleccionar_rival_admin(id))),
+                            ft.DataCell(ft.Container(content=ft.Text(nombre, color="white"), width=500, alignment=ft.alignment.center_left, on_click=lambda e, id=r_id: self._seleccionar_rival_admin(id))),
                         ],
                         data=r_id,
                         color=color_row
