@@ -53,6 +53,7 @@ class SistemaIndependiente:
             self.lista_administradores = []
 
         self._construir_interfaz_login()
+        global NOTIFICACIONES_LANZADAS
         if not NOTIFICACIONES_LANZADAS:
             NOTIFICACIONES_LANZADAS = True
             threading.Thread(target=self._servicio_notificaciones_background, daemon=True).start()
