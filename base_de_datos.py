@@ -378,23 +378,37 @@ class BaseDeDatos:
             for datos in lista:
                 fotmob_id = datos['fotmob_id']
                 rival_id = datos['rival_id']
+                rival_nombre = datos['rival']
                 torneo_id = datos['torneo_id']
                 torneo_nombre = datos['torneo']
                 anio_numero = str(datos['anio']).split("-")[0]
                 fecha_hora = datos['fecha']
 
                 # --- 1. GESTIÓN DE RIVAL (Por FotMob ID) ---
-                # (Ese código lo dejas igual a como lo actualizamos antes) ...
+                # Intentamos insertarlo. Si el ID ya existe (Error 1062), lo ignoramos para 
+                # respetar el nombre personalizado que le hayas puesto en el panel de Admin.
+                try:
+                    cursor.execute("INSERT INTO rivales (id, nombre) VALUES (%s, %s)", (rival_id, rival_nombre))
+                except mysql.connector.Error as err:
+                    if err.errno == 1062:
+                        pass 
+                    else:
+                        raise err
                 
                 # --- 2. GESTIÓN DE CAMPEONATO (Por FotMob ID) ---
-                # Intentamos insertarlo usando ON DUPLICATE KEY UPDATE por si 
-                # FotMob le llega a cambiar el nombre a la liga en pleno torneo
+                # Intentamos insertarlo. Si el ID ya existe (Error 1062), lo ignoramos para 
+                # respetar el nombre personalizado que le hayas puesto en el panel de Admin.
                 sql_camp = """
                     INSERT INTO campeonatos (id, nombre) 
                     VALUES (%s, %s)
-                    ON DUPLICATE KEY UPDATE nombre = VALUES(nombre)
                 """
-                cursor.execute(sql_camp, (torneo_id, torneo_nombre))
+                try:
+                    cursor.execute(sql_camp, (torneo_id, torneo_nombre))
+                except mysql.connector.Error as err:
+                    if err.errno == 1062:
+                        pass
+                    else:
+                        raise err
                 camp_id = torneo_id # Ya tenemos el ID asegurado
 
                 # --- 3. GESTIÓN DE AÑO ---
@@ -465,6 +479,43 @@ class BaseDeDatos:
         except Exception as e:
             logger.error(f"Error en sincronizacion monolítica: {e}")
             return False
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def obtener_campeonatos_completo(self):
+        """Obtiene ID y Nombre de todos los campeonatos."""
+        conexion = None
+        cursor = None
+        try:
+            conexion = self.abrir()
+            cursor = conexion.cursor()
+            sql = "SELECT id, nombre FROM campeonatos ORDER BY nombre ASC"
+            cursor.execute(sql)
+            return cursor.fetchall()
+        except Exception as e:
+            return []
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def actualizar_campeonato(self, id_camp, nuevo_nombre):
+        """Actualiza el nombre de un campeonato usando su ID."""
+        conexion = None
+        cursor = None
+        try:
+            conexion = self.abrir()
+            cursor = conexion.cursor()
+            sql = "UPDATE campeonatos SET nombre = %s WHERE id = %s"
+            cursor.execute(sql, (nuevo_nombre, id_camp))
+            conexion.commit()
+            return True
+        except mysql.connector.Error as e:
+            if e.errno == 1062:
+                raise Exception("Ya existe un torneo con ese nombre en la base de datos.")
+            raise e
+        except Exception as e:
+            raise e
         finally:
             if cursor: cursor.close()
             if conexion: conexion.close()

@@ -30,6 +30,8 @@ ALTURA_POR_USUARIO_LISTA = 52
 ALTURA_LISTAS_DIALOGO = CANT_USUARIOS_EN_LISTA * ALTURA_POR_USUARIO_LISTA
 ANCHO_COLUMNA_USUARIO = 100
 NOTIFICACIONES_LANZADAS = False
+ANCHO_RIVALES_NOMBRE = 225
+ANCHO_TORNEOS_NOMBRE = 225
 
 # --- CREDENCIALES SEGURAS ---
 # Lee el correo desde el sistema, si no lo encuentra usa el tuyo por defecto
@@ -637,6 +639,7 @@ class SistemaIndependiente:
         self.filtro_pron_torneo = None 
         self.filtro_pron_equipo = None 
         self.filtro_pron_usuario = None 
+        self.torneo_seleccionado_id = None
         self.filtro_ranking_edicion_id = None
         self.filtro_ranking_nombre = None
         self.filtro_ranking_anio = None
@@ -929,7 +932,7 @@ class SistemaIndependiente:
         ]
 
         columnas_rivales = [
-            ft.DataColumn(ft.Container(content=ft.Text("Nombre", color="white", weight=ft.FontWeight.BOLD), width=500, alignment=ft.alignment.center))
+            ft.DataColumn(ft.Container(content=ft.Text("Nombre", color="white", weight=ft.FontWeight.BOLD), width=ANCHO_RIVALES_NOMBRE, alignment=ft.alignment.center))
         ]
         
         # --- DEFINICIÓN DE TABLAS ---
@@ -946,12 +949,28 @@ class SistemaIndependiente:
         self.tabla_pronosticos = ft.DataTable(bgcolor="#2D2D2D", border=ft.border.all(1, "white10"), border_radius=ft.border_radius.only(bottom_left=8, bottom_right=8), vertical_lines=ft.border.BorderSide(1, "white10"), horizontal_lines=ft.border.BorderSide(1, "white10"), heading_row_height=0, data_row_min_height=20, data_row_max_height=60, column_spacing=20, columns=columnas_pronosticos, sort_column_index=self.pronosticos_sort_col_index, sort_ascending=self.pronosticos_sort_asc, rows=[])
 
         self.tabla_rivales_header = ft.DataTable(bgcolor="#2D2D2D", border=ft.border.all(1, "white10"), border_radius=ft.border_radius.only(top_left=8, top_right=8), vertical_lines=ft.border.BorderSide(1, "white10"), horizontal_lines=ft.border.BorderSide(1, "white10"), heading_row_color="black", heading_row_height=60, data_row_max_height=0, column_spacing=20, columns=columnas_rivales, rows=[])
-        self.tabla_rivales = ft.DataTable(bgcolor="#2D2D2D", border=ft.border.all(1, "white10"), border_radius=ft.border_radius.only(bottom_left=8, bottom_right=8), vertical_lines=ft.border.BorderSide(1, "white10"), horizontal_lines=ft.border.BorderSide(1, "white10"), heading_row_height=0, data_row_max_height=60, column_spacing=20, columns=columnas_rivales, rows=[])
+        self.tabla_rivales = ft.DataTable(bgcolor="#2D2D2D", border=ft.border.all(1, "white10"), border_radius=ft.border_radius.only(bottom_left=8, bottom_right=8), vertical_lines=ft.border.BorderSide(1, "white10"), horizontal_lines=ft.border.BorderSide(1, "white10"), heading_row_height=0, data_row_min_height=20, data_row_max_height=60, column_spacing=20, columns=columnas_rivales, rows=[])
 
         self.input_admin_nombre = ft.TextField(label="Nombre", width=250, bgcolor="#2D2D2D", color="white", border_color="white24")
         self.btn_guardar_rival = ft.ElevatedButton("Guardar", icon=ft.Icons.SAVE, bgcolor="green", color="white", on_click=self._guardar_rival_admin)
 
         self.contenedor_admin_rivales = ft.Container(content=ft.Column(controls=[self.input_admin_nombre, ft.Container(height=10), self.btn_guardar_rival], horizontal_alignment=ft.CrossAxisAlignment.CENTER), padding=20)
+
+        # Columnas de Torneos
+        columnas_torneos = [
+            ft.DataColumn(ft.Container(content=ft.Text("Nombre", color="white", weight=ft.FontWeight.BOLD), width=ANCHO_TORNEOS_NOMBRE, alignment=ft.alignment.center))
+        ]
+        
+        # Tablas de Torneos
+        self.tabla_torneos_header = ft.DataTable(bgcolor="#2D2D2D", border=ft.border.all(1, "white10"), border_radius=ft.border_radius.only(top_left=8, top_right=8), vertical_lines=ft.border.BorderSide(1, "white10"), horizontal_lines=ft.border.BorderSide(1, "white10"), heading_row_color="black", heading_row_height=60, data_row_max_height=0, column_spacing=20, columns=columnas_torneos, rows=[])
+        
+        self.tabla_torneos = ft.DataTable(bgcolor="#2D2D2D", border=ft.border.all(1, "white10"), border_radius=ft.border_radius.only(bottom_left=8, bottom_right=8), vertical_lines=ft.border.BorderSide(1, "white10"), horizontal_lines=ft.border.BorderSide(1, "white10"), heading_row_height=0, data_row_min_height=40, data_row_max_height=60, column_spacing=20, columns=columnas_torneos, rows=[])
+
+        # Formulario de Torneos
+        self.input_admin_nombre_torneo = ft.TextField(label="Nombre", width=250, bgcolor="#2D2D2D", color="white", border_color="white24")
+        self.btn_guardar_torneo = ft.ElevatedButton("Guardar", icon=ft.Icons.SAVE, bgcolor="green", color="white", on_click=self._guardar_torneo_admin)
+
+        self.contenedor_admin_torneos = ft.Container(content=ft.Column(controls=[self.input_admin_nombre_torneo, ft.Container(height=10), self.btn_guardar_torneo], horizontal_alignment=ft.CrossAxisAlignment.CENTER), padding=20)
 
         # 0. Obtener datos actuales para mostrar en Configuración
         email_actual_display = "Cargando..."
@@ -1143,18 +1162,42 @@ class SistemaIndependiente:
                         content=ft.Column(
                             scroll=ft.ScrollMode.ALWAYS, expand=True,
                             controls=[
-                                ft.Text("Equipos", size=20, weight=ft.FontWeight.BOLD, color="white"), 
+                                ft.Text("Panel de Administración", size=20, weight=ft.FontWeight.BOLD, color="white"), 
                                 self.loading_admin, 
                                 ft.Row(
                                     wrap=True, spacing=20, run_spacing=20, alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.START, 
                                     controls=[
-                                        ft.Row(scroll=ft.ScrollMode.ALWAYS, controls=[
-                                            ft.Column(spacing=0, controls=[
-                                                self.tabla_rivales_header, 
-                                                ft.Container(height=300, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_rivales]))
+                                        # 1. MÓDULO EQUIPOS (Tabla)
+                                        ft.Column(spacing=5, controls=[
+                                            ft.Text("Equipos", weight="bold", color="white", size=16),
+                                            ft.Row(scroll=ft.ScrollMode.ALWAYS, controls=[
+                                                ft.Column(spacing=0, controls=[
+                                                    self.tabla_rivales_header, 
+                                                    ft.Container(height=220, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_rivales]))
+                                                ])
                                             ])
                                         ]),
-                                        ft.Card(width=320, content=ft.Container(padding=15, content=ft.Column(controls=[ft.Text("Cambiar nombre", weight="bold", size=16), self.contenedor_admin_rivales])))
+                                        # 2. MÓDULO EQUIPOS (Formulario)
+                                        ft.Column(spacing=5, controls=[
+                                            ft.Text(" ", size=16), # Truco para alinear a la misma altura de la cabecera
+                                            ft.Card(width=320, content=ft.Container(padding=15, content=ft.Column(controls=[ft.Text("Cambiar nombre", weight="bold", size=16), self.contenedor_admin_rivales])))
+                                        ]),
+                                        
+                                        # 3. MÓDULO TORNEOS (Tabla)
+                                        ft.Column(spacing=5, controls=[
+                                            ft.Text("Torneos", weight="bold", color="white", size=16),
+                                            ft.Row(scroll=ft.ScrollMode.ALWAYS, controls=[
+                                                ft.Column(spacing=0, controls=[
+                                                    self.tabla_torneos_header, 
+                                                    ft.Container(height=220, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_torneos]))
+                                                ])
+                                            ])
+                                        ]),
+                                        # 4. MÓDULO TORNEOS (Formulario)
+                                        ft.Column(spacing=5, controls=[
+                                            ft.Text(" ", size=16), 
+                                            ft.Card(width=320, content=ft.Container(padding=15, content=ft.Column(controls=[ft.Text("Cambiar nombre", weight="bold", size=16), self.contenedor_admin_torneos])))
+                                        ])
                                     ]
                                 ),
                                 ft.Container(height=40)
@@ -1170,6 +1213,58 @@ class SistemaIndependiente:
         self.page.add(mis_pestanas)
         self.page.open(self.dlg_cargando_inicio)
         threading.Thread(target=self._sincronizar_fixture_api, daemon=True).start()
+
+    def _seleccionar_torneo_admin(self, id_torneo):
+        self.torneo_seleccionado_id = id_torneo
+        encontrado = False
+        for row in self.tabla_torneos.rows:
+            if row.data == id_torneo:
+                row.color = "#8B0000"
+                try:
+                    nombre_ui = row.cells[0].content.content.value
+                    self.input_admin_nombre_torneo.value = nombre_ui
+                    self.input_admin_nombre_torneo.update()
+                except Exception as e:
+                    pass
+                encontrado = True
+            else:
+                row.color = None
+        if encontrado:
+            self.tabla_torneos.update()
+
+    def _guardar_torneo_admin(self, e):
+        if not self.torneo_seleccionado_id:
+            GestorMensajes.mostrar(self.page, "Error", "Seleccione un torneo de la tabla.", "error")
+            return
+            
+        nombre = self.input_admin_nombre_torneo.value.strip()
+        
+        if not nombre:
+            GestorMensajes.mostrar(self.page, "Error", "El nombre es obligatorio.", "error")
+            return
+
+        def _guardar():
+            self.loading_partidos.visible = True
+            self.loading_pronosticos.visible = True
+            self.loading_admin.visible = True
+            self.page.update()
+            try:
+                bd = BaseDeDatos()
+                bd.actualizar_campeonato(self.torneo_seleccionado_id, nombre)
+                
+                GestorMensajes.mostrar(self.page, "Éxito", "Torneo actualizado.", "exito")
+                self.torneo_seleccionado_id = None
+                self.input_admin_nombre_torneo.value = ""
+                
+                self._recargar_datos(actualizar_partidos=True, actualizar_pronosticos=True, actualizar_ranking=False, actualizar_admin=True, actualizar_copas=False)
+            except Exception as ex:
+                GestorMensajes.mostrar(self.page, "Error al guardar", str(ex), "error")
+                self.loading_partidos.visible = False
+                self.loading_pronosticos.visible = False
+                self.loading_admin.visible = False
+                self.page.update()
+
+        threading.Thread(target=_guardar, daemon=True).start()
 
     def _guardar_nuevo_usuario(self, e):
         """Cambia el nombre de usuario directamente verificando restricciones."""
@@ -3454,6 +3549,7 @@ class SistemaIndependiente:
             # 5. ADMINISTRACIÓN
             # ------------------------------------------
             if actualizar_admin:
+                # --- EQUIPOS ---
                 datos_rivales = bd.obtener_rivales_completo()
                 filas_admin = []
                 for fila in datos_rivales:
@@ -3463,12 +3559,44 @@ class SistemaIndependiente:
                     
                     filas_admin.append(ft.DataRow(
                         cells=[
-                            ft.DataCell(ft.Container(content=ft.Text(nombre, color="white"), width=500, alignment=ft.alignment.center_left, on_click=lambda e, id=r_id: self._seleccionar_rival_admin(id))),
+                            ft.DataCell(ft.Container(
+                                # AQUI AGREGAMOS MAX_LINES Y OVERFLOW
+                                content=ft.Text(nombre, color="white", max_lines=2, overflow=ft.TextOverflow.ELLIPSIS), 
+                                width=ANCHO_RIVALES_NOMBRE, 
+                                alignment=ft.alignment.center_left, 
+                                on_click=lambda e, id=r_id: self._seleccionar_rival_admin(id)
+                            )),
                         ],
                         data=r_id,
                         color=color_row
                     ))
                 self.tabla_rivales.rows = filas_admin
+                
+                # --- TORNEOS ---
+                datos_torneos = bd.obtener_campeonatos_completo()
+                filas_torneos = []
+                for fila in datos_torneos:
+                    t_id = fila[0]
+                    nombre = fila[1]
+                    color_row = "#8B0000" if t_id == self.torneo_seleccionado_id else None
+                    
+                    filas_torneos.append(ft.DataRow(
+                        cells=[
+                            ft.DataCell(ft.Container(
+                                # AQUI AGREGAMOS MAX_LINES Y OVERFLOW
+                                content=ft.Text(nombre, color="white", max_lines=2, overflow=ft.TextOverflow.ELLIPSIS), 
+                                width=ANCHO_TORNEOS_NOMBRE, 
+                                alignment=ft.alignment.center_left, 
+                                on_click=lambda e, id=t_id: self._seleccionar_torneo_admin(id)
+                            )),
+                        ],
+                        data=t_id,
+                        color=color_row
+                    ))
+                self.tabla_torneos.rows = filas_torneos
+                
+                self.tabla_rivales.update()
+                self.tabla_torneos.update()
                 self.page.update()
 
         except Exception as e:
