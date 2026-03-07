@@ -2245,7 +2245,7 @@ class SistemaIndependiente:
                 self.page.update()
 
         threading.Thread(target=_tarea, daemon=True).start()
-        
+
     def _abrir_modal_racha_actual(self, e):
         """Abre la ventana modal con la Racha Actual."""
         
@@ -5504,4 +5504,4 @@ if __name__ == "__main__":
         
     else:
         # MODO 3: DEPURACIÓN LOCAL (Navegador)
-        ft.app(target=main)#, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir=ruta_assets)
+        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir=ruta_assets)
