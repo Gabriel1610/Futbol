@@ -18,7 +18,7 @@ import gc
 from ventana_carga import VentanaCarga
 
 # Constantes
-NOMBRE_ICONO = "favicon.png"
+NOMBRE_ICONO = "favicon.ico"
 NOMBRE_ICONO_UI = "Escudo.png"
 MAXIMA_CANTIDAD_DE_PUNTOS = 9
 ID_INDEPENDIENTE = 10078  # ID real de Independiente en FotMob
@@ -345,10 +345,11 @@ class SistemaIndependiente:
 
     def _configurar_ventana(self):
         self.page.title = "Pronósticos CAI"
-        self.page.favicon = NOMBRE_ICONO
+        # ELIMINADO: self.page.favicon = NOMBRE_ICONO (Ya sabemos que en la web esto no va)
         
         if not self.page.web:
-            self.page.window.icon = NOMBRE_ICONO # ¡Sigue usando el .ico!
+            # Aquí está el truco de Windows: Forzamos estrictamente el formato .ico
+            self.page.window.icon = NOMBRE_ICONO
             self.page.window.maximized = True
         
         self.page.theme_mode = ft.ThemeMode.DARK 
@@ -5505,4 +5506,4 @@ if __name__ == "__main__":
         
     else:
         # MODO 3: DEPURACIÓN LOCAL (Navegador)
-        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir=ruta_assets)
+        ft.app(target=main)#, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir=ruta_assets)
