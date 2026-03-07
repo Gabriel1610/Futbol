@@ -344,7 +344,8 @@ class SistemaIndependiente:
             )
 
     def _configurar_ventana(self):
-        self.page.title = "Sistema Club Atlético Independiente"
+        self.page.title = "Pronósticos CAI"
+        self.page.favicon = "escudo.png"
         
         if not self.page.web:
             self.page.window.icon = NOMBRE_ICONO # ¡Sigue usando el .ico!
