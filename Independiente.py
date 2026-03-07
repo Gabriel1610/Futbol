@@ -2179,15 +2179,19 @@ class SistemaIndependiente:
         threading.Thread(target=_cargar, daemon=True).start()
 
     def _guardar_pronostico(self, e):
-        """Valida y guarda el pronóstico ingresado mostrando ventana de carga."""
+        """Valida y guarda el pronóstico ingresado con protección anti-doble clic."""
         
-        # 1. BLOQUEO INSTANTÁNEO
+        # --- 1. ESCUDO ANTI-DOBLE CLIC SÚPER RÁPIDO ---
+        # Si el botón ya está inhabilitado en la memoria de Python, abortamos inmediatamente.
+        if self.btn_pronosticar.disabled:
+            return 
+            
+        # 2. INHABILITAR EL BOTÓN INMEDIATAMENTE
         self.btn_pronosticar.disabled = True
         self.btn_pronosticar.update()
         
         def _tarea():
-            # 2. MOSTRAR LA ANIMACIÓN DE CARGA AL USUARIO
-            # Ocultamos la barrita de progreso vieja y usamos el modal gigante
+            # 3. MOSTRAR MENSAJE DE CARGA
             self.loading_partidos.visible = False 
             VentanaCarga.mostrar(self.page, "Guardando pronóstico...")
             
@@ -2206,18 +2210,14 @@ class SistemaIndependiente:
                     GestorMensajes.mostrar(self.page, "Atención", "Ingrese ambos resultados.", "error")
                     return
                 
-                # Capturar la hora inmutable del servidor y ajustarla a la zona de Argentina
-                from datetime import datetime, timedelta, timezone
-
-                # Tomamos el tiempo exacto en UTC y le restamos 3 horas
-
+                # Capturar la hora de Argentina
                 hora_celular = self.obtener_hora_argentina().strftime('%Y-%m-%d %H:%M:%S')
                 
                 # Insertar en BD
                 bd = BaseDeDatos()
                 bd.insertar_pronostico(self.usuario_actual, self.partido_a_pronosticar_id, int(gc_str), int(gr_str), hora_celular)
                 
-                # Limpiar inputs
+                # 4. VACIAR EL FORMULARIO
                 self.input_pred_cai.value = ""
                 self.input_pred_rival.value = ""
                 
@@ -2229,23 +2229,23 @@ class SistemaIndependiente:
                     actualizar_copas=False
                 )
                 
-                # Cerramos el modal giratorio y abrimos el cartel verde de éxito
+                # 5. MOSTRAR LA RESPUESTA (Éxito)
                 VentanaCarga.cerrar(self.page)
                 GestorMensajes.mostrar(self.page, "Éxito", "Pronóstico guardado.", "exito")
                 
             except Exception as ex:
-                # Si falla internet o la BD, cerramos la carga y mostramos el error
+                # 5. MOSTRAR LA RESPUESTA (Error)
                 VentanaCarga.cerrar(self.page)
                 GestorMensajes.mostrar(self.page, "Error", f"No se pudo guardar: {ex}", "error")
                 
             finally:
-                # Limpieza total obligatoria pase lo que pase
-                VentanaCarga.cerrar(self.page) 
+                # 6. HABILITAR EL BOTÓN NUEVAMENTE (Pase lo que pase)
+                VentanaCarga.cerrar(self.page) # Por seguridad
                 self.btn_pronosticar.disabled = False
                 self.page.update()
 
         threading.Thread(target=_tarea, daemon=True).start()
-
+        
     def _abrir_modal_racha_actual(self, e):
         """Abre la ventana modal con la Racha Actual."""
         
