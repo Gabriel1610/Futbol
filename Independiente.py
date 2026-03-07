@@ -2345,7 +2345,7 @@ class SistemaIndependiente:
             
         threading.Thread(target=_cargar, daemon=True).start()
 
-    def obtener_hora_argentina():
+    def obtener_hora_argentina(self):
         """Retorna la hora exacta de Argentina (UTC-3) sin importar dónde esté el servidor."""
         # Tomamos la hora UTC real, le restamos 3 horas, y le quitamos la 'etiqueta' de zona horaria 
         # para que TiDB lo guarde como un DATETIME normal sin quejarse.

@@ -49,11 +49,11 @@ class BaseDeDatos:
             'use_pure': True
         }
     
-    def obtener_hora_argentina():
+    def obtener_hora_argentina(self):
         """Retorna la hora exacta de Argentina (UTC-3) sin importar dónde esté el servidor."""
         # Tomamos la hora UTC real, le restamos 3 horas, y le quitamos la 'etiqueta' de zona horaria 
         # para que TiDB lo guarde como un DATETIME normal sin quejarse.
-        return (self.obtener_hora_argentina(timezone.utc) - timedelta(hours=3)).replace(tzinfo=None)
+        return (datetime.now(timezone.utc) - timedelta(hours=3)).replace(tzinfo=None)
 
     def abrir(self):
         """Abre la conexión a la base de datos de forma segura."""
