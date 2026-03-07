@@ -279,53 +279,30 @@ class BaseDeDatos:
             if cursor: cursor.close()
             if conexion: conexion.close()
 
-    def insertar_pronostico(self, username, partido_id, pred_cai, pred_rival):
-        """
-        Inserta un nuevo pronóstico enviando explícitamente la fecha y hora 
-        del sistema local, y captura violaciones a las reglas CHECK (ej: goles negativos).
-        """
-        conexion = None
-        cursor = None
+    def insertar_pronostico(self, usuario, id_partido, goles_cai, goles_rival, fecha_hora):
+        # CAMBIAR ESTA LÍNEA:
+        conexion = self.abrir()
+        cursor = conexion.cursor()
+        
         try:
-            conexion = self.abrir()
-            cursor = conexion.cursor()
-            
-            # 1. Obtener ID del Usuario
-            cursor.execute("SELECT id FROM usuarios WHERE username = %s", (username,))
-            res_user = cursor.fetchone()
-            if not res_user:
-                raise Exception("Usuario no encontrado.")
-            usuario_id = res_user[0]
-            
-            # 2. Capturar fecha local
-            fecha_local = datetime.now()
-            
-            # 3. Insertar
-            sql = """
+            consulta = """
                 INSERT INTO pronosticos (usuario_id, partido_id, pred_goles_independiente, pred_goles_rival, fecha_prediccion)
-                VALUES (%s, %s, %s, %s, %s)
+                VALUES (
+                    (SELECT id FROM usuarios WHERE username = %s), 
+                    %s, %s, %s, %s
+                )
             """
-            cursor.execute(sql, (usuario_id, partido_id, pred_cai, pred_rival, fecha_local))
+            
+            cursor.execute(consulta, (usuario, id_partido, goles_cai, goles_rival, fecha_hora))
             conexion.commit()
-            return True
-
-        except mysql.connector.Error as e:
-            # 3819 = ER_CHECK_CONSTRAINT_VIOLATED
-            if e.errno == 3819:
-                mensaje_error = str(e).lower()
-                if 'chk_pred_independiente' in mensaje_error or 'chk_pred_rival' in mensaje_error:
-                    raise Exception("Operación rechazada por BD: Los goles pronosticados no pueden ser números negativos.")
-                else:
-                    raise Exception("Los datos del pronóstico no cumplen con las reglas de seguridad.")
-            raise e
             
         except Exception as e:
-            logger.error(f"Error insertando pronóstico: {e}")
+            print(f"Error al insertar pronóstico: {e}")
             raise e
         finally:
-            if cursor: cursor.close()
-            if conexion: conexion.close()
-            
+            cursor.close()
+            conexion.close()
+
     def actualizar_resultados_pendientes(self, lista_jugados):
         """Actualiza resultados usando directamente el ID de FotMob. Adiós a las búsquedas complejas."""
         conexion = None

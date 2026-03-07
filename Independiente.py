@@ -15,6 +15,7 @@ from base_de_datos import BaseDeDatos
 from datetime import datetime
 from ventana_mensaje import GestorMensajes
 import gc
+from ventana_carga import VentanaCarga
 
 # Constantes
 NOMBRE_ICONO = "Escudo.ico"
@@ -2178,50 +2179,66 @@ class SistemaIndependiente:
         threading.Thread(target=_cargar, daemon=True).start()
 
     def _guardar_pronostico(self, e):
-        """Valida y guarda el pronóstico ingresado."""
+        """Valida y guarda el pronóstico ingresado mostrando ventana de carga."""
+        
+        # 1. BLOQUEO INSTANTÁNEO
+        self.btn_pronosticar.disabled = True
+        self.btn_pronosticar.update()
+        
         def _tarea():
-            self.loading_partidos.visible = True
-            self.page.update()
+            # 2. MOSTRAR LA ANIMACIÓN DE CARGA AL USUARIO
+            # Ocultamos la barrita de progreso vieja y usamos el modal gigante
+            self.loading_partidos.visible = False 
+            VentanaCarga.mostrar(self.page, "Guardando pronóstico...")
             
             try:
                 # Validaciones
                 if not self.partido_a_pronosticar_id:
+                    VentanaCarga.cerrar(self.page)
                     GestorMensajes.mostrar(self.page, "Atención", "Seleccione un partido de la tabla.", "error")
-                    self.loading_partidos.visible = False
-                    self.page.update()
                     return
                 
                 gc_str = self.input_pred_cai.value.strip()
                 gr_str = self.input_pred_rival.value.strip()
                 
                 if not gc_str or not gr_str:
+                    VentanaCarga.cerrar(self.page)
                     GestorMensajes.mostrar(self.page, "Atención", "Ingrese ambos resultados.", "error")
-                    self.loading_partidos.visible = False
-                    self.page.update()
                     return
+                
+                # Capturar hora celular
+                from datetime import datetime
+                hora_celular = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 
                 # Insertar en BD
                 bd = BaseDeDatos()
-                bd.insertar_pronostico(self.usuario_actual, self.partido_a_pronosticar_id, int(gc_str), int(gr_str))
-                
-                GestorMensajes.mostrar(self.page, "Éxito", "Pronóstico guardado.", "exito")
+                bd.insertar_pronostico(self.usuario_actual, self.partido_a_pronosticar_id, int(gc_str), int(gr_str), hora_celular)
                 
                 # Limpiar inputs
                 self.input_pred_cai.value = ""
                 self.input_pred_rival.value = ""
                 
-                # --- CAMBIO REALIZADO ---
-                # actualizar_ranking=False para que no recalcule la tabla de posiciones
+                # Recargar las tablas silenciosamente de fondo
                 self._recargar_datos(
                     actualizar_partidos=True, 
                     actualizar_pronosticos=True, 
-                    actualizar_ranking=False,  # <--- AHORA ES FALSE
+                    actualizar_ranking=False,  
                     actualizar_copas=False
                 )
                 
+                # Cerramos el modal giratorio y abrimos el cartel verde de éxito
+                VentanaCarga.cerrar(self.page)
+                GestorMensajes.mostrar(self.page, "Éxito", "Pronóstico guardado.", "exito")
+                
             except Exception as ex:
+                # Si falla internet o la BD, cerramos la carga y mostramos el error
+                VentanaCarga.cerrar(self.page)
                 GestorMensajes.mostrar(self.page, "Error", f"No se pudo guardar: {ex}", "error")
-                self.loading_partidos.visible = False
+                
+            finally:
+                # Limpieza total obligatoria pase lo que pase
+                VentanaCarga.cerrar(self.page) 
+                self.btn_pronosticar.disabled = False
                 self.page.update()
 
         threading.Thread(target=_tarea, daemon=True).start()
