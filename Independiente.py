@@ -18,7 +18,7 @@ import gc
 from ventana_carga import VentanaCarga
 
 # Constantes
-NOMBRE_ICONO = "Escudo.ico"
+NOMBRE_ICONO = "favicon.png"
 NOMBRE_ICONO_UI = "Escudo.png"
 MAXIMA_CANTIDAD_DE_PUNTOS = 9
 ID_INDEPENDIENTE = 10078  # ID real de Independiente en FotMob
@@ -345,7 +345,7 @@ class SistemaIndependiente:
 
     def _configurar_ventana(self):
         self.page.title = "Pronósticos CAI"
-        self.page.favicon = "escudo.png"
+        self.page.favicon = NOMBRE_ICONO
         
         if not self.page.web:
             self.page.window.icon = NOMBRE_ICONO # ¡Sigue usando el .ico!
