@@ -197,6 +197,17 @@ def main():
             away = match.get("away", {}).get("name", "Visita")
             score = match.get("status", {}).get("scoreStr", "-")
             
+            # --- LÓGICA DE CONDICIÓN (Copiada de Independiente.py) ---
+            id_home = match.get("home", {}).get("id")
+            es_neutral = match.get("neutralGround", False) or match.get("status", {}).get("neutralGround", False) or match.get("general", {}).get("neutralGround", False)
+            
+            if es_neutral:
+                condicion = "Neutral"
+            elif id_home == ID_INDEPENDIENTE:
+                condicion = "Local"
+            else:
+                condicion = "Visitante"
+            
             # Fecha procesada
             fecha_raw = match.get("status", {}).get("utcTime", "")
             try:
@@ -207,7 +218,7 @@ def main():
                 fecha_str = fecha_raw.split("T")[0] if "T" in fecha_raw else fecha_raw
 
             print(f"📅 {fecha_str} | {home} vs {away} ({score})")
-            print(f"   🏆 {torneo}")
+            print(f"   🏆 {torneo} | 🏟️ Condición: {condicion}")
             
             obtener_detalle_goles(match_id)
             print("-" * 50)
@@ -221,6 +232,17 @@ def main():
             home = match.get("home", {}).get("name", "Local")
             away = match.get("away", {}).get("name", "Visita")
             
+            # --- LÓGICA DE CONDICIÓN ---
+            id_home = match.get("home", {}).get("id")
+            es_neutral = match.get("neutralGround", False) or match.get("status", {}).get("neutralGround", False) or match.get("general", {}).get("neutralGround", False)
+            
+            if es_neutral:
+                condicion = "Neutral"
+            elif id_home == ID_INDEPENDIENTE:
+                condicion = "Local"
+            else:
+                condicion = "Visitante"
+            
             # Fecha procesada al horario de Argentina con la Hora incluida
             fecha_raw = match.get("status", {}).get("utcTime", "")
             try:
@@ -231,7 +253,7 @@ def main():
                 fecha_str = fecha_raw.split("T")[0] if "T" in fecha_raw else fecha_raw
 
             print(f"📅 {fecha_str} | {home} vs {away}")
-            print(f"   🏆 {torneo}")
+            print(f"   🏆 {torneo} | 🏟️ Condición: {condicion}")
             print("-" * 50)
 
 if __name__ == "__main__":

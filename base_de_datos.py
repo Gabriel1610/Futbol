@@ -338,17 +338,17 @@ class BaseDeDatos:
             for datos in lista_jugados:
                 if datos['goles_cai'] is not None:
                     try:
-                        # Directo al grano: Actualizamos buscando por el ID
                         sql = """
                             UPDATE partidos 
-                            SET goles_independiente = %s, goles_rival = %s, fecha_hora = %s
+                            SET goles_independiente = %s, goles_rival = %s, fecha_hora = %s, condicion = %s
                             WHERE id = %s AND goles_independiente IS NULL
                         """
                         cursor.execute(sql, (
                             datos['goles_cai'], 
                             datos['goles_rival'], 
                             datos['fecha'],
-                            datos['fotmob_id']  # Usamos el ID de FotMob
+                            datos['condicion'],
+                            datos['fotmob_id']
                         ))
                         
                         if cursor.rowcount > 0:
@@ -383,6 +383,26 @@ class BaseDeDatos:
                 torneo_nombre = datos['torneo']
                 anio_numero = str(datos['anio']).split("-")[0]
                 fecha_hora = datos['fecha']
+                condicion = datos['condicion']
+                arbitro_id = datos.get('arbitro_id')
+                arbitro_nombre = datos.get('arbitro_nombre')
+                estadio_id = datos.get('estadio_id')
+                estadio_nombre = datos.get('estadio_nombre')
+                
+                # --- 0. GESTIÓN DE ÁRBITRO Y ESTADIO ---
+                if arbitro_id and arbitro_nombre:
+                    try:
+                        cursor.execute("INSERT INTO arbitros (id, nombre) VALUES (%s, %s)", (arbitro_id, arbitro_nombre))
+                    except mysql.connector.Error as err:
+                        if err.errno == 1062: pass # Ya existe, lo ignoramos
+                        else: raise err
+                        
+                if estadio_id and estadio_nombre:
+                    try:
+                        cursor.execute("INSERT INTO estadios (id, nombre) VALUES (%s, %s)", (estadio_id, estadio_nombre))
+                    except mysql.connector.Error as err:
+                        if err.errno == 1062: pass # Ya existe, lo ignoramos
+                        else: raise err
 
                 # --- 1. GESTIÓN DE RIVAL (Por FotMob ID) ---
                 # Intentamos insertarlo. Si el ID ya existe (Error 1062), lo ignoramos para 
@@ -437,17 +457,18 @@ class BaseDeDatos:
                         cursor.execute("SELECT id FROM ediciones WHERE campeonato_id = %s AND anio_id = %s", (camp_id, anio_id))
                         edicion_id = cursor.fetchone()[0]
 
-                # --- 5. GESTIÓN DE PARTIDO (Enfoque por FotMob ID) ---
+                # --- 5. GESTIÓN DE PARTIDO ---
                 sql_upsert = """
-                    INSERT INTO partidos (id, rival_id, edicion_id, fecha_hora) 
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO partidos (id, rival_id, edicion_id, fecha_hora, condicion) 
+                    VALUES (%s, %s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE 
                         rival_id = VALUES(rival_id),
                         edicion_id = VALUES(edicion_id),
-                        fecha_hora = VALUES(fecha_hora)
+                        fecha_hora = VALUES(fecha_hora),
+                        condicion = VALUES(condicion)
                 """
                 try:
-                    cursor.execute(sql_upsert, (fotmob_id, rival_id, edicion_id, fecha_hora))
+                    cursor.execute(sql_upsert, (fotmob_id, rival_id, edicion_id, fecha_hora, condicion))
                     
                     # rowcount devuelve 1 si se insertó nuevo, o 2 si se actualizó uno existente
                     if cursor.rowcount > 0:
@@ -599,13 +620,17 @@ class BaseDeDatos:
                     ELSE
                         ABS(CAST(p.goles_independiente AS SIGNED) - CAST(pr.pred_goles_independiente AS SIGNED)) + 
                         ABS(CAST(p.goles_rival AS SIGNED) - CAST(pr.pred_goles_rival AS SIGNED))
-                END as error_absoluto
+                END as error_absoluto,
+                
+                -- CONDICIÓN (Índice 12)
+                p.condicion
 
             FROM partidos p
             JOIN rivales r ON p.rival_id = r.id
             JOIN ediciones e ON p.edicion_id = e.id
             JOIN campeonatos c ON e.campeonato_id = c.id
             JOIN anios a ON e.anio_id = a.id
+            
             LEFT JOIN (
                 SELECT 
                     p1.partido_id, 

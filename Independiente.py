@@ -32,6 +32,7 @@ ANCHO_COLUMNA_USUARIO = 100
 NOTIFICACIONES_LANZADAS = False
 ANCHO_RIVALES_NOMBRE = 225
 ANCHO_TORNEOS_NOMBRE = 225
+ANCHO_PRONÓSTICO_USUARIO = 65
 
 # --- CREDENCIALES SEGURAS ---
 # Lee el correo desde el sistema, si no lo encuentra usa el tuyo por defecto
@@ -896,6 +897,7 @@ class SistemaIndependiente:
             ft.DataColumn(ft.Container(content=ft.Text("Vs (rival)", color="white", weight=ft.FontWeight.BOLD), width=190, alignment=ft.alignment.center)),
             ft.DataColumn(ft.Container(content=ft.Text("Resultado", color="white", weight=ft.FontWeight.BOLD), width=80, alignment=ft.alignment.center)), 
             ft.DataColumn(ft.Container(content=ft.Text("Fecha y hora", color="white", weight=ft.FontWeight.BOLD), width=140, alignment=ft.alignment.center)), 
+            ft.DataColumn(ft.Container(content=ft.Text("Condición", color="white", weight=ft.FontWeight.BOLD), width=90, alignment=ft.alignment.center)),
             ft.DataColumn(ft.Container(content=ft.Text("Torneo", color="yellow", weight=ft.FontWeight.BOLD), width=150, alignment=ft.alignment.center)), 
             ft.DataColumn(ft.Container(content=ft.Text("Tu pronóstico", color="cyan", weight=ft.FontWeight.BOLD), width=100, alignment=ft.alignment.center)), 
             ft.DataColumn(ft.Container(content=ft.Text("Tus puntos", color="green", weight=ft.FontWeight.BOLD), width=80, alignment=ft.alignment.center)),
@@ -906,7 +908,7 @@ class SistemaIndependiente:
             ft.DataColumn(ft.Container(content=ft.Text("Fecha y hora", color="white", weight=ft.FontWeight.BOLD), width=140, alignment=ft.alignment.center), on_sort=self._ordenar_tabla_pronosticos), 
             ft.DataColumn(ft.Container(content=ft.Text("Torneo", color="yellow", weight=ft.FontWeight.BOLD), width=150, alignment=ft.alignment.center), on_sort=self._ordenar_tabla_pronosticos), 
             ft.DataColumn(ft.Container(content=ft.Text("Resultado", color="white", weight=ft.FontWeight.BOLD), width=80, alignment=ft.alignment.center), on_sort=self._ordenar_tabla_pronosticos), 
-            ft.DataColumn(ft.Container(content=ft.Text("Usuario", color="white", weight=ft.FontWeight.BOLD), width=100, alignment=ft.alignment.center), on_sort=self._ordenar_tabla_pronosticos), 
+            ft.DataColumn(ft.Container(content=ft.Text("Usuario", color="white", weight=ft.FontWeight.BOLD), width=ANCHO_PRONÓSTICO_USUARIO, alignment=ft.alignment.center), on_sort=self._ordenar_tabla_pronosticos), 
             ft.DataColumn(ft.Container(content=ft.Text("Pronóstico", color="cyan", weight=ft.FontWeight.BOLD), width=80, alignment=ft.alignment.center), on_sort=self._ordenar_tabla_pronosticos), 
             ft.DataColumn(ft.Container(content=ft.Text("Fecha predicción", color="white70", weight=ft.FontWeight.BOLD), width=160, alignment=ft.alignment.center), on_sort=self._ordenar_tabla_pronosticos),
             ft.DataColumn(ft.Container(content=ft.Text("Puntos", color="green", weight=ft.FontWeight.BOLD), width=60, alignment=ft.alignment.center), numeric=True, on_sort=self._ordenar_tabla_pronosticos),
@@ -1573,12 +1575,22 @@ class SistemaIndependiente:
             goles_cai = None
             goles_rival = None
             
-            # --- NUEVA EXTRACCIÓN DE ID DE RIVAL ---
+            # --- NUEVA EXTRACCIÓN DE ID DE RIVAL Y CONDICIÓN ---
             id_rival_fotmob = 0
+            
+            # Detección de estadio neutral (Buscamos la bandera en posibles nodos del JSON)
+            es_neutral = match.get("neutralGround", False) or match.get("status", {}).get("neutralGround", False) or match.get("general", {}).get("neutralGround", False)
+
+            if es_neutral:
+                condicion = 0
+            elif id_home == ID_INDEPENDIENTE:
+                condicion = 1
+            else:
+                condicion = -1
 
             if id_home == ID_INDEPENDIENTE:
                 nombre_rival = away.get("name", "Rival Desconocido")
-                id_rival_fotmob = int(away.get("id") or 0) # <--- EXTRAEMOS ID
+                id_rival_fotmob = int(away.get("id") or 0) 
                 if finished and score_str and " - " in score_str:
                     try:
                         partes = score_str.split(" - ")
@@ -1587,7 +1599,7 @@ class SistemaIndependiente:
                     except: pass
             else:
                 nombre_rival = home.get("name", "Rival Desconocido")
-                id_rival_fotmob = int(home.get("id") or 0) # <--- EXTRAEMOS ID
+                id_rival_fotmob = int(home.get("id") or 0) 
                 if finished and score_str and " - " in score_str:
                     try:
                         partes = score_str.split(" - ")
@@ -1604,9 +1616,11 @@ class SistemaIndependiente:
                 
             anio_temporada = str(fecha_dt.year)
 
+            match_id = match.get("id")
+
             # Preparamos el diccionario de retorno
             datos_finales = {
-                'fotmob_id': match.get("id"),
+                'fotmob_id': match_id,
                 'rival_id': id_rival_fotmob,
                 'rival': nombre_rival,
                 'torneo_id': int(id_torneo),
@@ -1614,7 +1628,8 @@ class SistemaIndependiente:
                 'anio': anio_temporada,
                 'fecha': fecha_dt,
                 'goles_cai': goles_cai,
-                'goles_rival': goles_rival
+                'goles_rival': goles_rival,
+                'condicion': condicion
             }
             return datos_finales
 
@@ -3426,6 +3441,14 @@ class SistemaIndependiente:
                     puntos_usuario = fila[10] 
                     error_abs = fila[11]
 
+                    # --- EXTRACCIÓN DE NUEVOS DATOS ---
+                    condicion_num = fila[12]
+
+                    if condicion_num == 1: txt_condicion = "Local"
+                    elif condicion_num == -1: txt_condicion = "Visitante"
+                    elif condicion_num == 0: txt_condicion = "Neutral"
+                    else: txt_condicion = "-"
+
                     if gc is not None and gr is not None: texto_resultado = f"{gc} a {gr}"
                     else: texto_resultado = "-"
                     if pred_cai is not None and pred_rival is not None: texto_pronostico = f"{pred_cai} a {pred_rival}"
@@ -3454,12 +3477,15 @@ class SistemaIndependiente:
                     filas_tabla_partidos.append(ft.DataRow(
                         cells=[
                             ft.DataCell(ft.Container(content=ft.Text(str(rival), weight=ft.FontWeight.BOLD, color="white"), width=190, alignment=ft.alignment.center_left, on_click=evt_click)),
-                            ft.DataCell(ft.Container(content=ft.Text(texto_resultado, color="white"), alignment=ft.alignment.center, on_click=evt_click)),
+                            ft.DataCell(ft.Container(content=ft.Text(texto_resultado, color="white"), width=80, alignment=ft.alignment.center, on_click=evt_click)),
                             ft.DataCell(ft.Container(content=ft.Text(fecha_display_str, color="white70"), width=140, alignment=ft.alignment.center_left, on_click=evt_click)), 
+                            
+                            ft.DataCell(ft.Container(content=ft.Text(txt_condicion, color="white"), width=90, alignment=ft.alignment.center, on_click=evt_click)),
+                            
                             ft.DataCell(ft.Container(content=ft.Text(str(torneo), color="yellow"), width=150, alignment=ft.alignment.center_left, on_click=evt_click)),
-                            ft.DataCell(ft.Container(content=ft.Text(texto_pronostico, color="cyan"), alignment=ft.alignment.center, on_click=evt_click)),
-                            ft.DataCell(ft.Container(content=ft.Text(texto_puntos, color="green", size=15), alignment=ft.alignment.center, on_click=evt_click)),
-                            ft.DataCell(ft.Container(content=ft.Text(txt_error, color=color_error, size=14), alignment=ft.alignment.center, on_click=evt_click))
+                            ft.DataCell(ft.Container(content=ft.Text(texto_pronostico, color="cyan"), width=100, alignment=ft.alignment.center, on_click=evt_click)),
+                            ft.DataCell(ft.Container(content=ft.Text(texto_puntos, color="green", size=15), width=80, alignment=ft.alignment.center, on_click=evt_click)),
+                            ft.DataCell(ft.Container(content=ft.Text(txt_error, color=color_error, size=14), width=80, alignment=ft.alignment.center, on_click=evt_click))
                         ],
                         data=p_id,
                         color=color_fila 
@@ -3511,7 +3537,7 @@ class SistemaIndependiente:
                             ft.DataCell(ft.Container(content=ft.Text(fecha_disp, color="white"), width=140, alignment=ft.alignment.center, on_click=evt_click_pron)),
                             ft.DataCell(ft.Container(content=ft.Text(row[2], color="yellow"), width=150, alignment=ft.alignment.center_left, on_click=evt_click_pron)),
                             ft.DataCell(ft.Container(content=ft.Text(res_txt, color="white"), width=80, alignment=ft.alignment.center, on_click=evt_click_pron)), 
-                            ft.DataCell(ft.Container(content=ft.Text(row[5], color="white", weight=ft.FontWeight.BOLD), width=100, alignment=ft.alignment.center_left, on_click=evt_click_pron)), 
+                            ft.DataCell(ft.Container(content=ft.Text(row[5], color="white", weight=ft.FontWeight.BOLD), width=ANCHO_PRONÓSTICO_USUARIO, alignment=ft.alignment.center_left, on_click=evt_click_pron)), 
                             ft.DataCell(ft.Container(content=ft.Text(pron_txt, color="cyan"), width=80, alignment=ft.alignment.center, on_click=evt_click_pron)), 
                             ft.DataCell(ft.Container(content=ft.Text(fecha_pred_disp, color="white70"), width=160, alignment=ft.alignment.center, on_click=evt_click_pron)), 
                             ft.DataCell(ft.Container(content=ft.Text(puntos_disp, color="green"), width=60, alignment=ft.alignment.center, on_click=evt_click_pron)), 
