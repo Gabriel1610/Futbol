@@ -12,7 +12,7 @@ from email.mime.multipart import MIMEMultipart
 from tarjeta_acceso import TarjetaAcceso
 from estilos import Estilos
 from base_de_datos import BaseDeDatos
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from ventana_mensaje import GestorMensajes
 import gc
 from ventana_carga import VentanaCarga
@@ -100,7 +100,7 @@ class SistemaIndependiente:
                 })
 
             cantidad_enviados = 0
-            ahora = datetime.now()
+            ahora = self.obtener_hora_argentina()
             
             # 2. Armamos el correo analizando partido por partido
             for uid, datos in usuarios_a_notificar.items():
@@ -277,7 +277,7 @@ class SistemaIndependiente:
             por_jugar.sort(key=lambda x: x['fecha'], reverse=False)
             
             # --- LÓGICA DE REGLA DE 21:00 H (PLACEHOLDER) ---
-            ahora = datetime.now()
+            ahora = self.obtener_hora_argentina()
             for i, p in enumerate(por_jugar):
                 fecha = p['fecha']
                 
@@ -2206,9 +2206,12 @@ class SistemaIndependiente:
                     GestorMensajes.mostrar(self.page, "Atención", "Ingrese ambos resultados.", "error")
                     return
                 
-                # Capturar hora celular
-                from datetime import datetime
-                hora_celular = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                # Capturar la hora inmutable del servidor y ajustarla a la zona de Argentina
+                from datetime import datetime, timedelta, timezone
+
+                # Tomamos el tiempo exacto en UTC y le restamos 3 horas
+
+                hora_celular = self.obtener_hora_argentina().strftime('%Y-%m-%d %H:%M:%S')
                 
                 # Insertar en BD
                 bd = BaseDeDatos()
@@ -2341,6 +2344,12 @@ class SistemaIndependiente:
             self.dlg_racha.update()
             
         threading.Thread(target=_cargar, daemon=True).start()
+
+    def obtener_hora_argentina():
+        """Retorna la hora exacta de Argentina (UTC-3) sin importar dónde esté el servidor."""
+        # Tomamos la hora UTC real, le restamos 3 horas, y le quitamos la 'etiqueta' de zona horaria 
+        # para que TiDB lo guarde como un DATETIME normal sin quejarse.
+        return (datetime.now(timezone.utc) - timedelta(hours=3)).replace(tzinfo=None)
 
     def _validar_solo_numeros(self, e):
         """
@@ -5495,4 +5504,4 @@ if __name__ == "__main__":
         
     else:
         # MODO 3: DEPURACIÓN LOCAL (Navegador)
-        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir=ruta_assets)
+        ft.app(target=main)#, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir=ruta_assets)

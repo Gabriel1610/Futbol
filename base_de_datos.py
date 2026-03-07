@@ -5,6 +5,7 @@ import sys
 import os # IMPORTANTE: Para encontrar el certificado
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
+from datetime import datetime, timedelta, timezone
 
 PUNTOS = 3
 MÁXIMA_CANTIDAD_DE_PUNTOS = 9
@@ -47,6 +48,12 @@ class BaseDeDatos:
             'ssl_verify_cert': True,
             'use_pure': True
         }
+    
+    def obtener_hora_argentina():
+        """Retorna la hora exacta de Argentina (UTC-3) sin importar dónde esté el servidor."""
+        # Tomamos la hora UTC real, le restamos 3 horas, y le quitamos la 'etiqueta' de zona horaria 
+        # para que TiDB lo guarde como un DATETIME normal sin quejarse.
+        return (self.obtener_hora_argentina(timezone.utc) - timedelta(hours=3)).replace(tzinfo=None)
 
     def abrir(self):
         """Abre la conexión a la base de datos de forma segura."""
@@ -113,7 +120,7 @@ class BaseDeDatos:
             cursor = conexion.cursor()
 
             password_hash = self.ph.hash(password)
-            fecha_actual = datetime.now()
+            fecha_actual = self.obtener_hora_argentina()
 
             # Insertamos. El 'tipo' se completa solo por defecto a 'comun' en TiDB.
             sql = "INSERT INTO usuarios (username, password, email, fecha_registro) VALUES (%s, %s, %s, %s)"
@@ -201,7 +208,7 @@ class BaseDeDatos:
             cursor = conexion.cursor()
             
             # Calculamos expiración (Ahora + 15 minutos)
-            expiracion = datetime.now() + timedelta(minutes=15)
+            expiracion = self.obtener_hora_argentina() + timedelta(minutes=15)
             
             sql = "UPDATE usuarios SET token_recuperacion = %s, token_expiracion = %s WHERE username = %s"
             cursor.execute(sql, (token, expiracion, username))
@@ -228,7 +235,7 @@ class BaseDeDatos:
             
             if res:
                 expiracion = res[0]
-                if expiracion and expiracion > datetime.now():
+                if expiracion and expiracion > self.obtener_hora_argentina():
                     return True # Válido
                 else:
                     raise Exception("El código ha expirado.")
