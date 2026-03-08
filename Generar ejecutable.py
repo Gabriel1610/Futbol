@@ -8,7 +8,7 @@ import sys
 
 # --- CONFIGURACIÓN DEL PROYECTO ---
 NOMBRE_ARCHIVO = 'Independiente'  
-NOMBRE_ICONO = 'Escudo.ico'       
+NOMBRE_ICONO = 'favicon.ico'       
 ARCHIVO_SSL = 'isrgrootx1.pem'    
 
 DIRECTORIO_BASE = os.path.dirname(os.path.abspath(__file__))

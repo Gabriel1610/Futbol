@@ -1539,10 +1539,10 @@ class BaseDeDatos:
             conexion = self.abrir()
             cursor = conexion.cursor()
             
-            sql = "SELECT username FROM usuarios WHERE tipo = 'administrador'"
+            sql = "SELECT username, email FROM usuarios WHERE tipo = 'administrador'"
             cursor.execute(sql)
             
-            # fetchall devuelve una lista de tuplas [(user1,), (user2,)]
+            # fetchall devuelve una lista de tuplas [(user1, email1), (user2, email2), ...]
             # Usamos comprensión de listas para sacar el string limpio
             return [fila[0] for fila in cursor.fetchall()]
             

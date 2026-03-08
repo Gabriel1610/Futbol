@@ -181,7 +181,7 @@ class SistemaIndependiente:
                 except Exception as e_mail:
                     mensaje_log = f"Error enviando a {username}: {e_mail}"
                     print(f"   [!] {mensaje_log}")
-                    self._mostrar_mensaje_admin("Error SMTP", mensaje_log, "error")
+                    self._mostrar_mensaje_admin("Error SMTP", mensaje_log, "error", nombre_función="SistemaIndependiente._servicio_notificaciones_background")
 
             if cantidad_enviados > 0:
                 print(f"🔔 Se enviaron {cantidad_enviados} notificaciones exitosamente.")
@@ -189,19 +189,92 @@ class SistemaIndependiente:
         except Exception as e:
             mensaje_log = f"Error en servicio de notificaciones: {e}"
             print(mensaje_log)
-            self._mostrar_mensaje_admin("Error de Sistema", mensaje_log, "error")
+            self._mostrar_mensaje_admin("Error de Sistema", mensaje_log, "error", nombre_función="SistemaIndependiente._servicio_notificaciones_background")
 
-    def _mostrar_mensaje_admin(self, titulo, mensaje, tipo="error"):
+    def _mostrar_mensaje_admin(self, titulo, mensaje, tipo="error", nombre_función=None):
         """
-        Función auxiliar que verifica si el usuario es admin y muestra
-        una ventana de mensaje. Si no es admin, no hace nada visual.
+        Verifica si el usuario es admin y muestra un mensaje. 
+        Si no es admin, envía un correo de alerta silencioso a los administradores.
         """
-        # Verificamos si existe usuario logueado y si está en la lista de admins
-        if hasattr(self, 'usuario_actual') and self.usuario_actual in self.lista_administradores:
-            # Usamos GestorMensajes para mostrar el error en pantalla
+        # 1. Extraemos solo los nombres de usuario de nuestra nueva lista de diccionarios
+        nombres_admins = [admin["username"] for admin in self.lista_administradores]
+        
+        # 2. Verificamos si el usuario actual está logueado y es administrador
+        es_admin = hasattr(self, 'usuario_actual') and self.usuario_actual in nombres_admins
+        
+        if es_admin:
+            # Es administrador: le mostramos el cartel en pantalla
             GestorMensajes.mostrar(self.page, titulo, mensaje, tipo)
-            # Como puede ser llamado desde un hilo secundario, forzamos update
             self.page.update()
+        else:
+            # No es administrador: lanzamos el envío de correo en segundo plano para no congelar la app
+            threading.Thread(
+                target=self._enviar_alerta_correo_admins, 
+                args=(titulo, mensaje, tipo, nombre_función), 
+                daemon=True
+            ).start()
+    
+    def _enviar_alerta_correo_admins(self, titulo, mensaje, tipo, nombre_función=None):
+        """
+        Envía un correo electrónico a todos los administradores registrados.
+        """
+        # 1. Creamos una lista rápida solo con los nombres (ignorando los emails)
+        nombres_admins = [admin["username"] for admin in self.lista_administradores]
+
+        # 2. Corroboramos que el usuario no sea un administrador para evitar enviarle un correo a alguien que es quien debería recibirlo
+        if usuario_implicado not in nombres_admins:
+            # Variables de entorno de tu correo del sistema (Render)
+            remitente = os.getenv("EMAIL_USER")
+            password = os.getenv("EMAIL_PASSWORD")
+            
+            if not remitente or not password:
+                print("No se enviará la alerta: Credenciales de correo no configuradas.")
+                return
+
+            # Extraemos solo los correos que no sean nulos o vacíos
+            correos_destino = [admin["email"] for admin in self.lista_administradores if admin.get("email")]
+            
+            if not correos_destino:
+                print("No hay administradores con correo configurado para recibir la alerta.")
+                return
+                
+            try:
+                msg = MIMEMultipart()
+                msg['From'] = remitente
+                # Unimos todos los correos separados por coma
+                msg['To'] = ", ".join(correos_destino) 
+                msg['Subject'] = f"🚨 ALERTA DEL SISTEMA: {titulo}"
+                
+                usuario_implicado = getattr(self, 'usuario_actual', 'Usuario no logueado')
+                
+                cuerpo_mensaje = f"""
+                Se ha registrado una alerta oculta en el sistema de Pronósticos CAI.
+                
+                • Usuario implicado: {usuario_implicado}
+                • Gravedad: {tipo.upper()}
+                • Título del error: {titulo}
+                • Función donde ocurrió el error: {nombre_función if nombre_función else "Desconocida"}
+                
+                Detalle técnico:
+                {mensaje}
+                
+                -----------------------------------------
+                Este es un mensaje automático del servidor.
+                """
+                
+                msg.attach(MIMEText(cuerpo_mensaje, 'plain'))
+                
+                # Conexión al servidor SMTP (Asumiendo que usas Gmail o Google Workspace)
+                server = smtplib.SMTP('smtp.gmail.com', 587)
+                server.starttls()
+                server.login(remitente, password)
+                server.send_message(msg)
+                server.quit()
+                
+                print(f"Alerta enviada exitosamente a los administradores.")
+                
+            except Exception as e:
+                print(f"Fallo crítico al intentar enviar correo a administradores: {e}")
 
     def _sincronizar_fixture_api(self):
         """
@@ -328,7 +401,7 @@ class SistemaIndependiente:
             print("Sincronización completada.")
             
         except Exception as e:
-            self._mostrar_mensaje_admin("Error Sincronización", f"Error crítico sincronizando FotMob: {e}", "error")
+            self._mostrar_mensaje_admin("Error Sincronización", f"Error crítico sincronizando FotMob: {e}", "error", nombre_función="SistemaIndependiente._sincronizar_fixture_api")
         
         finally:
             if hasattr(self, 'dlg_cargando_inicio') and self.dlg_cargando_inicio.open:
@@ -364,7 +437,11 @@ class SistemaIndependiente:
     def _construir_interfaz_login(self):
         self.page.appbar = None
         
-        self.tarjeta = TarjetaAcceso(self.page, on_login_success=self._ir_a_menu_principal)
+        self.tarjeta = TarjetaAcceso(
+            self.page, 
+            on_login_success=self._ir_a_menu_principal,
+            on_error_fatal=self._enviar_alerta_correo_admins
+        )
 
         self.btn_salir = ft.IconButton(
             icon="close",
@@ -555,6 +632,7 @@ class SistemaIndependiente:
             except Exception as ex:
                 self._limpiar_memoria_dialogo(self.dlg_fp)
                 GestorMensajes.mostrar(self.page, "Error", f"No se pudo cargar falso profeta: {ex}", "error")
+                self._enviar_alerta_correo_admins("Error Falso Profeta", f"Error al cargar ranking de falso profeta: {ex}", "error", nombre_función="SistemaIndependiente._abrir_modal_falso_profeta._cargar")
 
         threading.Thread(target=_cargar, daemon=True).start()
 
@@ -1230,7 +1308,7 @@ class SistemaIndependiente:
                     self.input_admin_nombre_torneo.value = nombre_ui
                     self.input_admin_nombre_torneo.update()
                 except Exception as e:
-                    pass
+                    self._mostrar_mensaje_admin("Error", f"No se pudo cargar el nombre del torneo seleccionado: {str(e)}", "error")
                 encontrado = True
             else:
                 row.color = None
@@ -1317,6 +1395,7 @@ class SistemaIndependiente:
                     
             except Exception as ex:
                 GestorMensajes.mostrar(self.page, "Error", str(ex), "error")
+                self._enviar_alerta_correo_admins("Error al cambiar nombre de usuario", f"Error al cambiar nombre de usuario", tipo=str(ex), nombre_función="SistemaIndependiente._guardar_nuevo_usuario._tarea")
             
             finally:
                 self.btn_conf_guardar_usuario.disabled = False
@@ -1638,7 +1717,7 @@ class SistemaIndependiente:
 
         except Exception as e:
             print(f"Error procesando item individual: {e}")
-            self._mostrar_mensaje_admin("Error procesando item individual", f"{e}", "error")
+            self._mostrar_mensaje_admin("Error procesando item individual", f"{e}", "error", nombre_función="SistemaIndependiente._procesar_partido_fotmob")
             return None
 
     def _ordenar_tabla_pronosticos(self, e):
@@ -1952,6 +2031,7 @@ class SistemaIndependiente:
             except Exception as ex:
                 self._limpiar_memoria_dialogo(self.dlg_carga_grafico)
                 GestorMensajes.mostrar(self.page, "Error de BD", f"Asegúrate de que obtener_historial_puntos_usuario soporte edicion_id=None. Error: {ex}", "error")
+                self._enviar_alerta_correo_admins("Error al generar gráfico de barras", f"Error al generar gráfico de barras", tipo=str(ex), nombre_función="SistemaIndependiente._generar_grafico_barras._tarea")
                 return
 
             if not puntos_lista:
@@ -2239,6 +2319,7 @@ class SistemaIndependiente:
                 # 5. MOSTRAR LA RESPUESTA (Error)
                 VentanaCarga.cerrar(self.page)
                 GestorMensajes.mostrar(self.page, "Error", f"No se pudo guardar: {ex}", "error")
+                self._enviar_alerta_correo_admins("Error al guardar pronóstico", f"Error al guardar pronóstico", tipo=str(ex), nombre_función="SistemaIndependiente._guardar_pronostico._tarea")
                 
             finally:
                 # 6. HABILITAR EL BOTÓN NUEVAMENTE (Pase lo que pase)
@@ -2380,7 +2461,7 @@ class SistemaIndependiente:
                 self.lv_usuarios.controls = controles
                 self.lv_usuarios.update()
             except Exception as ex:
-                self._mostrar_mensaje_admin("Error cargando modal usuarios", f"{e}", "error")
+                self._mostrar_mensaje_admin("Error cargando modal usuarios", f"{e}", "error", nombre_función="SistemaIndependiente._abrir_selector_usuario_pronosticos._cargar_usuarios_modal")
 
         contenido_modal = ft.Container(width=400, height=400, content=ft.Column(controls=[ft.Text("Seleccione un Usuario", weight=ft.FontWeight.BOLD), ft.Container(content=self.lv_usuarios, border=ft.border.all(1, "white24"), border_radius=5, padding=5, expand=True)]))
 
@@ -2503,7 +2584,7 @@ class SistemaIndependiente:
                     controles.append(ft.ListTile(title=ft.Text(nombre, size=14), data=nombre, on_click=self._seleccionar_campeonato_modal, bgcolor="#2D2D2D", shape=ft.RoundedRectangleBorder(radius=5)))
                 self.lv_torneos.controls = controles
             except Exception as ex:
-                self._mostrar_mensaje_admin("Error cargando modal", f"{ex}", "error")
+                self._mostrar_mensaje_admin("Error cargando modal", f"{ex}", "error", nombre_función="SistemaIndependiente._abrir_selector_torneo_pronosticos._cargar_datos_modal")
 
             es_pc = (self.page.width >= 600) if self.page.width else True
             ancho_pantalla = self.page.width if self.page.width else 600
@@ -2591,7 +2672,7 @@ class SistemaIndependiente:
                     controles.append(ft.ListTile(title=ft.Text(nombre, size=14, no_wrap=False), data=id_rival, on_click=self._seleccionar_rival_modal, bgcolor="#2D2D2D", shape=ft.RoundedRectangleBorder(radius=5)))
                 self.lv_equipos.controls = controles
             except Exception as ex:
-                self._mostrar_mensaje_admin("Error cargando modal equipos", f"{ex}", "error")
+                self._mostrar_mensaje_admin("Error cargando modal equipos", f"{ex}", "error", nombre_función="SistemaIndependiente._abrir_selector_equipo_pronosticos._cargar_rivales_modal")
 
             ancho_pantalla = self.page.width if self.page.width else 600
             ancho_modal = min(400, ancho_pantalla - 20)
@@ -3013,6 +3094,7 @@ class SistemaIndependiente:
             except Exception as ex:
                 self._limpiar_memoria_dialogo(self.dlg_mufa)
                 GestorMensajes.mostrar(self.page, "Error", f"No se pudo cargar mufa: {ex}", "error")
+                self._enviar_alerta_correo_admins("Error al cargar mufa", f"Error al cargar mufa", tipo=str(ex), nombre_función="SistemaIndependiente._abrir_modal_mufa._cargar")
 
         # Ejecutar en hilo secundario
         threading.Thread(target=_cargar, daemon=True).start()
@@ -3329,6 +3411,7 @@ class SistemaIndependiente:
                 
             threading.Thread(target=_vaciar_ram, daemon=True).start()
         except Exception as e:
+            self._enviar_alerta_correo_admins("Error al limpiar memoria de diálogo", f"Error al limpiar memoria de diálogo: {e}", tipo=str(e), nombre_función="SistemaIndependiente._limpiar_memoria_dialogo")
             pass
 
     def _tarea_en_segundo_plano(self, actualizar_ranking, actualizar_copas, actualizar_partidos, actualizar_pronosticos, actualizar_admin):
@@ -3655,7 +3738,7 @@ class SistemaIndependiente:
 
         except Exception as e:
             GestorMensajes.mostrar(self.page, "Error recargando datos", f"{e}", "error")
-        
+            self._enviar_alerta_correo_admins("Error al recargar datos", f"Ocurrió un error al recargar los datos", tipo=str(e), nombre_función="SistemaIndependiente._tarea_en_segundo_plano")
         finally:
             self.loading.visible = False
             self.loading_copas.visible = False 
@@ -3840,6 +3923,7 @@ class SistemaIndependiente:
                 
             except Exception as ex:
                 GestorMensajes.mostrar(self.page, "Error", str(ex), "error")
+                self._enviar_alerta_correo_admins("Error al enviar código de verificación", f"Error al enviar código de verificación para cambio de correo", tipo=str(ex), nombre_función="SistemaIndependiente._iniciar_cambio_email._tarea_envio")
             finally:
                 self.btn_conf_guardar_email.disabled = False
                 self.btn_conf_guardar_email.text = "Enviar código"
@@ -3929,6 +4013,7 @@ class SistemaIndependiente:
                     # Error de base de datos
                     self._limpiar_memoria_dialogo(self.dlg_validar_email)
                     GestorMensajes.mostrar(self.page, "Error", f"Error en base de datos: {ex}", "error")
+                    self._enviar_alerta_correo_admins("Error al actualizar correo", f"Error al actualizar correo de usuario {self.usuario_actual}", tipo=str(ex), nombre_función="SistemaIndependiente._confirmar_cambio_email._tarea_verificacion")
             else:
                 # Código Incorrecto: Restaurar controles y mostrar error
                 self.btn_confirmar_codigo.disabled = False
@@ -3986,7 +4071,7 @@ class SistemaIndependiente:
                         controles.append(ft.ListTile(title=ft.Text(nombre, size=14), data=nombre, on_click=self._seleccionar_campeonato_modal, bgcolor="#2D2D2D", shape=ft.RoundedRectangleBorder(radius=5)))
                     self.lv_torneos.controls = controles
                 except Exception as ex:
-                    self._mostrar_mensaje_admin("Error cargando modal", f"No se pudieron cargar los torneos: {ex}", "error")
+                    self._mostrar_mensaje_admin("Error cargando modal", f"No se pudieron cargar los torneos: {ex}", "error", nombre_función="SistemaIndependiente._abrir_selector_torneo._cargar_datos_modal")
 
                 es_pc = (self.page.width >= 600) if self.page.width else True
                 ancho_pantalla = self.page.width if self.page.width else 600
@@ -4074,7 +4159,7 @@ class SistemaIndependiente:
                         controles.append(ft.ListTile(title=ft.Text(nombre, size=14, no_wrap=False), data=id_rival, on_click=self._seleccionar_rival_modal, bgcolor="#2D2D2D", shape=ft.RoundedRectangleBorder(radius=5)))
                     self.lv_equipos.controls = controles
                 except Exception as ex:
-                    self._mostrar_mensaje_admin("Error cargando modal", f"No se pudieron cargar los equipos: {ex}", "error")
+                    self._mostrar_mensaje_admin("Error cargando modal", f"No se pudieron cargar los equipos: {ex}", "error", nombre_función="SistemaIndependiente._abrir_selector_equipo._cargar_rivales_modal")
 
                 ancho_pantalla = self.page.width if self.page.width else 600
                 ancho_modal = min(400, ancho_pantalla - 20)
@@ -4356,6 +4441,7 @@ class SistemaIndependiente:
             except Exception as ex:
                 self._limpiar_memoria_dialogo(self.dlg_carga_grafico)
                 GestorMensajes.mostrar(self.page, "Error", f"Error generando gráfico: {ex}", "error")
+                self._enviar_alerta_correo_admins("Error en gráfico de puestos", f"Ocurrió un error al generar el gráfico de puestos", tipo=str(ex), nombre_función="SistemaIndependiente._generar_grafico_puestos._tarea")
 
         threading.Thread(target=_tarea, daemon=True).start()
 
@@ -4420,7 +4506,7 @@ class SistemaIndependiente:
                     controles.append(ft.ListTile(title=ft.Text(nombre, size=14), data=nombre, on_click=self._seleccionar_campeonato_modal, bgcolor="#2D2D2D", shape=ft.RoundedRectangleBorder(radius=5)))
                 self.lv_torneos.controls = controles
             except Exception as ex:
-                self._mostrar_mensaje_admin("Error cargando modal", f"No se pudieron cargar los torneos: {ex}", "error")
+                self._mostrar_mensaje_admin("Error cargando modal", f"No se pudieron cargar los torneos: {ex}", "error", nombre_función="SistemaIndependiente._abrir_selector_torneo_ranking._cargar_datos_modal")
 
             es_pc = (self.page.width >= 600) if self.page.width else True
             ancho_pantalla = self.page.width if self.page.width else 600
@@ -4510,6 +4596,7 @@ class SistemaIndependiente:
             except Exception as ex:
                 print(f"Error cargando modal años: {ex}")
                 self._mostrar_mensaje_general("Error cargando modal", f"No se pudieron cargar los años: {ex}", "error")
+                self._enviar_alerta_correo_admins("Error en modal año ranking", f"Ocurrió un error al cargar los años en el modal de ranking", tipo=str(ex), nombre_función="SistemaIndependiente._abrir_selector_anio_ranking._cargar_anios")
 
         contenido_modal = ft.Container(
             width=300,
@@ -4626,7 +4713,7 @@ class SistemaIndependiente:
                 self.btn_ver_torneo.update()
                 
         except Exception as ex:
-            self._mostrar_mensaje_admin("Error", f"Error al cargar años: {ex}", "error")
+            self._mostrar_mensaje_admin("Error", f"Error al cargar años: {ex}", "error", nombre_función="SistemaIndependiente._seleccionar_campeonato_modal")
 
     def _seleccionar_anio_modal(self, e):
         """Al clickear un año, habilita el botón Ver"""
@@ -4925,6 +5012,22 @@ class SistemaIndependiente:
             time.sleep(0.3)
             self.temp_usuarios_seleccionados = []
             
+            # --- NUEVO: Determinamos el texto del subtítulo según el parámetro ---
+            if permite_multiple:
+                texto_indicacion = "Puedes seleccionar hasta 4 usuarios a la vez."
+            else:
+                texto_indicacion = "Puedes seleccionar 1 solo usuario."
+                
+            # --- NUEVO: Creamos una columna ajustada para reemplazar el título simple ---
+            titulo_con_subtitulo = ft.Column(
+                controls=[
+                    ft.Text(titulo, weight=ft.FontWeight.BOLD),
+                    ft.Text(texto_indicacion, size=13, color=ft.Colors.WHITE70, italic=True)
+                ],
+                spacing=2,
+                tight=True # Vital para que la columna no ocupe toda la pantalla
+            )
+            
             # Usamos Column con scroll ALWAYS para cumplir tu requisito de la barra siempre visible
             self.lv_usuarios_gen = ft.Column(scroll=ft.ScrollMode.ALWAYS, spacing=5)
             
@@ -4953,7 +5056,7 @@ class SistemaIndependiente:
                     )
                 self.lv_usuarios_gen.controls = controles
             except Exception as ex:
-                self._mostrar_mensaje_admin("Error", f"Error cargando usuarios: {ex}", "error")
+                self._mostrar_mensaje_admin("Error", f"Error cargando usuarios: {ex}", "error", nombre_función="SistemaIndependiente._abrir_selector_usuarios_generico._cargar")
 
             # Altura diseñada para mostrar exactamente 4 usuarios (aprox 220px)
             contenido = ft.Container(
@@ -4969,7 +5072,7 @@ class SistemaIndependiente:
 
             self.dlg_gen_usuarios = ft.AlertDialog(
                 modal=True,
-                title=ft.Text(titulo, weight=ft.FontWeight.BOLD),
+                title=titulo_con_subtitulo, # <-- Aquí pasamos nuestro nuevo bloque de título + subtítulo
                 content=contenido,
                 actions=[
                     ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_gen_usuarios)),
@@ -5464,6 +5567,7 @@ class SistemaIndependiente:
             except Exception as ex:
                 self._limpiar_memoria_dialogo(self.dlg_carga_errores)
                 GestorMensajes.mostrar(self.page, "Error", f"Error al generar tabla: {ex}", "error")
+                self._enviar_alerta_correo_admins("Error al generar tabla de mayores errores", f"Ocurrió un error al generar la tabla de mayores errores: {ex}", tipo=str(ex), nombre_función="SistemaIndependiente._generar_tabla_mayores_errores._tarea")
 
         threading.Thread(target=_tarea, daemon=True).start()
 

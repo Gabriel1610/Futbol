@@ -8,10 +8,11 @@ from ventana_carga import VentanaCarga
 from correo import GestorCorreo
 
 class TarjetaAcceso(ft.Container):
-    def __init__(self, page: ft.Page, on_login_success):
+    def __init__(self, page: ft.Page, on_login_success, on_error_fatal=None):
         super().__init__()
         self.page_principal = page
-        self.on_login_success = on_login_success 
+        self.on_login_success = on_login_success
+        self.on_error_fatal = on_error_fatal
         
         self.expand = True  
         self.alignment = ft.alignment.center
@@ -282,6 +283,8 @@ class TarjetaAcceso(ft.Container):
                     VentanaCarga.cerrar(self.page_principal)
                     GestorMensajes.mostrar(self.page_principal, "Error de Sistema", str(ex), "error")
                     self.page_principal.open(dlg)
+                    if self.on_error_fatal:
+                        self.on_error_fatal("Fallo crítico durante la verificación del código de registro", str(ex), "error", nombre_función="TarjetaAcceso._mostrar_modal_codigo_registro._verificar_y_guardar._proceso_verificacion")
 
             # Ejecutamos en segundo plano para no congelar la ventana
             threading.Thread(target=_proceso_verificacion, daemon=True).start()
@@ -318,6 +321,8 @@ class TarjetaAcceso(ft.Container):
         except Exception as e:
             VentanaCarga.cerrar(self.page_principal)
             GestorMensajes.mostrar(self.page_principal, "Error Fatal", str(e), "error")
+            if self.on_error_fatal:
+                self.on_error_fatal("Fallo crítico en el registro de un nuevo usuario", str(e), "error", nombre_función="TarjetaAcceso._insertar_usuario_final")
     
     def _iniciar_flujo_recuperacion(self, e):
         """Paso 1: Pedir Usuario"""
@@ -558,3 +563,5 @@ class TarjetaAcceso(ft.Container):
             # Si hay error técnico, cerramos la carga para mostrar el mensaje
             VentanaCarga.cerrar(self.page_principal)
             GestorMensajes.mostrar(self.page_principal, "Error de Sistema", f"Fallo técnico: {error}", "error")
+            if self.on_error_fatal:
+                self.on_error_fatal("Fallo crítico durante el ingreso de usuario", str(error), "error", nombre_función="TarjetaAcceso._ingresar")
