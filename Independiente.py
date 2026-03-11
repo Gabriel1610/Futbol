@@ -6,6 +6,7 @@ import time
 import threading
 import requests
 import smtplib
+import socket
 from dotenv import load_dotenv
 import random
 from email.mime.text import MIMEText
@@ -36,6 +37,19 @@ ANCHO_RIVALES_NOMBRE = 225
 ANCHO_TORNEOS_NOMBRE = 225
 ANCHO_PRONÓSTICO_USUARIO = 65
 
+# ==============================================================================
+# PARCHE DE RED PARA RENDER: Forzar IPv4 en todas las conexiones del sistema
+# Esto evita el Error 101 (Network is unreachable) al conectar con smtp.gmail.com
+# ==============================================================================
+_old_getaddrinfo = socket.getaddrinfo
+
+def _nueva_getaddrinfo(*args, **kwargs):
+    respuestas = _old_getaddrinfo(*args, **kwargs)
+    return [r for r in respuestas if r[0] == socket.AF_INET]
+
+socket.getaddrinfo = _nueva_getaddrinfo
+# ==============================================================================
+
 # --- CARGA MAESTRA DE VARIABLES DE ENTORNO ---
 if getattr(sys, 'frozen', False):
     carpeta_actual = sys._MEIPASS
@@ -46,7 +60,7 @@ ruta_env = os.path.join(carpeta_actual, ".env")
 if os.path.exists(ruta_env):
     load_dotenv(dotenv_path=ruta_env)
 
-# Ahora sí, extraemos las constantes globales con seguridad
+# Extraemos las constantes globales con seguridad
 REMITENTE = os.getenv("EMAIL_USER")
 PASSWORD = os.getenv("EMAIL_PASSWORD")
 
@@ -260,8 +274,17 @@ class SistemaIndependiente:
         # 1. Definimos PRIMERO quién es el usuario implicado
         usuario_implicado = getattr(self, 'usuario_actual', 'Usuario no logueado')
         
-        # 2. Creamos una lista rápida solo con los nombres
-        nombres_admins = [admin["username"] for admin in self.lista_administradores]
+        # 2. Extraemos nombres y correos de manera segura (Soporta formato viejo y nuevo)
+        nombres_admins = []
+        correos_destino = []
+        
+        for admin in self.lista_administradores:
+            if isinstance(admin, dict):
+                nombres_admins.append(admin.get("username"))
+                if admin.get("email"):
+                    correos_destino.append(admin.get("email"))
+            else:
+                nombres_admins.append(admin)
 
         # 3. AHORA SÍ corroboramos que no sea administrador
         if usuario_implicado not in nombres_admins:
@@ -272,13 +295,11 @@ class SistemaIndependiente:
             if not remitente or not password:
                 print("No se enviará la alerta: Credenciales de correo no configuradas.")
                 return
-            # Extraemos solo los correos que no sean nulos o vacíos
-            correos_destino = [admin["email"] for admin in self.lista_administradores if admin.get("email")]
             
             if not correos_destino:
                 print("No hay administradores con correo configurado para recibir la alerta.")
                 return
-                
+
             try:
                 msg = MIMEMultipart()
                 msg['From'] = remitente
