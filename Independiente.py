@@ -36,15 +36,22 @@ ANCHO_RIVALES_NOMBRE = 225
 ANCHO_TORNEOS_NOMBRE = 225
 ANCHO_PRONÓSTICO_USUARIO = 65
 
-# --- CREDENCIALES SEGURAS ---
-# Lee el correo desde el sistema, si no lo encuentra usa el tuyo por defecto
-REMITENTE = os.getenv("EMAIL_REMITENTE")
+# --- CARGA MAESTRA DE VARIABLES DE ENTORNO ---
+if getattr(sys, 'frozen', False):
+    carpeta_actual = sys._MEIPASS
+else:
+    carpeta_actual = os.path.dirname(os.path.abspath(__file__))
 
-# Lee la contraseña invisible que guardamos en Windows
+ruta_env = os.path.join(carpeta_actual, ".env")
+if os.path.exists(ruta_env):
+    load_dotenv(dotenv_path=ruta_env)
+
+# Ahora sí, extraemos las constantes globales con seguridad
+REMITENTE = os.getenv("EMAIL_USER")
 PASSWORD = os.getenv("EMAIL_PASSWORD")
 
-if PASSWORD is None:
-    print("¡ADVERTENCIA!: No se encontró la contraseña del correo en el sistema.")
+if not PASSWORD:
+    print("¡ADVERTENCIA CRÍTICA!: No se encontró la contraseña del correo en el sistema.")
 
 class SistemaIndependiente:
     def __init__(self, page: ft.Page):
@@ -75,11 +82,35 @@ class SistemaIndependiente:
         
         try:
             print("🔔 Verificando notificaciones pendientes...")
+            
+            # =====================================================================
+            # --- PRUEBA FORZADA DE ENVÍO DE CORREO ---
+            # =====================================================================
+            try:
+                print("⏳ Intentando enviar correo de prueba a gabrielydeindependiente@gmail.com...")
+                msg_prueba = MIMEMultipart()
+                msg_prueba['From'] = REMITENTE
+                msg_prueba['To'] = "gabrielydeindependiente@gmail.com"
+                msg_prueba['Subject'] = "Prueba de conexión SMTP desde Render"
+                msg_prueba.attach(MIMEText("probando envíos", 'plain'))
+                
+                server_prueba = smtplib.SMTP('smtp.gmail.com', 587)
+                server_prueba.starttls()
+                server_prueba.login(REMITENTE, PASSWORD)
+                server_prueba.send_message(msg_prueba)
+                server_prueba.quit()
+                print("✅ ÉXITO: El correo de prueba fue enviado correctamente desde Render.")
+            except Exception as e_prueba:
+                error_txt = f"❌ FALLO CRÍTICO en el correo de prueba: {e_prueba}"
+                print(error_txt)
+                self._mostrar_mensaje_admin("Error Prueba SMTP", error_txt, "error", nombre_función="SistemaIndependiente._servicio_notificaciones_background")
+            # =====================================================================
+
             bd = BaseDeDatos()
             pendientes = bd.obtener_pendientes_notificacion(dias=DÍAS_NOTIFICACIÓN)
             
             if not pendientes:
-                print("   -> No hay notificaciones para enviar hoy.")
+                print("   -> No hay notificaciones reales para enviar hoy a los usuarios.")
                 return
 
             usuarios_a_notificar = {}
@@ -191,14 +222,21 @@ class SistemaIndependiente:
             mensaje_log = f"Error en servicio de notificaciones: {e}"
             print(mensaje_log)
             self._mostrar_mensaje_admin("Error de Sistema", mensaje_log, "error", nombre_función="SistemaIndependiente._servicio_notificaciones_background")
-
+            
     def _mostrar_mensaje_admin(self, titulo, mensaje, tipo="error", nombre_función=None):
         """
         Verifica si el usuario es admin y muestra un mensaje. 
         Si no es admin, envía un correo de alerta silencioso a los administradores.
         """
-        # 1. Extraemos solo los nombres de usuario de nuestra nueva lista de diccionarios
-        nombres_admins = [admin["username"] for admin in self.lista_administradores]
+        # 1. Extraemos los nombres de manera segura (Soporta diccionarios y strings simples)
+        nombres_admins = []
+        for admin in self.lista_administradores:
+            if isinstance(admin, dict):
+                # Si viene con el formato nuevo de la base de datos
+                nombres_admins.append(admin.get("username"))
+            else:
+                # Si viene con el formato de texto simple (fallback)
+                nombres_admins.append(admin)
         
         # 2. Verificamos si el usuario actual está logueado y es administrador
         es_admin = hasattr(self, 'usuario_actual') and self.usuario_actual in nombres_admins
