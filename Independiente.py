@@ -6,6 +6,7 @@ import time
 import threading
 import requests
 import smtplib
+from dotenv import load_dotenv
 import random
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -218,63 +219,24 @@ class SistemaIndependiente:
         """
         Envía un correo electrónico a todos los administradores registrados.
         """
-        # 1. Creamos una lista rápida solo con los nombres (ignorando los emails)
+        # 1. Definimos PRIMERO quién es el usuario implicado
+        usuario_implicado = getattr(self, 'usuario_actual', 'Usuario no logueado')
+        
+        # 2. Creamos una lista rápida solo con los nombres
         nombres_admins = [admin["username"] for admin in self.lista_administradores]
 
-        # 2. Corroboramos que el usuario no sea un administrador para evitar enviarle un correo a alguien que es quien debería recibirlo
+        # 3. AHORA SÍ corroboramos que no sea administrador
         if usuario_implicado not in nombres_admins:
-            # Variables de entorno de tu correo del sistema (Render)
+            # Variables de entorno de tu correo del sistema
             remitente = os.getenv("EMAIL_USER")
             password = os.getenv("EMAIL_PASSWORD")
-            
+
             if not remitente or not password:
                 print("No se enviará la alerta: Credenciales de correo no configuradas.")
                 return
-
-            # Extraemos solo los correos que no sean nulos o vacíos
-            correos_destino = [admin["email"] for admin in self.lista_administradores if admin.get("email")]
             
-            if not correos_destino:
-                print("No hay administradores con correo configurado para recibir la alerta.")
-                return
-                
-            try:
-                msg = MIMEMultipart()
-                msg['From'] = remitente
-                # Unimos todos los correos separados por coma
-                msg['To'] = ", ".join(correos_destino) 
-                msg['Subject'] = f"🚨 ALERTA DEL SISTEMA: {titulo}"
-                
-                usuario_implicado = getattr(self, 'usuario_actual', 'Usuario no logueado')
-                
-                cuerpo_mensaje = f"""
-                Se ha registrado una alerta oculta en el sistema de Pronósticos CAI.
-                
-                • Usuario implicado: {usuario_implicado}
-                • Gravedad: {tipo.upper()}
-                • Título del error: {titulo}
-                • Función donde ocurrió el error: {nombre_función if nombre_función else "Desconocida"}
-                
-                Detalle técnico:
-                {mensaje}
-                
-                -----------------------------------------
-                Este es un mensaje automático del servidor.
-                """
-                
-                msg.attach(MIMEText(cuerpo_mensaje, 'plain'))
-                
-                # Conexión al servidor SMTP (Asumiendo que usas Gmail o Google Workspace)
-                server = smtplib.SMTP('smtp.gmail.com', 587)
-                server.starttls()
-                server.login(remitente, password)
-                server.send_message(msg)
-                server.quit()
-                
-                print(f"Alerta enviada exitosamente a los administradores.")
-                
-            except Exception as e:
-                print(f"Fallo crítico al intentar enviar correo a administradores: {e}")
+            # ... el resto de tu código (correo_destino, try, etc) sigue igual ...
+            # (Asegúrate de borrar la línea 247 vieja donde definías usuario_implicado)
 
     def _sincronizar_fixture_api(self):
         """

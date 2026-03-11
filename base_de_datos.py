@@ -1,6 +1,7 @@
 import mysql.connector
 import logging
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 import sys
 import os # IMPORTANTE: Para encontrar el certificado
 from argon2 import PasswordHasher
@@ -28,27 +29,35 @@ class BaseDeDatos:
             # Si es script .py, usamos la ruta normal
             carpeta_actual = os.path.dirname(os.path.abspath(__file__))
             
+        # 1. Cargamos el certificado de seguridad
         ruta_certificado = os.path.join(carpeta_actual, "isrgrootx1.pem")
         
         if not os.path.exists(ruta_certificado):
             logger.error(f"NO SE ENCUENTRA EL CERTIFICADO EN: {ruta_certificado}")
 
+        # 2. Cargamos las variables de entorno desde el archivo .env oculto (si existe)
+        ruta_env = os.path.join(carpeta_actual, ".env")
+        if os.path.exists(ruta_env):
+            load_dotenv(dotenv_path=ruta_env)
+
+        # 3. Leemos las variables (ahora buscará primero en el .env, y si no, en el sistema)
         db_user = os.getenv("DB_USER")
         db_password = os.getenv("DB_PASSWORD")
-        db_host = os.getenv("DB_HOST", "gateway01.us-east-1.prod.aws.tidbcloud.com") # El host no es secreto, pero es buena práctica
+        db_host = os.getenv("DB_HOST", "gateway01.us-east-1.prod.aws.tidbcloud.com") 
+        db_name = os.getenv("DB_NAME", "independiente") 
         
         self.config = {
             'user': db_user,       
             'password': db_password, 
             'host': db_host, 
             'port': 4000,                                         
-            'database': 'independiente',          
+            'database': db_name,          
             'raise_on_warnings': True,
             'ssl_ca': ruta_certificado,           
             'ssl_verify_cert': True,
             'use_pure': True
         }
-    
+        
     def obtener_hora_argentina(self):
         """Retorna la hora exacta de Argentina (UTC-3) sin importar dónde esté el servidor."""
         # Tomamos la hora UTC real, le restamos 3 horas, y le quitamos la 'etiqueta' de zona horaria 

@@ -10,53 +10,33 @@ import sys
 NOMBRE_ARCHIVO = 'Independiente'  
 NOMBRE_ICONO = 'favicon.ico'       
 ARCHIVO_SSL = 'isrgrootx1.pem'    
+ARCHIVO_ENV = '.env'               # <-- NUEVO: Nombre de tu archivo de contraseñas
 
 DIRECTORIO_BASE = os.path.dirname(os.path.abspath(__file__))
 RUTA_DIST = os.path.join(DIRECTORIO_BASE, 'dist')
 RUTA_BUILD = os.path.join(DIRECTORIO_BASE, 'build')
 RUTA_SPEC = os.path.join(DIRECTORIO_BASE, f"{NOMBRE_ARCHIVO}.spec")
 
-# --- NUEVO: APUNTAMOS A LA CARPETA ASSETS ---
+# --- NUEVO: APUNTAMOS A LA CARPETA ASSETS Y ARCHIVOS ---
 RUTA_ASSETS = os.path.join(DIRECTORIO_BASE, "assets")
 RUTA_ICONO_ABS = os.path.join(RUTA_ASSETS, NOMBRE_ICONO)
 RUTA_SSL_ABS = os.path.join(DIRECTORIO_BASE, ARCHIVO_SSL)
+RUTA_ENV_ABS = os.path.join(DIRECTORIO_BASE, ARCHIVO_ENV)  # <-- NUEVO: Ruta absoluta al .env
 
 def limpiar_pyinstaller():
     """Elimina carpetas y archivos temporales."""
-    print("Limpiando archivos temporales anteriores...")
-
-    def on_rm_error(func, path, exc_info):
-        os.chmod(path, stat.S_IWRITE)
-        try:
-            func(path)
-        except Exception:
-            pass
-
-    if os.path.exists(RUTA_SPEC):
-        try: os.remove(RUTA_SPEC)
-        except: pass
-
-    if os.path.exists(RUTA_DIST):
-        try: shutil.rmtree(RUTA_DIST, onerror=on_rm_error)
-        except: pass
-
-    if os.path.exists(RUTA_BUILD):
-        try: shutil.rmtree(RUTA_BUILD, onerror=on_rm_error)
-        except: pass
-            
-    time.sleep(1)
+    # ... (Todo este bloque queda igual, no lo toques) ...
+    pass
 
 def obtener_diferencia_tiempo(momento1, momento2):
     """Calcula la duración del proceso."""
-    diferencia = momento2 - momento1
-    horas, resto = divmod(diferencia.seconds, 3600)
-    minutos, segundos = divmod(resto, 60)
-    return f"{horas:02}:{minutos:02}:{segundos:02}"
+    # ... (Este bloque queda igual) ...
+    pass
 
 def ejecutar_pyinstaller():
     """Ejecuta el comando para crear el ejecutable."""
     ruta_script_principal = os.path.join(DIRECTORIO_BASE, f"{NOMBRE_ARCHIVO}.py")
-    
+
     print(f"\nEjecutando PyInstaller sobre: {ruta_script_principal}")
     print("Esto puede tardar unos minutos...\n")
 
@@ -65,19 +45,24 @@ def ejecutar_pyinstaller():
     if not os.path.exists(RUTA_SSL_ABS):
         print(f"ERROR CRÍTICO: No se encuentra el certificado {ARCHIVO_SSL}")
         return False
+        
+    # <-- NUEVO: Verificación de seguridad
+    if not os.path.exists(RUTA_ENV_ABS):
+        print(f"ADVERTENCIA CRÍTICA: No se encuentra el archivo {ARCHIVO_ENV}. El ejecutable no tendrá contraseñas.")
 
     comando = [
-        sys.executable, "-m", "PyInstaller", 
-        "--noconsole",          
-        "--onefile",            
+        sys.executable, "-m", "PyInstaller",
+        "--noconsole",
+        "--onefile",
         f"--name={NOMBRE_ARCHIVO}",
         f"--icon={RUTA_ICONO_ABS}",
-        
+
         # --- ARCHIVOS ADJUNTOS ---
+        f"--add-data={RUTA_ENV_ABS};.",     # <-- NUEVO: Inyecta el .env invisible en la raíz
         f"--add-data={RUTA_SSL_ABS};.",     # Certificado SSL en la raíz
         f"--add-data={RUTA_ASSETS};assets", # Empaqueta TODA la carpeta assets
-        
-        "--collect-all=mysql", 
+
+        "--collect-all=mysql",
         "--collect-all=mysql.connector",
         "--hidden-import=flet",
         "--hidden-import=argon2",
