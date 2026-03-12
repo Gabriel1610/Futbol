@@ -6,7 +6,6 @@ import time
 import threading
 import requests
 import smtplib
-import socket
 from dotenv import load_dotenv
 import random
 from email.mime.text import MIMEText
@@ -36,19 +35,6 @@ NOTIFICACIONES_LANZADAS = False
 ANCHO_RIVALES_NOMBRE = 225
 ANCHO_TORNEOS_NOMBRE = 225
 ANCHO_PRONÓSTICO_USUARIO = 65
-
-# ==============================================================================
-# PARCHE DE RED PARA RENDER: Forzar IPv4 en todas las conexiones del sistema
-# Esto evita el Error 101 (Network is unreachable) al conectar con smtp.gmail.com
-# ==============================================================================
-_old_getaddrinfo = socket.getaddrinfo
-
-def _nueva_getaddrinfo(*args, **kwargs):
-    respuestas = _old_getaddrinfo(*args, **kwargs)
-    return [r for r in respuestas if r[0] == socket.AF_INET]
-
-socket.getaddrinfo = _nueva_getaddrinfo
-# ==============================================================================
 
 # --- CARGA MAESTRA DE VARIABLES DE ENTORNO ---
 if getattr(sys, 'frozen', False):
@@ -96,6 +82,12 @@ class SistemaIndependiente:
         
         try:
             print("🔔 Verificando notificaciones pendientes...")
+            
+            # --- NUEVA LÓGICA DE ARQUITECTURA DISTRIBUIDA ---
+            if os.getenv("RENDER"):
+                print("☁️ Entorno Render detectado: Omitiendo envío de correos por bloqueo de puertos SMTP.")
+                print("💡 Utiliza el archivo .exe local para procesar y enviar las notificaciones.")
+                return
             
             # =====================================================================
             # --- PRUEBA FORZADA DE ENVÍO DE CORREO ---
@@ -271,6 +263,11 @@ class SistemaIndependiente:
         """
         Envía un correo electrónico a todos los administradores registrados.
         """
+        # --- GUARDIÁN DE NUBE ---
+        if os.getenv("RENDER"):
+            print(f"☁️ Alerta oculta registrada en Render: {titulo} | Función: {nombre_función}")
+            return
+            
         # 1. Definimos PRIMERO quién es el usuario implicado
         usuario_implicado = getattr(self, 'usuario_actual', 'Usuario no logueado')
         
@@ -303,38 +300,34 @@ class SistemaIndependiente:
             try:
                 msg = MIMEMultipart()
                 msg['From'] = remitente
-                # Unimos todos los correos separados por coma
-                msg['To'] = ", ".join(correos_destino) 
+                msg['To'] = ", ".join(correos_destino)
                 msg['Subject'] = f"🚨 ALERTA DEL SISTEMA: {titulo}"
-                
-                usuario_implicado = getattr(self, 'usuario_actual', 'Usuario no logueado')
-                
+
                 cuerpo_mensaje = f"""
                 Se ha registrado una alerta oculta en el sistema de Pronósticos CAI.
-                
+
                 • Usuario implicado: {usuario_implicado}
                 • Gravedad: {tipo.upper()}
                 • Título del error: {titulo}
                 • Función donde ocurrió el error: {nombre_función if nombre_función else "Desconocida"}
-                
+
                 Detalle técnico:
                 {mensaje}
-                
+
                 -----------------------------------------
                 Este es un mensaje automático del servidor.
                 """
-                
+
                 msg.attach(MIMEText(cuerpo_mensaje, 'plain'))
-                
-                # Conexión al servidor SMTP (Asumiendo que usas Gmail o Google Workspace)
+
                 server = smtplib.SMTP('smtp.gmail.com', 587)
                 server.starttls()
                 server.login(remitente, password)
                 server.send_message(msg)
                 server.quit()
-                
+
                 print(f"Alerta enviada exitosamente a los administradores.")
-                
+
             except Exception as e:
                 print(f"Fallo crítico al intentar enviar correo a administradores: {e}")
 
