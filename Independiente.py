@@ -75,48 +75,26 @@ class SistemaIndependiente:
         Revisa si hay usuarios sin pronosticar partidos próximos y les envía un correo.
         Se ejecuta una sola vez al iniciar la app.
         """
+        # --- GUARDIÁN DE ARQUITECTURA DISTRIBUIDA ---
+        # Si estamos en la nube, cancelamos la función instantáneamente para ahorrar RAM
+        if os.getenv("RENDER"):
+            print("☁️ Entorno Render detectado: Omitiendo envío de correos por bloqueo de puertos SMTP.")
+            print("💡 Utiliza el archivo .exe local para procesar y enviar las notificaciones.")
+            return
+
         time.sleep(5) 
         
         # Aseguramos que timedelta y datetime estén disponibles localmente para los cálculos
         from datetime import datetime, timedelta
         
         try:
-            print("🔔 Verificando notificaciones pendientes...")
-            
-            # --- NUEVA LÓGICA DE ARQUITECTURA DISTRIBUIDA ---
-            if os.getenv("RENDER"):
-                print("☁️ Entorno Render detectado: Omitiendo envío de correos por bloqueo de puertos SMTP.")
-                print("💡 Utiliza el archivo .exe local para procesar y enviar las notificaciones.")
-                return
-            
-            # =====================================================================
-            # --- PRUEBA FORZADA DE ENVÍO DE CORREO ---
-            # =====================================================================
-            try:
-                print("⏳ Intentando enviar correo de prueba a gabrielydeindependiente@gmail.com...")
-                msg_prueba = MIMEMultipart()
-                msg_prueba['From'] = REMITENTE
-                msg_prueba['To'] = "gabrielydeindependiente@gmail.com"
-                msg_prueba['Subject'] = "Prueba de conexión SMTP desde Render"
-                msg_prueba.attach(MIMEText("probando envíos", 'plain'))
-                
-                server_prueba = smtplib.SMTP('smtp.gmail.com', 587)
-                server_prueba.starttls()
-                server_prueba.login(REMITENTE, PASSWORD)
-                server_prueba.send_message(msg_prueba)
-                server_prueba.quit()
-                print("✅ ÉXITO: El correo de prueba fue enviado correctamente desde Render.")
-            except Exception as e_prueba:
-                error_txt = f"❌ FALLO CRÍTICO en el correo de prueba: {e_prueba}"
-                print(error_txt)
-                self._mostrar_mensaje_admin("Error Prueba SMTP", error_txt, "error", nombre_función="SistemaIndependiente._servicio_notificaciones_background")
-            # =====================================================================
+            print("🔔 Verificando notificaciones pendientes en entorno local...")
 
             bd = BaseDeDatos()
             pendientes = bd.obtener_pendientes_notificacion(dias=DÍAS_NOTIFICACIÓN)
             
             if not pendientes:
-                print("   -> No hay notificaciones reales para enviar hoy a los usuarios.")
+                print("   -> No hay notificaciones pendientes para enviar hoy.")
                 return
 
             usuarios_a_notificar = {}
