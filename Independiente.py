@@ -2758,30 +2758,34 @@ class SistemaIndependiente:
         Simula la selección de una fila tipo 'Treeview'.
         Recibe el ID del partido desde el evento on_click de la celda.
         """
-        # Si toco el mismo que ya estaba seleccionado, lo desmarco
+        # 1. Si toco el mismo que ya estaba seleccionado, lo desmarco
         if self.partido_a_pronosticar_id == id_partido:
             self.partido_a_pronosticar_id = None
             self.input_pred_cai.value = ""
             self.input_pred_rival.value = ""
             
-            # Desmarcar todo (quitar color)
+            # Desmarcar iterando rápidamente (solo cambiamos las que tienen color)
             for row in self.tabla_partidos.rows:
-                row.color = None
-            self.page.update()
+                if row.color is not None:
+                    row.color = None
+            
+            # 🚀 ACTUALIZACIÓN ENFOCADA E INSTANTÁNEA
+            self.tabla_partidos.update()
+            self.input_pred_cai.update()
+            self.input_pred_rival.update()
             return
 
-        # Nueva selección
+        # 2. Nueva selección
         self.partido_a_pronosticar_id = id_partido
         
-        # Iteramos filas para pintar la correcta y leer sus datos
         for row in self.tabla_partidos.rows:
             if row.data == id_partido:
                 row.color = "#8B0000" # Rojo oscuro
                 
-                # Intentamos leer el pronóstico visual de la celda 4
+                # Intentamos leer el pronóstico visual de la celda
                 try:
-                    # Estructura: DataCell -> Container -> Text -> value
-                    texto_celda = row.cells[4].content.content.value
+                    # 🐛 CORRECCIÓN: El pronóstico está en la celda 5, no en la 4
+                    texto_celda = row.cells[5].content.content.value
                     if " a " in texto_celda:
                         partes = texto_celda.split(" a ")
                         self.input_pred_cai.value = partes[0]
@@ -2793,9 +2797,14 @@ class SistemaIndependiente:
                     self.input_pred_cai.value = ""
                     self.input_pred_rival.value = ""
             else:
-                row.color = None
+                # Solo limpiamos si estaba seleccionado para no procesar de más
+                if row.color is not None:
+                    row.color = None
         
-        self.page.update()
+        # 🚀 ACTUALIZACIÓN ENFOCADA E INSTANTÁNEA
+        self.tabla_partidos.update()
+        self.input_pred_cai.update()
+        self.input_pred_rival.update()
 
     def _guardar_contrasena_config(self, e):
         """Valida y guarda el cambio de contraseña desde Configuración."""
