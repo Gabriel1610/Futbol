@@ -441,12 +441,15 @@ class SistemaIndependiente:
                 self._limpiar_memoria_dialogo(self.dlg_cargando_inicio)
             
             print("Cargando interfaz...")
+            # Detectamos si el usuario actual es el administrador que tiene la pestaña
+            es_admin = hasattr(self, 'usuario_actual') and self.usuario_actual == "Gabriel"
+            
             self._recargar_datos(
                 actualizar_partidos=True, 
                 actualizar_pronosticos=True, 
                 actualizar_ranking=True,
                 actualizar_copas=True, 
-                actualizar_admin=True 
+                actualizar_admin=es_admin
             )
 
     def _configurar_ventana(self):
@@ -3765,8 +3768,11 @@ class SistemaIndependiente:
                     ))
                 self.tabla_torneos.rows = filas_torneos
                 
-                self.tabla_rivales.update()
-                self.tabla_torneos.update()
+                if self.tabla_rivales.page:
+                    self.tabla_rivales.update()
+                if self.tabla_torneos.page:
+                    self.tabla_torneos.update()
+                    
                 self.page.update()
 
         except Exception as e:
