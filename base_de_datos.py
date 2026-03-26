@@ -360,143 +360,6 @@ class BaseDeDatos:
             if cursor: cursor.close()
             if conexion: conexion.close()
 
-    def sincronizar_partidos(self, lista):
-        conexion = None
-        cursor = None
-        hubo_cambios = False
-        try:
-            conexion = self.abrir()
-            cursor = conexion.cursor()
-
-            for datos in lista:
-                fotmob_id = datos['fotmob_id']
-                rival_id = datos['rival_id']
-                rival_nombre = datos['rival']
-                torneo_id = datos['torneo_id']
-                torneo_nombre = datos['torneo']
-                anio_numero = str(datos['anio']).split("-")[0]
-                fecha_hora = datos['fecha']
-                condicion = datos['condicion']
-                arbitro_id = datos.get('arbitro_id')
-                arbitro_nombre = datos.get('arbitro_nombre')
-                estadio_id = datos.get('estadio_id')
-                estadio_nombre = datos.get('estadio_nombre')
-                
-                # --- 0. GESTIÓN DE ÁRBITRO Y ESTADIO ---
-                if arbitro_id and arbitro_nombre:
-                    try:
-                        cursor.execute("INSERT INTO arbitros (id, nombre) VALUES (%s, %s)", (arbitro_id, arbitro_nombre))
-                    except mysql.connector.Error as err:
-                        if err.errno == 1062: pass # Ya existe, lo ignoramos
-                        else: raise err
-                        
-                if estadio_id and estadio_nombre:
-                    try:
-                        cursor.execute("INSERT INTO estadios (id, nombre) VALUES (%s, %s)", (estadio_id, estadio_nombre))
-                    except mysql.connector.Error as err:
-                        if err.errno == 1062: pass # Ya existe, lo ignoramos
-                        else: raise err
-
-                # --- 1. GESTIÓN DE RIVAL (Por FotMob ID) ---
-                # Intentamos insertarlo. Si el ID ya existe (Error 1062), lo ignoramos para 
-                # respetar el nombre personalizado que le hayas puesto en el panel de Admin.
-                try:
-                    cursor.execute("INSERT INTO rivales (id, nombre) VALUES (%s, %s)", (rival_id, rival_nombre))
-                except mysql.connector.Error as err:
-                    if err.errno == 1062:
-                        pass 
-                    else:
-                        raise err
-                
-                # --- 2. GESTIÓN DE CAMPEONATO (Por FotMob ID) ---
-                # Intentamos insertarlo. Si el ID ya existe (Error 1062), lo ignoramos para 
-                # respetar el nombre personalizado que le hayas puesto en el panel de Admin.
-                sql_camp = """
-                    INSERT INTO campeonatos (id, nombre) 
-                    VALUES (%s, %s)
-                """
-                try:
-                    cursor.execute(sql_camp, (torneo_id, torneo_nombre))
-                except mysql.connector.Error as err:
-                    if err.errno == 1062:
-                        pass
-                    else:
-                        raise err
-                camp_id = torneo_id # Ya tenemos el ID asegurado
-
-                # --- 3. GESTIÓN DE AÑO ---
-                cursor.execute("SELECT id FROM anios WHERE numero = %s", (anio_numero,))
-                res_anio = cursor.fetchone()
-                if res_anio: 
-                    anio_id = res_anio[0]
-                else:
-                    try:
-                        cursor.execute("INSERT INTO anios (numero) VALUES (%s)", (anio_numero,))
-                        anio_id = cursor.lastrowid
-                    except mysql.connector.IntegrityError:
-                        cursor.execute("SELECT id FROM anios WHERE numero = %s", (anio_numero,))
-                        anio_id = cursor.fetchone()[0]
-
-                # --- 4. GESTIÓN DE EDICIÓN ---
-                cursor.execute("SELECT id FROM ediciones WHERE campeonato_id = %s AND anio_id = %s", (camp_id, anio_id))
-                res_ed = cursor.fetchone()
-                if res_ed: 
-                    edicion_id = res_ed[0]
-                else:
-                    try:
-                        cursor.execute("INSERT INTO ediciones (campeonato_id, anio_id, finalizado) VALUES (%s, %s, FALSE)", (camp_id, anio_id))
-                        edicion_id = cursor.lastrowid
-                    except mysql.connector.IntegrityError:
-                        cursor.execute("SELECT id FROM ediciones WHERE campeonato_id = %s AND anio_id = %s", (camp_id, anio_id))
-                        edicion_id = cursor.fetchone()[0]
-
-                # --- 5. GESTIÓN DE PARTIDO ---
-                sql_upsert = """
-                    INSERT INTO partidos (id, rival_id, edicion_id, fecha_hora, condicion) 
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON DUPLICATE KEY UPDATE 
-                        rival_id = VALUES(rival_id),
-                        edicion_id = VALUES(edicion_id),
-                        fecha_hora = VALUES(fecha_hora),
-                        condicion = VALUES(condicion)
-                """
-                try:
-                    cursor.execute(sql_upsert, (fotmob_id, rival_id, edicion_id, fecha_hora, condicion))
-                    
-                    # rowcount devuelve 1 si se insertó nuevo, o 2 si se actualizó uno existente
-                    if cursor.rowcount > 0:
-                        hubo_cambios = True
-                        
-                except mysql.connector.Error as err:
-                    # Si choca con nuestra fecha_unica (dos IDs distintos en el mismo día), lo ignoramos
-                    if err.errno == 1062:
-                        pass 
-                    else:
-                        logger.error(f"Error sincronizando partido {fotmob_id}: {err}")
-
-            # --- 6. LIMPIEZA DE TORNEOS HUÉRFANOS ---
-            # Si un torneo cambió de nombre, el anterior quedará vacío. 
-            # Estas 3 consultas borran la basura en cascada sin romper las llaves foráneas.
-            
-            # Borrar ediciones vacías
-            cursor.execute("DELETE FROM ediciones WHERE id NOT IN (SELECT DISTINCT edicion_id FROM partidos WHERE edicion_id IS NOT NULL)")
-            
-            # Borrar campeonatos vacíos
-            cursor.execute("DELETE FROM campeonatos WHERE id NOT IN (SELECT DISTINCT campeonato_id FROM ediciones WHERE campeonato_id IS NOT NULL)")
-            
-            # Borrar años vacíos
-            cursor.execute("DELETE FROM anios WHERE id NOT IN (SELECT DISTINCT anio_id FROM ediciones WHERE anio_id IS NOT NULL)")
-
-            conexion.commit()
-            return hubo_cambios
-            
-        except Exception as e:
-            logger.error(f"Error en sincronizacion monolítica: {e}")
-            return False
-        finally:
-            if cursor: cursor.close()
-            if conexion: conexion.close()
-
     def obtener_campeonatos_completo(self):
         """Obtiene ID y Nombre de todos los campeonatos."""
         conexion = None
@@ -1162,7 +1025,164 @@ class BaseDeDatos:
         finally:
             if cursor: cursor.close()
             if conexion: conexion.close()
-               
+    
+    def insertar_partido_manual(self, edicion_id, rival_id, condicion, fecha_str, goles_cai, goles_rival):
+        """
+        Inserta un nuevo partido calculando automáticamente el siguiente ID disponible.
+        """
+        conexion = self.abrir()
+        if not conexion:
+            raise Exception("Error de conexión a la base de datos.")
+            
+        try:
+            cursor = conexion.cursor()
+            
+            # 1. Calculamos el nuevo ID manualmente ya que la tabla no tiene AUTO_INCREMENT
+            cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM partidos")
+            nuevo_id = cursor.fetchone()[0]
+            
+            # 2. Insertamos usando los nombres exactos de tus columnas
+            query = """
+                INSERT INTO partidos (id, edicion_id, rival_id, condicion, fecha_hora, goles_independiente, goles_rival) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+            valores = (nuevo_id, edicion_id, rival_id, condicion, fecha_str, goles_cai, goles_rival)
+            
+            cursor.execute(query, valores)
+            conexion.commit()
+            
+        except Exception as e:
+            conexion.rollback()
+            raise Exception(f"Error insertando partido: {e}")
+            
+        finally:
+            if 'cursor' in locals() and cursor: cursor.close()
+            if conexion: conexion.close()
+
+    # ---------------- RIVALES ----------------
+    def insertar_rival_manual(self, nombre):
+        conexion = self.abrir()
+        try:
+            cursor = conexion.cursor()
+            cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM rivales")
+            nuevo_id = cursor.fetchone()[0]
+            cursor.execute("INSERT INTO rivales (id, nombre) VALUES (%s, %s)", (nuevo_id, nombre))
+            conexion.commit()
+        finally:
+            if 'cursor' in locals() and cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def actualizar_rival_manual(self, rival_id, nombre):
+        conexion = self.abrir()
+        try:
+            cursor = conexion.cursor()
+            cursor.execute("UPDATE rivales SET nombre = %s WHERE id = %s", (nombre, rival_id))
+            conexion.commit()
+        finally:
+            if 'cursor' in locals() and cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def eliminar_rival_manual(self, rival_id):
+        conexion = self.abrir()
+        try:
+            cursor = conexion.cursor()
+            cursor.execute("DELETE FROM rivales WHERE id = %s", (rival_id,))
+            conexion.commit()
+        finally:
+            if 'cursor' in locals() and cursor: cursor.close()
+            if conexion: conexion.close()
+
+    # ---------------- TORNEOS (CAMPEONATOS) ----------------
+    def insertar_torneo_manual(self, nombre):
+        conexion = self.abrir()
+        try:
+            cursor = conexion.cursor()
+            cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM campeonatos")
+            nuevo_id = cursor.fetchone()[0]
+            cursor.execute("INSERT INTO campeonatos (id, nombre) VALUES (%s, %s)", (nuevo_id, nombre))
+            conexion.commit()
+        finally:
+            if 'cursor' in locals() and cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def actualizar_torneo_manual(self, torneo_id, nombre):
+        conexion = self.abrir()
+        try:
+            cursor = conexion.cursor()
+            cursor.execute("UPDATE campeonatos SET nombre = %s WHERE id = %s", (nombre, torneo_id))
+            conexion.commit()
+        finally:
+            if 'cursor' in locals() and cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def eliminar_torneo_manual(self, torneo_id):
+        conexion = self.abrir()
+        try:
+            cursor = conexion.cursor()
+            cursor.execute("DELETE FROM campeonatos WHERE id = %s", (torneo_id,))
+            conexion.commit()
+        finally:
+            if 'cursor' in locals() and cursor: cursor.close()
+            if conexion: conexion.close()
+            
+    def actualizar_partido_manual(self, partido_id, edicion_id, rival_id, condicion, fecha_str, goles_cai, goles_rival):
+        """
+        Actualiza los datos de un partido usando la estructura de la base de datos 'independiente'.
+        """
+        conexion = self.abrir()
+        if not conexion:
+            raise Exception("Error de conexión a la base de datos.")
+            
+        try:
+            cursor = conexion.cursor()
+            
+            query = """
+                UPDATE partidos 
+                SET edicion_id = %s, 
+                    rival_id = %s, 
+                    condicion = %s, 
+                    fecha_hora = %s, 
+                    goles_independiente = %s, 
+                    goles_rival = %s
+                WHERE id = %s
+            """
+            valores = (edicion_id, rival_id, condicion, fecha_str, goles_cai, goles_rival, partido_id)
+            
+            cursor.execute(query, valores)
+            conexion.commit()
+            
+        except Exception as e:
+            conexion.rollback()
+            raise Exception(f"Error actualizando partido: {e}")
+            
+        finally:
+            if 'cursor' in locals() and cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def eliminar_partido_manual(self, partido_id):
+        """
+        Elimina un partido. Gracias a ON DELETE CASCADE en la tabla pronosticos, 
+        el motor de la base de datos limpiará automáticamente los pronósticos huérfanos.
+        """
+        conexion = self.abrir()
+        if not conexion:
+            raise Exception("Error de conexión a la base de datos.")
+            
+        try:
+            cursor = conexion.cursor()
+            
+            # Solo necesitamos borrar el partido, la base de datos hace el resto
+            cursor.execute("DELETE FROM partidos WHERE id = %s", (partido_id,))
+            conexion.commit()
+            
+        except Exception as e:
+            conexion.rollback()
+            raise Exception(f"Error eliminando partido: {e}")
+            
+        finally:
+            if 'cursor' in locals() and cursor: cursor.close()
+            if conexion: conexion.close()
+                   
     def obtener_racha_record(self, edicion_id=None, anio=None):
         """
         Calcula la MEJOR racha (récord) de partidos consecutivos sumando puntos en la historia (o filtro).
