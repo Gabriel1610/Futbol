@@ -1032,7 +1032,27 @@ class SistemaIndependiente:
         )
         
         self.btn_nuevo_partido_admin = ft.ElevatedButton("Nuevo Partido", icon=ft.Icons.ADD, bgcolor="green", color="white", on_click=self._abrir_modal_partido_admin)
+        # --- NUEVO: BOTONES Y DESPLEGABLES DE FILTRO ---
+        self.estado_filtro_admin = "Todos" # Memoria interna del filtro excluyente
         
+        # Grupo 1: Botones Excluyentes
+        self.btn_admin_todos = ft.ElevatedButton("Todos", bgcolor="blue", color="white", on_click=lambda e: self._toggle_filtro_estado_admin(e, "Todos"), height=35)
+        self.btn_admin_jugados = ft.ElevatedButton("Jugados", bgcolor="#2D2D2D", color="white", on_click=lambda e: self._toggle_filtro_estado_admin(e, "Jugados"), height=35)
+        self.btn_admin_por_jugar = ft.ElevatedButton("Por Jugar", bgcolor="#2D2D2D", color="white", on_click=lambda e: self._toggle_filtro_estado_admin(e, "Por Jugar"), height=35)
+        
+        # Grupo 2: Filtros Combinables (Buscadores de texto en tiempo real)
+        self.txt_admin_filtro_torneo = ft.TextField(hint_text="🔍 Torneo...", width=140, height=35, text_size=12, content_padding=ft.padding.only(left=10, right=10, top=5, bottom=5), bgcolor="#1A1A1A", border_color="white24", on_change=self._aplicar_filtros_admin)
+        self.txt_admin_filtro_equipo = ft.TextField(hint_text="🔍 Equipo...", width=140, height=35, text_size=12, content_padding=ft.padding.only(left=10, right=10, top=5, bottom=5), bgcolor="#1A1A1A", border_color="white24", on_change=self._aplicar_filtros_admin)
+        
+        # Botón extra para limpiar rápido
+        self.btn_limpiar_filtros = ft.IconButton(icon=ft.Icons.CLEANING_SERVICES, tooltip="Limpiar Filtros", icon_color="red", icon_size=20, on_click=self._limpiar_filtros_admin)
+
+        self.fila_filtros_admin = ft.Row([
+            self.btn_admin_todos, self.btn_admin_jugados, self.btn_admin_por_jugar, 
+            ft.Text(" | ", color="white54"), # Separador visual
+            self.txt_admin_filtro_torneo, self.txt_admin_filtro_equipo,
+            self.btn_limpiar_filtros
+        ], spacing=5, wrap=True)
         # Formulario de Torneos
         self.input_admin_nombre_torneo = ft.TextField(label="Nombre", width=250, bgcolor="#2D2D2D", color="white", border_color="white24")
         self.btn_guardar_torneo = ft.ElevatedButton("Guardar", icon=ft.Icons.SAVE, bgcolor="green", color="white", on_click=self._guardar_torneo_admin)
@@ -1242,7 +1262,7 @@ class SistemaIndependiente:
                                             ft.Column(spacing=0, controls=[
                                                 ft.Container(content=self.tabla_rivales_header, width=280), 
                                                 # Le bajamos la altura de 280 a 240 para compensar el espacio que ocupa el buscador
-                                                ft.Container(height=240, width=280, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_rivales]))
+                                                ft.Container(height=240, width=280, content=ft.Column(scroll=ft.ScrollMode.AUTO, controls=[self.tabla_rivales]))
                                             ])
                                         ]),
                                         
@@ -1252,19 +1272,30 @@ class SistemaIndependiente:
                                             ft.Column(spacing=0, controls=[
                                                 # 🚀 AQUÍ LA MAGIA: Envolvemos el header en un Container de ancho estricto
                                                 ft.Container(content=self.tabla_torneos_header, width=280), 
-                                                ft.Container(height=280, width=280, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_torneos]))
+                                                ft.Container(height=280, width=280, content=ft.Column(scroll=ft.ScrollMode.AUTO, controls=[self.tabla_torneos]))
                                             ])
                                         ]),
-                                        # 3. MÓDULO PARTIDOS (Tabla centralizada)
+                                        # 3. MÓDULO PARTIDOS
                                         ft.Column(spacing=5, controls=[
                                             ft.Row([ft.Text("Partidos", weight="bold", color="white", size=16), self.btn_nuevo_partido_admin], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, width=730),
-                                            ft.Row(scroll=ft.ScrollMode.ALWAYS, controls=[
-                                                ft.Column(spacing=0, controls=[
-                                                    self.tabla_partidos_admin_header, 
-                                                    ft.Container(height=280, content=ft.Column(scroll=ft.ScrollMode.ALWAYS, controls=[self.tabla_partidos_admin]))
-                                                ])
-                                            ])
-                                        ]),
+                                            self.fila_filtros_admin, 
+                                            
+                                            # 🚀 AQUÍ ESTÁ LA MAGIA DEL SCROLL HORIZONTAL:
+                                            # Limitamos la vista a 730px y metemos una Fila (Row) con scroll horizontal
+                                            ft.Container(
+                                                width=730,
+                                                content=ft.Row(
+                                                    scroll=ft.ScrollMode.AUTO,
+                                                    controls=[
+                                                        ft.Column(spacing=0, controls=[
+                                                            # Quitamos los width internos para que la tabla pueda expandirse libremente
+                                                            self.tabla_partidos_admin_header,
+                                                            ft.Container(height=520, content=ft.Column(scroll=ft.ScrollMode.AUTO, controls=[self.tabla_partidos_admin]))
+                                                        ])
+                                                    ]
+                                                )
+                                            )
+                                        ])
                                     ]
                                 ),
                                 ft.Container(height=40)
@@ -3076,6 +3107,78 @@ class SistemaIndependiente:
             self.dlg_cambios.update()
             
         threading.Thread(target=_cargar, daemon=True).start()
+    
+    def _toggle_filtro_estado_admin(self, e, estado):
+        """Maneja el clic de los botones de estado (1 o ninguno activado)."""
+        boton_clickeado = e.control
+        
+        # Si hacemos clic en un botón que ya está encendido, lo apagamos (quedan 0 activos)
+        if boton_clickeado.bgcolor == "blue":
+            boton_clickeado.bgcolor = "#2D2D2D"
+            self.estado_filtro_admin = None
+        else:
+            # Apagamos todos y encendemos solo el clickeado
+            self.btn_admin_todos.bgcolor = "#2D2D2D"
+            self.btn_admin_jugados.bgcolor = "#2D2D2D"
+            self.btn_admin_por_jugar.bgcolor = "#2D2D2D"
+            boton_clickeado.bgcolor = "blue"
+            self.estado_filtro_admin = estado
+
+        self.btn_admin_todos.update()
+        self.btn_admin_jugados.update()
+        self.btn_admin_por_jugar.update()
+        
+        # Mandamos a recalcular la tabla
+        self._aplicar_filtros_admin()
+
+    def _aplicar_filtros_admin(self, e=None):
+        """Aplica y combina TODOS los filtros (Estado + Búsqueda Torneo + Búsqueda Equipo)."""
+        if not hasattr(self, 'backup_filas_admin_partidos'): return
+
+        def limpiar_texto(texto):
+            if not texto: return ""
+            return unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('utf-8').lower()
+
+        # Leemos el texto de las cajitas
+        texto_torneo = limpiar_texto(self.txt_admin_filtro_torneo.value)
+        texto_equipo = limpiar_texto(self.txt_admin_filtro_equipo.value)
+        
+        filas_filtradas = []
+        for fila in self.backup_filas_admin_partidos:
+            torneo_fila = fila.cells[1].content.content.value
+            rival_fila = fila.cells[2].content.content.value
+            res_txt = fila.cells[4].content.content.value
+            jugado = any(char.isdigit() for char in res_txt)
+            
+            # 1. Filtro Excluyente de Estado
+            pasa_estado = True
+            if self.estado_filtro_admin == "Jugados": pasa_estado = jugado
+            elif self.estado_filtro_admin == "Por Jugar": pasa_estado = not jugado
+
+            # 2. Filtro Combinable de Torneo (Subcadena inteligente)
+            pasa_torneo = True
+            if texto_torneo and texto_torneo not in limpiar_texto(torneo_fila): pasa_torneo = False
+                
+            # 3. Filtro Combinable de Equipo (Subcadena inteligente)
+            pasa_equipo = True
+            if texto_equipo and texto_equipo not in limpiar_texto(rival_fila): pasa_equipo = False
+                
+            if pasa_estado and pasa_torneo and pasa_equipo:
+                filas_filtradas.append(fila)
+
+        self.tabla_partidos_admin.rows = filas_filtradas
+        self.tabla_partidos_admin.update()
+
+    def _limpiar_filtros_admin(self, e):
+        """Resetea todos los filtros de la tabla de partidos y borra el texto de las cajitas."""
+        self.txt_admin_filtro_torneo.value = ""
+        self.txt_admin_filtro_equipo.value = ""
+        self.txt_admin_filtro_torneo.update()
+        self.txt_admin_filtro_equipo.update()
+        
+        # Volvemos a encender "Todos" por defecto (esto auto-recalcula la tabla)
+        self._toggle_filtro_estado_admin(type('Event', (object,), {'control': self.btn_admin_todos})(), "Todos")
+             
     def _filtrar_dropdown_rivales(self, e):
         """Filtra la lista de rivales ignorando mayúsculas y tildes."""
         if not hasattr(self, 'opciones_originales_rivales'): return
@@ -3739,6 +3842,8 @@ class SistemaIndependiente:
                         color=color_row
                     ))
                 self.tabla_partidos_admin.rows = filas_part_admin
+                # 🚀 GUARDAMOS LA COPIA ORIGINAL Y MANTENEMOS EL FILTRO ACTIVO
+                self.backup_filas_admin_partidos = list(filas_part_admin)
                 
         except Exception as e:
             GestorMensajes.mostrar(self.page, "Error recargando datos", f"{e}", "error")
@@ -5806,4 +5911,4 @@ if __name__ == "__main__":
         
     else:
         # MODO 3: DEPURACIÓN LOCAL (Navegador)
-        ft.app(target=main)#, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir=ruta_assets)
+        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir=ruta_assets)
