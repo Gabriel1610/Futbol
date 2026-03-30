@@ -1745,6 +1745,9 @@ class SistemaIndependiente:
             for p in range(intervalo_y, int(altura_eje), intervalo_y):
                 labels_y.append(ft.ChartAxisLabel(value=p, label=ft.Text(str(p), size=12)))
 
+            # 🚀 NUEVO: Creamos las etiquetas del eje X explícitamente (del 0 en adelante)
+            labels_x = [ft.ChartAxisLabel(value=i, label=ft.Text(str(i), size=12, color="white54")) for i in range(0, cant_partidos + 1)]
+
             ancho = self.page.width - 50 if self.page.width else 900
             alto = self.page.height - 50 if self.page.height else 600
             es_pc = (self.page.width >= 750) if self.page.width else True
@@ -1758,9 +1761,21 @@ class SistemaIndependiente:
             chart = ft.LineChart(
                 data_series=data_series, border=ft.border.all(1, ft.Colors.WHITE10),
                 left_axis=ft.ChartAxis(labels=labels_y, labels_size=40, title=ft.Text("Puntos Acumulados", size=14, italic=True), title_size=30),
-                bottom_axis=ft.ChartAxis(labels_interval=1, title=ft.Text("Partido Nro", size=14, italic=True), labels_size=40),
-                tooltip_bgcolor=ft.Colors.with_opacity(0.9, "#1E1E1E"), min_y=0, max_y=altura_eje + 5, min_x=-0.5, max_x=cant_partidos + 0.5,
-                horizontal_grid_lines=ft.ChartGridLines(interval=intervalo_y, color=ft.Colors.WHITE10, width=1), vertical_grid_lines=ft.ChartGridLines(interval=1, color=ft.Colors.WHITE10, width=1),
+                # 🚀 SOLUCIÓN: Asignamos labels_x a los ejes inferior y superior, y subimos labels_size a 25 arriba
+                bottom_axis=ft.ChartAxis(labels=labels_x, title=ft.Text("Partido Nro", size=14, italic=True), labels_size=40),
+                top_axis=ft.ChartAxis(labels=labels_x, labels_size=25), 
+                tooltip_bgcolor=ft.Colors.with_opacity(0.9, "#1E1E1E"), 
+                min_y=0, 
+                max_y=altura_eje + 2, 
+                min_x=-0.5, max_x=cant_partidos + 0.5,
+                horizontal_grid_lines=ft.ChartGridLines(interval=intervalo_y, color=ft.Colors.WHITE10, width=1), 
+                vertical_grid_lines=ft.ChartGridLines(interval=1, color=ft.Colors.WHITE10, width=1),
+            )
+
+            # 🚀 MAGIA AQUÍ: Aumentamos el margen superior (top=45) para que el número quepa, y reducimos la altura total (+50)
+            fila_grafico = ft.Row(
+                controls=[ft.Container(content=chart, width=ancho_grafico_dinamico, height=alto_grafico + 50, padding=ft.padding.only(top=45, right=60, bottom=20, left=50))],
+                scroll=ft.ScrollMode.ALWAYS
             )
             
             items_leyenda = [ft.Row([ft.Container(width=15, height=15, bgcolor=colores[i % len(colores)], border_radius=3), ft.Text(user, weight="bold", size=14, color="white")], spacing=5) for i, user in enumerate(usuarios_sel)]
@@ -4659,7 +4674,16 @@ class SistemaIndependiente:
 
                 for p in rango_puestos:
                     val_y = altura_eje - p + 1
-                    labels_y.append(ft.ChartAxisLabel(value=val_y, label=ft.Text(str(p), size=12, weight="bold" if p==1 else "normal")))
+                    # 🚀 Le agregamos explícitamente el color "white54"
+                    labels_y.append(ft.ChartAxisLabel(value=val_y, label=ft.Text(str(p), size=12, color="white54", weight="bold" if p==1 else "normal")))
+
+                # 🚀 SOLUCIÓN AL BUG DE FLET: Ordenamos la lista de etiquetas de menor a mayor (value)
+                labels_y.sort(key=lambda x: x.value)
+
+                # 🚀 Reducimos el "cielo invisible" a solo una fracción para matar el hueco gigante
+                labels_y.append(ft.ChartAxisLabel(value=altura_eje + 0.8, label=ft.Text("", size=1)))
+
+                labels_x = [ft.ChartAxisLabel(value=i, label=ft.Text(str(i), size=12, color="white54")) for i in range(1, cant_partidos + 1)]
 
                 es_pc = (self.page.width >= 750) if self.page.width else True
                 px_fila = 60 if es_pc else 80
@@ -4675,10 +4699,23 @@ class SistemaIndependiente:
 
                 chart = ft.LineChart(
                     data_series=data_series, border=ft.border.all(1, ft.Colors.WHITE10),
-                    left_axis=ft.ChartAxis(labels=labels_y, title=ft.Text("Puesto", size=14, italic=True), title_size=30),
-                    bottom_axis=ft.ChartAxis(labels_interval=1, title=ft.Text("Partidos", size=14, italic=True), labels_size=30),
-                    tooltip_bgcolor=ft.Colors.with_opacity(0.9, "#1E1E1E"), min_y=0, max_y=altura_eje + (1.2 if es_pc else 0.5), min_x=0.5, max_x=cant_partidos + 0.5,
-                    horizontal_grid_lines=ft.ChartGridLines(interval=1, color=ft.Colors.WHITE10, width=1), vertical_grid_lines=ft.ChartGridLines(interval=1, color=ft.Colors.WHITE10, width=1),
+                    # 🚀 AQUÍ ESTÁ LA SOLUCIÓN: Agregamos labels_size=40 para darle espacio físico a los números
+                    left_axis=ft.ChartAxis(labels=labels_y, labels_size=40, title=ft.Text("Puesto", size=14, italic=True), title_size=30),
+                    bottom_axis=ft.ChartAxis(labels=labels_x, title=ft.Text("Partidos", size=14, italic=True), labels_size=30),
+                    top_axis=ft.ChartAxis(labels=labels_x, labels_size=25), 
+                    tooltip_bgcolor=ft.Colors.with_opacity(0.9, "#1E1E1E"), 
+                    min_y=0, 
+                    max_y=altura_eje + 0.8,
+                    min_x=0.5, max_x=cant_partidos + 0.5,
+                    horizontal_grid_lines=ft.ChartGridLines(interval=1, color=ft.Colors.WHITE10, width=1), 
+                    vertical_grid_lines=ft.ChartGridLines(interval=1, color=ft.Colors.WHITE10, width=1),
+                )
+
+                # 🚀 Reducimos el margen superior a 0. El único espacio que quedará 
+                # es el interno del gráfico para que los globos no se corten.
+                fila_grafico = ft.Row(
+                    controls=[ft.Container(content=chart, width=ancho_grafico_dinamico, height=alto_grafico, padding=ft.padding.only(top=0, right=60, bottom=20, left=50))],
+                    scroll=ft.ScrollMode.ALWAYS
                 )
                 
                 items_leyenda = [ft.Row([ft.Container(width=15, height=15, bgcolor=colores[i % len(colores)], border_radius=3), ft.Text(user, weight="bold", size=14, color="white")], spacing=5) for i, user in enumerate(usuarios_sel)]
