@@ -760,21 +760,15 @@ class SistemaIndependiente:
         )
 
         # --- CONTENEDOR 5: GRÁFICOS DE TORTA ---
-        self.btn_grafico_torta_estilo = ft.ElevatedButton("Resultados pronosticados", icon=ft.Icons.PIE_CHART, bgcolor="#333333", color="white", width=215, height=30, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=lambda e: self._abrir_selector_usuarios_generico("Resultados pronosticados", False, "Ver Gráfico", ft.Icons.PIE_CHART, self._generar_grafico_torta_estilo_pronostico))
-        self.btn_grafico_torta_tendencia = ft.ElevatedButton("Tendencia de pronóstico", icon=ft.Icons.PIE_CHART_OUTLINE, bgcolor="#333333", color="white", width=215, height=30, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=lambda e: self._abrir_selector_usuarios_generico("Tendencia de pronóstico", False, "Ver Gráfico", ft.Icons.PIE_CHART_OUTLINE, self._generar_grafico_torta_tendencia))
-        self.btn_grafico_torta_firmeza = ft.ElevatedButton("Grado de firmeza", icon=ft.Icons.SHIELD, bgcolor="#333333", color="white", width=215, height=30, style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), on_click=lambda e: self._abrir_selector_usuarios_generico("Grado de firmeza", False, "Ver Gráfico", ft.Icons.SHIELD, self._generar_grafico_torta_firmeza))
-        
-        self.contenedor_graficos_torta = ft.Container(
-            padding=ft.padding.all(10), border=ft.border.all(1, "white24"), border_radius=8, bgcolor="#1E1E1E", 
-            content=ft.Column(
-                spacing=10, horizontal_alignment=ft.CrossAxisAlignment.START, 
-                controls=[
-                    ft.Text("Gráficos de torta", size=11, weight=ft.FontWeight.BOLD, color="white54"), 
-                    ft.Row(controls=[self.btn_grafico_torta_estilo, self.btn_grafico_torta_tendencia, self.btn_grafico_torta_firmeza], alignment=ft.MainAxisAlignment.START, wrap=True, spacing=10, run_spacing=10)
-                ]
-            )
+        self.btn_grafico_torta_estilo = ft.ElevatedButton(
+            "Resultados pronosticados", 
+            icon=ft.Icons.PIE_CHART, 
+            bgcolor="#333333", color="white", width=215, height=30, 
+            tooltip="Desglosa tus predicciones mostrando el porcentaje de veces que pronosticaste victoria, empate o derrota del Rojo.", 
+            style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), 
+            on_click=lambda e: self._abrir_selector_usuarios_generico("Resultados pronosticados", False, "Ver Gráfico", ft.Icons.PIE_CHART, self._generar_grafico_torta_estilo_pronostico)
         )
-
+        
         self.btn_grafico_torta_tendencia = ft.ElevatedButton(
             "Tendencia de pronóstico", 
             icon=ft.Icons.PIE_CHART_OUTLINE, 
@@ -791,17 +785,6 @@ class SistemaIndependiente:
             tooltip="Analiza la cantidad de veces que cambiaste de opinión antes del partido.\n🧱 1 vez | 🤔 2 veces | 🔄 3+ veces", 
             style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), 
             on_click=lambda e: self._abrir_selector_usuarios_generico("Grado de firmeza", False, "Ver Gráfico", ft.Icons.SHIELD, self._generar_grafico_torta_firmeza)
-        )
-
-        # --- BOTÓN DE GRÁFICO DE BARRAS ---
-        # (Ajusta el nombre de la variable si en tu código se llama distinto, ej: self.btn_grafico_barras)
-        self.btn_grafico_barras = ft.ElevatedButton(
-            "Puntos por partidos", 
-            icon=ft.Icons.BAR_CHART, 
-            bgcolor="#333333", color="white", width=215, height=30, 
-            tooltip="Muestra el rendimiento de puntos por partido.", 
-            style=ft.ButtonStyle(padding=5, text_style=ft.TextStyle(size=12)), 
-            on_click=lambda e: self._abrir_selector_usuarios_generico("Puntos por partidos", False, "Ver Gráfico", ft.Icons.BAR_CHART, self._generar_grafico_barras)
         )
 
         self.contenedor_graficos_torta = ft.Container(
@@ -1745,7 +1728,12 @@ class SistemaIndependiente:
             for p in range(intervalo_y, int(altura_eje), intervalo_y):
                 labels_y.append(ft.ChartAxisLabel(value=p, label=ft.Text(str(p), size=12)))
 
-            # 🚀 NUEVO: Creamos las etiquetas del eje X explícitamente (del 0 en adelante)
+            # 🚀 MAGIA AQUÍ: Etiqueta fantasma proporcional
+            # Le sumamos 1 intervalo hacia arriba para obligar a Flet a dibujar "más cielo" y evitar cortes.
+            techo_matematico = int(altura_eje) + intervalo_y
+            labels_y.append(ft.ChartAxisLabel(value=techo_matematico, label=ft.Text("", size=1)))
+
+            # Creamos las etiquetas explícitas para el eje horizontal (Partidos 0, 1, 2...)
             labels_x = [ft.ChartAxisLabel(value=i, label=ft.Text(str(i), size=12, color="white54")) for i in range(0, cant_partidos + 1)]
 
             ancho = self.page.width - 50 if self.page.width else 900
@@ -1761,20 +1749,20 @@ class SistemaIndependiente:
             chart = ft.LineChart(
                 data_series=data_series, border=ft.border.all(1, ft.Colors.WHITE10),
                 left_axis=ft.ChartAxis(labels=labels_y, labels_size=40, title=ft.Text("Puntos Acumulados", size=14, italic=True), title_size=30),
-                # 🚀 SOLUCIÓN: Asignamos labels_x a los ejes inferior y superior, y subimos labels_size a 25 arriba
                 bottom_axis=ft.ChartAxis(labels=labels_x, title=ft.Text("Partido Nro", size=14, italic=True), labels_size=40),
                 top_axis=ft.ChartAxis(labels=labels_x, labels_size=25), 
                 tooltip_bgcolor=ft.Colors.with_opacity(0.9, "#1E1E1E"), 
                 min_y=0, 
-                max_y=altura_eje + 2, 
+                # 🚀 Usamos el techo matemático que calculamos para darle altura natural a la cuadrícula
+                max_y=techo_matematico, 
                 min_x=-0.5, max_x=cant_partidos + 0.5,
                 horizontal_grid_lines=ft.ChartGridLines(interval=intervalo_y, color=ft.Colors.WHITE10, width=1), 
                 vertical_grid_lines=ft.ChartGridLines(interval=1, color=ft.Colors.WHITE10, width=1),
             )
 
-            # 🚀 MAGIA AQUÍ: Aumentamos el margen superior (top=45) para que el número quepa, y reducimos la altura total (+50)
+            # 🚀 Igual que en Puestos: Reducimos el margen superior (top=0) y devolvemos la altura a la normalidad
             fila_grafico = ft.Row(
-                controls=[ft.Container(content=chart, width=ancho_grafico_dinamico, height=alto_grafico + 50, padding=ft.padding.only(top=45, right=60, bottom=20, left=50))],
+                controls=[ft.Container(content=chart, width=ancho_grafico_dinamico, height=alto_grafico, padding=ft.padding.only(top=0, right=60, bottom=20, left=50))],
                 scroll=ft.ScrollMode.ALWAYS
             )
             
