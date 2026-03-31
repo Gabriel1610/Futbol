@@ -2459,6 +2459,128 @@ class BaseDeDatos:
         finally:
             if cursor: cursor.close()
             if conexion: conexion.close()
+        
+    # -------------------------------------------------------------
+    # --- MÉTODOS PARA LA ADMINISTRACIÓN DE EDICIONES Y AÑOS ---
+    # -------------------------------------------------------------
+
+    def obtener_anios_admin(self):
+        """Obtiene la lista de años disponibles para los selectores."""
+        conexion = None; cursor = None
+        try:
+            conexion = self.abrir()
+            cursor = conexion.cursor()
+            cursor.execute("SELECT id, numero FROM anios ORDER BY numero DESC")
+            return cursor.fetchall()
+        except Exception as e:
+            raise e
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def obtener_ediciones_admin(self):
+        """Obtiene todas las ediciones combinando Torneo, Año y Estado."""
+        conexion = None; cursor = None
+        try:
+            conexion = self.abrir()
+            cursor = conexion.cursor()
+            cursor.execute("""
+                SELECT e.id, c.nombre, a.numero, e.finalizado, c.id, a.id 
+                FROM ediciones e 
+                JOIN campeonatos c ON e.campeonato_id = c.id 
+                JOIN anios a ON e.anio_id = a.id 
+                ORDER BY e.finalizado ASC, a.numero DESC, c.nombre ASC
+            """)
+            return cursor.fetchall()
+        except Exception as e:
+            raise e
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def agregar_edicion_admin(self, campeonato_id, anio_id, finalizado):
+        """Agrega una nueva edición validando que no esté duplicada."""
+        conexion = None; cursor = None
+        try:
+            conexion = self.abrir()
+            cursor = conexion.cursor()
+            cursor.execute("INSERT INTO ediciones (campeonato_id, anio_id, finalizado) VALUES (%s, %s, %s)", (campeonato_id, anio_id, finalizado))
+            conexion.commit()
+        except mysql.connector.Error as e:
+            if e.errno == 1062:
+                raise Exception("Esta edición (Torneo + Año) ya existe en la base de datos.")
+            raise e
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def editar_edicion_admin(self, edicion_id, campeonato_id, anio_id, finalizado):
+        """Edita una edición existente."""
+        conexion = None; cursor = None
+        try:
+            conexion = self.abrir()
+            cursor = conexion.cursor()
+            cursor.execute("UPDATE ediciones SET campeonato_id=%s, anio_id=%s, finalizado=%s WHERE id=%s", (campeonato_id, anio_id, finalizado, edicion_id))
+            conexion.commit()
+        except mysql.connector.Error as e:
+            if e.errno == 1062:
+                raise Exception("Esta edición (Torneo + Año) ya existe en la base de datos.")
+            raise e
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+    
+    def registrar_anio_actual(self):
+        """Registra el año actual en la base de datos automáticamente si no existe."""
+        conexion = None
+        cursor = None
+        try:
+            conexion = self.abrir()
+            cursor = conexion.cursor()
+            
+            # Usamos tu función para obtener el año exacto en horario de Argentina
+            anio_actual = self.obtener_hora_argentina().year
+            
+            # Respetamos el CHECK de tu base de datos (2026 - 2100)
+            if 2026 <= anio_actual <= 2100:
+                sql = "INSERT INTO anios (numero) VALUES (%s)"
+                cursor.execute(sql, (anio_actual,))
+                conexion.commit()
+                logger.info(f"Año {anio_actual} registrado automáticamente en la base de datos.")
+                
+        except mysql.connector.Error as e:
+            if e.errno == 1062:
+                # Error 1062 = Duplicate entry. El año ya existe.
+                # Lo ignoramos en total silencio porque es lo que esperamos el 99% de las veces.
+                pass
+            else:
+                logger.error(f"Error de BD al registrar el año actual: {e}")
+        except Exception as e:
+            logger.error(f"Error general al registrar el año actual: {e}")
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def eliminar_edicion_admin(self, edicion_id):
+        """Elimina una edición SOLO si no tiene partidos jugados/cargados."""
+        conexion = None; cursor = None
+        try:
+            conexion = self.abrir()
+            cursor = conexion.cursor()
+            
+            # Control de seguridad restrictivo: ¿Hay partidos en esta edición?
+            cursor.execute("SELECT COUNT(*) FROM partidos WHERE edicion_id = %s", (edicion_id,))
+            cantidad = cursor.fetchone()[0]
+            if cantidad > 0:
+                raise Exception("No se puede eliminar la edición porque ya tiene partidos asociados. Debes eliminar los partidos primero.")
+                
+            cursor.execute("DELETE FROM ediciones WHERE id = %s", (edicion_id,))
+            conexion.commit()
+        except Exception as e:
+            raise e
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
 
     def verificar_email_libre(self, nuevo_email, usuario_actual):
         """

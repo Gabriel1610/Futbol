@@ -933,9 +933,35 @@ class SistemaIndependiente:
             rows=[]
         )
         
-        # --- NUEVO: BOTONES DE CREACIÓN ---
         self.btn_nuevo_rival_admin = ft.ElevatedButton("Nuevo Rival", icon=ft.Icons.ADD, bgcolor="green", color="white", on_click=self._abrir_modal_rival_admin)
         self.btn_nuevo_torneo_admin = ft.ElevatedButton("Nuevo Torneo", icon=ft.Icons.ADD, bgcolor="green", color="white", on_click=self._abrir_modal_torneo_admin)
+        self.btn_nueva_edicion = ft.ElevatedButton("Nueva Edición", icon=ft.Icons.ADD, bgcolor="#333333", color="white", height=30, style=ft.ButtonStyle(padding=10, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_edicion)
+        # 🚀 1. MATEMÁTICA EXACTA PARA 500px:
+        # Anchos de columnas (260 + 80 + 100 = 440px)
+        # Márgenes (15izq + 15der = 30px) + Espacios entre columnas (15 + 15 = 30px)
+        # Total = 440 + 30 + 30 = 500 píxeles exactos.
+        ancho_torneo = 260
+        ancho_anio = 80
+        ancho_estado = 100
+
+        # 🚀 2. Usamos una SOLA lista de columnas para ambas tablas (Garantiza simetría)
+        columnas_ediciones = [
+            ft.DataColumn(ft.Container(content=ft.Text("Torneo", color="white", weight="bold"), width=ancho_torneo, alignment=ft.alignment.center_left)),
+            ft.DataColumn(ft.Container(content=ft.Text("Año", color="white", weight="bold"), width=ancho_anio, alignment=ft.alignment.center)),
+            ft.DataColumn(ft.Container(content=ft.Text("Estado", color="white", weight="bold"), width=ancho_estado, alignment=ft.alignment.center)),
+        ]
+        
+        # 🚀 3. Agregamos el horizontal_margin=15 a ambas
+        self.tabla_ediciones_header = ft.DataTable(
+            bgcolor="#2D2D2D", border=ft.border.all(1, "white10"), border_radius=ft.border_radius.only(top_left=8, top_right=8), 
+            heading_row_color="#111111", heading_row_height=60, data_row_max_height=0, 
+            horizontal_margin=15, column_spacing=15, columns=columnas_ediciones, rows=[]
+        )
+        self.tabla_ediciones = ft.DataTable(
+            bgcolor="#2D2D2D", border=ft.border.all(1, "white10"), border_radius=ft.border_radius.only(bottom_left=8, bottom_right=8), 
+            heading_row_height=0, data_row_min_height=40, data_row_max_height=60, 
+            horizontal_margin=15, column_spacing=15, columns=columnas_ediciones, rows=[]
+        )
         # --- BUSCADOR DE EQUIPOS ---
         self.txt_buscar_equipo = ft.TextField(
             hint_text="🔍 Buscar equipo...", 
@@ -1249,15 +1275,54 @@ class SistemaIndependiente:
                                             ])
                                         ]),
                                         
-                                        # 2. MÓDULO TORNEOS
-                                        ft.Column(spacing=5, controls=[
-                                            ft.Row([ft.Text("Torneos", weight="bold", color="white", size=16), self.btn_nuevo_torneo_admin], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, width=280),
-                                            ft.Column(spacing=0, controls=[
-                                                # 🚀 AQUÍ LA MAGIA: Envolvemos el header en un Container de ancho estricto
-                                                ft.Container(content=self.tabla_torneos_header, width=280), 
-                                                ft.Container(height=280, width=280, content=ft.Column(scroll=ft.ScrollMode.AUTO, controls=[self.tabla_torneos]))
-                                            ])
-                                        ]),
+                                        # 2. MÓDULOS TORNEOS Y EDICIONES
+                                        ft.Row(
+                                            wrap=True,
+                                            alignment=ft.MainAxisAlignment.START,
+                                            vertical_alignment=ft.CrossAxisAlignment.START,
+                                            controls=[
+                                                # Columna Izquierda: Torneos
+                                                ft.Column(spacing=5, controls=[
+                                                    ft.Row([ft.Text("Torneos", weight="bold", color="white", size=16), self.btn_nuevo_torneo_admin], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, width=320),
+                                                    ft.Column(spacing=0, controls=[
+                                                        # 🚀 Envolvemos el encabezado en un Container con width=320
+                                                        ft.Container(content=self.tabla_torneos_header, width=320), 
+                                                        ft.Container(height=240, width=320, content=ft.Column(scroll=ft.ScrollMode.AUTO, controls=[self.tabla_torneos]))
+                                                    ])
+                                                ]),
+                                                
+                                                # Columna Derecha: Ediciones
+                                                ft.Column(spacing=5, controls=[
+                                                    ft.Row([ft.Text("Ediciones", weight="bold", color="white", size=16), self.btn_nueva_edicion], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, width=500),
+                                                    
+                                                    # 🚀 CONTENEDOR VIEWPORT: Límite visual de 500px (aprox 4 columnas visibles)
+                                                    ft.Container(
+                                                        width=500,
+                                                        content=ft.Row(
+                                                            scroll=ft.ScrollMode.AUTO, # 🚀 BARRA HORIZONTAL (No siempre visible)
+                                                            controls=[
+                                                                ft.Column(
+                                                                    spacing=0, 
+                                                                    controls=[
+                                                                        # Quitamos la restricción de ancho al encabezado para que crezca libre si agregas columnas
+                                                                        ft.Container(content=self.tabla_ediciones_header), 
+                                                                        
+                                                                        # Cuerpo de la tabla
+                                                                        ft.Container(
+                                                                            height=240, 
+                                                                            content=ft.Column(
+                                                                                scroll=ft.ScrollMode.AUTO, # 🚀 BARRA VERTICAL (No siempre visible)
+                                                                                controls=[self.tabla_ediciones]
+                                                                            )
+                                                                        )
+                                                                    ]
+                                                                )
+                                                            ]
+                                                        )
+                                                    )
+                                                ])
+                                            ]
+                                        ),
                                         # 3. MÓDULO PARTIDOS
                                         ft.Column(spacing=5, controls=[
                                             ft.Row([ft.Text("Partidos", weight="bold", color="white", size=16), self.btn_nuevo_partido_admin], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, width=730),
@@ -3809,6 +3874,9 @@ class SistemaIndependiente:
                     ))
                 self.tabla_torneos.rows = filas_torneos
                 
+                # 🚀 NUEVO: CARGAR EDICIONES
+                self._cargar_ediciones_admin()
+                
                 # --- NUEVO: PARTIDOS PARA ADMIN ---
                 # Reutilizamos tu función de BD para obtener todos los partidos ordenados por fecha
                 datos_partidos_admin = bd.obtener_partidos(self.usuario_actual, filtro_tiempo='todos')
@@ -3828,7 +3896,7 @@ class SistemaIndependiente:
                     res_txt = f"{gc}-{gr}" if gc is not None else "-"
                     
                     # Al hacer clic, abrimos el modal para editar pasándole el ID
-                    evt_edit = lambda e, id_p=p_id: self._abrir_modal_partido_admin(e, id_partido=id_p)
+                    evt_edit = lambda e, id_p=p_id: self._abrir_modal_partido_admin(e, partido_id=id_p)
 
                     # Destacar fila si la estábamos editando
                     color_row = "#8B0000" if p_id == getattr(self, 'partido_admin_editando_id', None) else None
@@ -3875,6 +3943,151 @@ class SistemaIndependiente:
                 
             self.page.update()
 
+    # -----------------------------------------------------
+    # LÓGICA DE EDICIONES (ADMINISTRACIÓN)
+    # -----------------------------------------------------
+    def _cargar_ediciones_admin(self):
+        """Llena la tabla de ediciones trayendo datos frescos."""
+        try:
+            bd = BaseDeDatos()
+            ediciones = bd.obtener_ediciones_admin()
+            self.tabla_ediciones.rows.clear()
+            for ed in ediciones:
+                estado_texto = "Finalizado" if ed[3] else "En curso"
+                color_estado = "red" if ed[3] else "green"
+                
+                # 🚀 Evento universal para abrir el modal al hacer clic en cualquier parte de la fila
+                evt_edit = lambda e, ed_id=ed[0], c_id=ed[4], a_id=ed[5], fin=ed[3]: self._abrir_modal_edicion(e, ed_id, c_id, a_id, fin)
+                
+                self.tabla_ediciones.rows.append(
+                    ft.DataRow(
+                        cells=[
+                            # 🚀 Sincronizamos con los mismos anchos exactos: 260, 80 y 100
+                            ft.DataCell(ft.Container(content=ft.Text(ed[1], size=12, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS), width=260, alignment=ft.alignment.center_left, on_click=evt_edit)),
+                            ft.DataCell(ft.Container(content=ft.Text(str(ed[2]), size=12), width=80, alignment=ft.alignment.center, on_click=evt_edit)),
+                            ft.DataCell(ft.Container(content=ft.Text(estado_texto, color=color_estado, weight="bold", size=12), width=100, alignment=ft.alignment.center, on_click=evt_edit))
+                        ],
+                        data=ed[0] # Guardamos el ID en la memoria de la fila
+                    )
+                )
+            self.tabla_ediciones.update()
+        except Exception as ex:
+            print(f"Error cargando ediciones: {ex}")
+
+    def _abrir_modal_edicion(self, e, edicion_id=None, camp_id=None, anio_id=None, finalizado=False):
+        """Abre el modal de edición con doble capa de seguridad asíncrona."""
+        
+        # 1. CARGA INICIAL: Para traer la lista de torneos y años
+        loading_content = ft.Column(
+            controls=[
+                ft.Text("Cargando datos...", size=16, weight="bold", color="white"),
+                ft.Container(height=10),
+                ft.ProgressBar(width=200, color="red", bgcolor="#222222")
+            ],
+            height=100, width=300, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
+        )
+        dlg_carga_inicial = ft.AlertDialog(content=loading_content, modal=True)
+        self.page.open(dlg_carga_inicial)
+
+        def _tarea():
+            time.sleep(0.2) 
+            try:
+                bd = BaseDeDatos()
+                torneos = bd.obtener_campeonatos_completo()
+                anios = bd.obtener_anios_admin()
+                
+                self._limpiar_memoria_dialogo(dlg_carga_inicial)
+                
+                dd_camp = ft.Dropdown(label="Selecciona un Torneo", width=350, options=[ft.dropdown.Option(key=str(t[0]), text=t[1]) for t in torneos])
+                dd_anio = ft.Dropdown(label="Selecciona el Año", width=350, options=[ft.dropdown.Option(key=str(a[0]), text=str(a[1])) for a in anios])
+                sw_fin = ft.Switch(label="¿Torneo Finalizado?", value=bool(finalizado), active_color="red", inactive_thumb_color="green")
+                
+                if camp_id: dd_camp.value = str(camp_id)
+                if anio_id: dd_anio.value = str(anio_id)
+                
+                def _guardar(e2):
+                    if not dd_camp.value or not dd_anio.value:
+                        GestorMensajes.mostrar(self.page, "Aviso", "Debes seleccionar un torneo y un año para continuar.", "warning")
+                        return
+
+                    # 🚀 NUEVO: Diálogo de carga específico para la operación de guardado
+                    dlg_guardando = ft.AlertDialog(
+                        content=ft.Row([ft.ProgressRing(color="red"), ft.Container(content=ft.Text("Procesando solicitud...", color="white"), padding=20)], tight=True),
+                        modal=True
+                    )
+                    self.page.open(dlg_guardando)
+
+                    def _hilo_guardar():
+                        try:
+                            time.sleep(0.5) # Breve pausa para efecto visual
+                            if edicion_id:
+                                bd.editar_edicion_admin(edicion_id, int(dd_camp.value), int(dd_anio.value), sw_fin.value)
+                                msg_exito = "La edición ha sido actualizada correctamente."
+                            else:
+                                bd.agregar_edicion_admin(int(dd_camp.value), int(dd_anio.value), sw_fin.value)
+                                msg_exito = "Nueva edición registrada correctamente."
+                            
+                            # ✅ ÉXITO: Cerramos ambos diálogos y refrescamos la tabla
+                            self._limpiar_memoria_dialogo(dlg_guardando)
+                            self._limpiar_memoria_dialogo(self.dlg_admin_edicion) 
+                            GestorMensajes.mostrar(self.page, "Éxito", msg_exito, "success")
+                            self._cargar_ediciones_admin() 
+                        except Exception as ex:
+                            # ❌ ERROR: Cerramos solo la carga, el usuario puede reintentar en el modal abierto
+                            self._limpiar_memoria_dialogo(dlg_guardando)
+                            GestorMensajes.mostrar(self.page, "Error", str(ex), "error")
+
+                    threading.Thread(target=_hilo_guardar, daemon=True).start()
+
+                def _eliminar_click(e2):
+                    self._limpiar_memoria_dialogo(self.dlg_admin_edicion)
+                    self._eliminar_edicion(e2, edicion_id)
+                    
+                btn_guardar = ft.ElevatedButton("Actualizar" if edicion_id else "Crear", on_click=_guardar, bgcolor="green", color="white")
+                btn_eliminar = ft.ElevatedButton("Borrar", on_click=_eliminar_click, bgcolor="red", color="white", icon=ft.Icons.DELETE_FOREVER)
+                
+                botones_accion = [ft.TextButton("Cancelar", on_click=lambda ev: self._limpiar_memoria_dialogo(self.dlg_admin_edicion))]
+                if edicion_id: botones_accion.append(btn_eliminar)
+                botones_accion.append(btn_guardar)
+                
+                self.dlg_admin_edicion = ft.AlertDialog(
+                    title=ft.Text("Editar Edición" if edicion_id else "Nueva Edición", weight="bold"),
+                    content=ft.Column([dd_camp, dd_anio, ft.Container(height=10), sw_fin], tight=True),
+                    actions=botones_accion,
+                    actions_alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                )
+                
+                self.page.open(self.dlg_admin_edicion)
+
+            except Exception as ex:
+                self._limpiar_memoria_dialogo(dlg_carga_inicial)
+                GestorMensajes.mostrar(self.page, "Error", f"Error al cargar datos: {ex}", "error")
+
+        threading.Thread(target=_tarea, daemon=True).start()
+    
+    def _eliminar_edicion(self, e, edicion_id):
+        """Maneja la eliminación de forma segura validando datos."""
+        def _confirmar(e2):
+            try:
+                bd = BaseDeDatos()
+                bd.eliminar_edicion_admin(edicion_id)
+                GestorMensajes.mostrar(self.page, "Éxito", "Edición eliminada correctamente.", "success")
+                self._limpiar_memoria_dialogo(dlg)
+                self._cargar_ediciones_admin() # Refrescamos la tabla
+            except Exception as ex:
+                self._limpiar_memoria_dialogo(dlg)
+                GestorMensajes.mostrar(self.page, "Error de Seguridad", str(ex), "error")
+                
+        dlg = ft.AlertDialog(
+            title=ft.Text("Confirmar Eliminación"),
+            content=ft.Text("¿Estás seguro que deseas eliminar esta edición? Si tiene partidos asignados, el sistema bloqueará la operación por seguridad."),
+            actions=[
+                ft.TextButton("Cancelar", on_click=lambda ev: self._limpiar_memoria_dialogo(dlg)),
+                ft.ElevatedButton("Sí, Eliminar", on_click=_confirmar, bgcolor="red", color="white")
+            ]
+        )
+        self.page.open(dlg)
+        
     def _abrir_modal_racha_record(self, e):
         """Abre la ventana modal con la Racha Récord."""
         
@@ -4398,104 +4611,129 @@ class SistemaIndependiente:
             self._limpiar_memoria_dialogo(self.dlg_modal_equipo)
             self._recargar_datos(actualizar_partidos=True, actualizar_copas=False)
 
-    def _abrir_modal_partido_admin(self, e, id_partido=None):
-        self.partido_admin_editando_id = id_partido
-
-        # 1. Crear controles del formulario
-        self.dd_torneo_admin = ft.Dropdown(label="Torneo", width=300, bgcolor="#2D2D2D", border_color="white24")
+    def _abrir_modal_partido_admin(self, e, partido_id=None, edicion_id=None, rival_id=None, condicion=None, fecha_str=None, goles_cai=None, goles_rival=None):
+        """Abre el formulario de partidos con carga asíncrona para evitar congelamientos."""
         
-        # --- NUEVO: Buscador de rivales ---
-        self.txt_filtro_rival_admin = ft.TextField(
-            label="🔍 Buscar Rival...", 
-            width=300, 
-            height=45, 
-            bgcolor="#1A1A1A", 
-            border_color="white24", 
-            on_change=self._filtrar_dropdown_rivales
+        # 1. ABRIR DIÁLOGO DE CARGA INMEDIATAMENTE
+        loading_content = ft.Column(
+            controls=[
+                ft.Text("Cargando formulario...", size=16, weight="bold", color="white"),
+                ft.Container(height=10),
+                ft.ProgressBar(width=200, color="red", bgcolor="#222222")
+            ],
+            height=100, width=300, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER
         )
-        self.dd_rival_admin = ft.Dropdown(label="Rival Seleccionado", width=300, bgcolor="#2D2D2D", border_color="white24")
-        # ----------------------------------
-        
-        self.dd_cond_admin = ft.Dropdown(label="Condición", width=300, bgcolor="#2D2D2D", border_color="white24", options=[
-            ft.dropdown.Option(key="1", text="Local"),
-            ft.dropdown.Option(key="-1", text="Visitante"),
-            ft.dropdown.Option(key="0", text="Neutral"),
-        ])
-        self.txt_fecha_admin = ft.TextField(label="Fecha (YYYY-MM-DD HH:MM)", width=300, bgcolor="#2D2D2D", border_color="white24", hint_text="Ej: 2026-03-24 20:30")
-        self.txt_gc_admin = ft.TextField(label="Goles CAI", width=140, bgcolor="#2D2D2D", border_color="white24", keyboard_type=ft.KeyboardType.NUMBER)
-        self.txt_gr_admin = ft.TextField(label="Goles Rival", width=140, bgcolor="#2D2D2D", border_color="white24", keyboard_type=ft.KeyboardType.NUMBER)
+        dlg_carga = ft.AlertDialog(content=loading_content, modal=True)
+        self.page.open(dlg_carga)
 
-        # 2. Rellenar listas desplegables desde la caché (Instántaneo)
-        torneos = getattr(self, 'cache_admin_ediciones', [])
-        rivales = getattr(self, 'cache_admin_rivales', [])
-
-        self.dd_torneo_admin.options = [ft.dropdown.Option(key=str(t[0]), text=f"{t[1]} {t[2]}") for t in torneos]
-        
-        # Guardamos una copia INTACTA de todos los rivales para que el filtro funcione
-        self.opciones_originales_rivales = [ft.dropdown.Option(key=str(r[0]), text=r[1]) for r in rivales]
-        self.dd_rival_admin.options = list(self.opciones_originales_rivales)
-
-        # 3. Inteligencia: Si estamos editando, autocompletar todo leyendo de la caché
-        if id_partido and hasattr(self, 'cache_partidos_admin_data'):
-            partido = next((p for p in self.cache_partidos_admin_data if p[0] == id_partido), None)
-            if partido:
-                rival_nombre = partido[1]
-                torneo_nombre = partido[3]
-
-                for opt in self.dd_rival_admin.options:
-                    if opt.text == rival_nombre: self.dd_rival_admin.value = opt.key
-
-                for opt in self.dd_torneo_admin.options:
-                    if opt.text == torneo_nombre: self.dd_torneo_admin.value = opt.key
-
-                self.dd_cond_admin.value = str(partido[12])
+        # 2. TAREA EN SEGUNDO PLANO
+        def _tarea():
+            time.sleep(0.1) # Pequeña pausa visual
+            try:
+                bd = BaseDeDatos()
+                ediciones = bd.obtener_ediciones()
+                rivales = bd.obtener_rivales_completo()
                 
-                # Transformamos la fecha a formato de escritura
-                self.txt_fecha_admin.value = str(partido[7]) if partido[7] else ""
+                # 3. CERRAR CARGA AL RECIBIR LOS DATOS
+                self._limpiar_memoria_dialogo(dlg_carga)
+        
+                # 🚀 4. FILTRO INTELIGENTE DE EDICIONES
+                opciones_edicion = []
+                for ed in ediciones:
+                    esta_finalizada = bool(ed[3])
+                    
+                    es_edicion_actual_del_partido = False
+                    if locals().get('edicion_id') and str(ed[0]) == str(edicion_id):
+                        es_edicion_actual_del_partido = True
+
+                    if not esta_finalizada or es_edicion_actual_del_partido:
+                        texto_opcion = f"{ed[1]} {ed[2]}" 
+                        opciones_edicion.append(ft.dropdown.Option(key=str(ed[0]), text=texto_opcion))
+
+                # 🚀 Redefinimos los anchos para que encastren perfecto como bloques de Tetris
+                self.dd_edicion = ft.Dropdown(label="Edición", width=340, options=opciones_edicion)
                 
-                self.txt_gc_admin.value = str(partido[4]) if partido[4] is not None else ""
-                self.txt_gr_admin.value = str(partido[5]) if partido[5] is not None else ""
+                # --- Buscador de rivales ---
+                self.txt_filtro_rival_admin = ft.TextField(
+                    label="🔍 Buscar Rival...", width=340, height=45, bgcolor="#1A1A1A", border_color="white24", on_change=self._filtrar_dropdown_rivales
+                )
+                self.dd_rival_admin = ft.Dropdown(label="Rival Seleccionado", width=340, bgcolor="#2D2D2D", border_color="white24")
+                
+                self.dd_cond_admin = ft.Dropdown(label="Condición", width=160, bgcolor="#2D2D2D", border_color="white24", options=[
+                    ft.dropdown.Option(key="1", text="Local"),
+                    ft.dropdown.Option(key="-1", text="Visitante"),
+                    ft.dropdown.Option(key="0", text="Neutral"),
+                ])
+                self.txt_fecha_admin = ft.TextField(label="Fecha (YYYY-MM-DD HH:MM)", width=230, bgcolor="#2D2D2D", border_color="white24", hint_text="Ej: 2026-03-24 20:30")
+                self.txt_gc_admin = ft.TextField(label="Goles CAI", width=120, bgcolor="#2D2D2D", border_color="white24", keyboard_type=ft.KeyboardType.NUMBER)
+                self.txt_gr_admin = ft.TextField(label="Goles Rival", width=120, bgcolor="#2D2D2D", border_color="white24", keyboard_type=ft.KeyboardType.NUMBER)
 
-        # 4. Construir ventana flotante
-        btn_guardar = ft.ElevatedButton("Actualizar" if id_partido else "Crear", bgcolor="green", color="white", on_click=self._guardar_partido_admin)
-        btn_eliminar = ft.ElevatedButton("Borrar", bgcolor="red", color="white", icon=ft.Icons.DELETE_FOREVER, on_click=self._eliminar_partido_admin)
+                # 5. Rellenar listas desplegables desde la caché (Instantáneo)
+                rivales = getattr(self, 'cache_admin_rivales', [])
+                self.opciones_originales_rivales = [ft.dropdown.Option(key=str(r[0]), text=r[1]) for r in rivales]
+                self.dd_rival_admin.options = list(self.opciones_originales_rivales)
 
-        botones_accion = [ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_admin_partido))]
-        if id_partido: botones_accion.append(btn_eliminar)
-        botones_accion.append(btn_guardar)
+                # 6. Inteligencia: Si estamos editando, autocompletar todo leyendo de la caché
+                if partido_id and hasattr(self, 'cache_partidos_admin_data'):
+                    partido = next((p for p in self.cache_partidos_admin_data if p[0] == partido_id), None)
+                    if partido:
+                        rival_nombre = partido[1]
+                        torneo_nombre = partido[3]
+                        for opt in self.dd_rival_admin.options:
+                            if opt.text == rival_nombre: self.dd_rival_admin.value = opt.key
+                        for opt in self.dd_edicion.options:
+                            if opt.text == torneo_nombre: self.dd_edicion.value = opt.key
+                        self.dd_cond_admin.value = str(partido[12])
+                        self.txt_fecha_admin.value = str(partido[7]) if partido[7] else ""
+                        self.txt_gc_admin.value = str(partido[4]) if partido[4] is not None else ""
+                        self.txt_gr_admin.value = str(partido[5]) if partido[5] is not None else ""
 
-        # --- FORMULARIO CON SCROLL AUTOMÁTICO ---
-        # Envolvemos todo en un contenedor de tamaño fijo.
-        # La Fila (Row) nos da scroll horizontal y la Columna (Column) nos da scroll vertical.
-        contenido_formulario = ft.Container(
-            width=320,
-            content=ft.Column(
-                tight=True, # 🚀 LA MAGIA: Hace que la columna mida exactamente lo que miden sus controles
-                scroll=ft.ScrollMode.AUTO, # Solo aparece barra si la ventana completa es muy pequeña
-                spacing=10,
-                controls=[
-                    self.dd_torneo_admin, 
-                    self.txt_filtro_rival_admin, 
-                    self.dd_rival_admin, 
-                    self.dd_cond_admin, 
-                    self.txt_fecha_admin,
-                    ft.Row([self.txt_gc_admin, self.txt_gr_admin], width=300, alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
-                ]
-            )
-        )
+                # 7. Construir ventana flotante
+                btn_guardar = ft.ElevatedButton("Actualizar" if partido_id else "Crear", bgcolor="green", color="white", on_click=self._guardar_partido_admin)
+                btn_eliminar = ft.ElevatedButton("Borrar", bgcolor="red", color="white", icon=ft.Icons.DELETE_FOREVER, on_click=self._eliminar_partido_admin)
 
-        self.dlg_admin_partido = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Editar Partido" if id_partido else "Nuevo Partido", weight="bold"),
-            content=contenido_formulario, # Aquí metemos el formulario scrolleable
-            actions=botones_accion,       # Aquí los botones que quedan fijos afuera
-            actions_alignment=ft.MainAxisAlignment.SPACE_BETWEEN
-        )
-        self.page.open(self.dlg_admin_partido)
+                botones_accion = [ft.TextButton("Cancelar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_admin_partido))]
+                if partido_id: botones_accion.append(btn_eliminar)
+                botones_accion.append(btn_guardar)
+
+                # --- FORMULARIO CON SCROLL AUTOMÁTICO Y WRAP ---
+                contenido_formulario = ft.Container(
+                    width=750, # 🚀 1. Ensanchamos el contenedor principal para que los elementos entren lado a lado
+                    content=ft.Row( # 🚀 2. Cambiamos Column por Row
+                        wrap=True,  # 🚀 3. LA MAGIA: Flujo de izquierda a derecha y salto automático de línea
+                        spacing=15,
+                        run_spacing=15, # Espacio vertical entre las filas que se generen
+                        scroll=ft.ScrollMode.AUTO, 
+                        controls=[
+                            self.dd_edicion, 
+                            self.txt_filtro_rival_admin, 
+                            self.dd_rival_admin, 
+                            self.dd_cond_admin, 
+                            self.txt_fecha_admin,
+                            self.txt_gc_admin, 
+                            self.txt_gr_admin # 🚀 4. Todos sueltos al mismo nivel, el wrap se encarga de acomodarlos
+                        ]
+                    )
+                )
+
+                self.dlg_admin_partido = ft.AlertDialog(
+                    modal=True,
+                    title=ft.Text("Editar Partido" if partido_id else "Nuevo Partido", weight="bold"),
+                    content=contenido_formulario, 
+                    actions=botones_accion,
+                    actions_alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                )
+                self.page.open(self.dlg_admin_partido)
+            except Exception as ex:
+                self._limpiar_memoria_dialogo(dlg_carga)
+                GestorMensajes.mostrar(self.page, "Error", f"Fallo al cargar la base de datos: {ex}", "error")
+
+        # 4. LANZAR EL HILO
+        threading.Thread(target=_tarea, daemon=True).start()
 
     def _guardar_partido_admin(self, e):
         """Valida y guarda los datos (crear o actualizar)."""
-        torneo_id = self.dd_torneo_admin.value
+        torneo_id = self.dd_edicion.value
         rival_id = self.dd_rival_admin.value
         condicion = self.dd_cond_admin.value
         fecha_str = self.txt_fecha_admin.value.strip()
@@ -5897,13 +6135,20 @@ class SistemaIndependiente:
 
         threading.Thread(target=_tarea, daemon=True).start()
 
-def main(page: ft.Page):
-    # Aquí adentro está todo tu código de configuración inicial de la página
-    app = SistemaIndependiente(page)
-
 if __name__ == "__main__":
 
     def main(page: ft.Page):
+        # 🚀 Tarea en segundo plano para registrar el año sin congelar la pantalla de inicio
+        def _verificar_anio_inicio():
+            try:
+                bd = BaseDeDatos()
+                bd.registrar_anio_actual()
+            except:
+                pass # Si falla por falta de internet al arrancar, lo ignoramos silenciosamente
+                
+        threading.Thread(target=_verificar_anio_inicio, daemon=True).start()
+        
+        # Iniciamos la interfaz visual de la app
         app = SistemaIndependiente(page)
     
     puerto_nube = os.getenv("PORT")
