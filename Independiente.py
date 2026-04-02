@@ -935,7 +935,14 @@ class SistemaIndependiente:
         
         self.btn_nuevo_rival_admin = ft.ElevatedButton("Nuevo Rival", icon=ft.Icons.ADD, bgcolor="green", color="white", on_click=self._abrir_modal_rival_admin)
         self.btn_nuevo_torneo_admin = ft.ElevatedButton("Nuevo Torneo", icon=ft.Icons.ADD, bgcolor="green", color="white", on_click=self._abrir_modal_torneo_admin)
-        self.btn_nueva_edicion = ft.ElevatedButton("Nueva Edición", icon=ft.Icons.ADD, bgcolor="#333333", color="white", height=30, style=ft.ButtonStyle(padding=10, text_style=ft.TextStyle(size=12)), on_click=self._abrir_modal_edicion)
+        # 🚀 CORRECCIÓN DE ESTILO PARA EL BOTÓN
+        self.btn_nueva_edicion = ft.ElevatedButton(
+            "Nueva Edición", 
+            icon=ft.Icons.ADD,
+            bgcolor="green",
+            color="white",
+            on_click=self._abrir_modal_edicion
+        )
         # 🚀 1. MATEMÁTICA EXACTA PARA 500px:
         # Anchos de columnas (260 + 80 + 100 = 440px)
         # Márgenes (15izq + 15der = 30px) + Espacios entre columnas (15 + 15 = 30px)
@@ -3910,7 +3917,12 @@ class SistemaIndependiente:
                             ft.DataCell(ft.Container(content=ft.Text(res_txt, color="cyan", weight="bold"), width=85, alignment=ft.alignment.center_left, on_click=evt_edit)),
                         ],
                         data=p_id,
-                        color=color_row
+                        # 🚀 FORMA CORRECTA EN FLET: Usamos un diccionario de estados
+                        color={
+                            ft.ControlState.HOVERED: ft.Colors.TRANSPARENT,
+                            ft.ControlState.PRESSED: ft.Colors.TRANSPARENT,
+                            ft.ControlState.DEFAULT: color_row if color_row else ft.Colors.TRANSPARENT
+                        }
                     ))
                 self.tabla_partidos_admin.rows = filas_part_admin
                 # 🚀 GUARDAMOS LA COPIA ORIGINAL Y MANTENEMOS EL FILTRO ACTIVO
@@ -4614,6 +4626,9 @@ class SistemaIndependiente:
     def _abrir_modal_partido_admin(self, e, partido_id=None, edicion_id=None, rival_id=None, condicion=None, fecha_str=None, goles_cai=None, goles_rival=None):
         """Abre el formulario de partidos con carga asíncrona para evitar congelamientos."""
         
+        # 🚀 LA SOLUCIÓN: Guardamos el ID en la memoria de la clase
+        self.partido_admin_editando_id = partido_id 
+        
         # 1. ABRIR DIÁLOGO DE CARGA INMEDIATAMENTE
         loading_content = ft.Column(
             controls=[
@@ -4641,7 +4656,6 @@ class SistemaIndependiente:
                 opciones_edicion = []
                 for ed in ediciones:
                     esta_finalizada = bool(ed[3])
-                    
                     es_edicion_actual_del_partido = False
                     if locals().get('edicion_id') and str(ed[0]) == str(edicion_id):
                         es_edicion_actual_del_partido = True
@@ -4650,28 +4664,71 @@ class SistemaIndependiente:
                         texto_opcion = f"{ed[1]} {ed[2]}" 
                         opciones_edicion.append(ft.dropdown.Option(key=str(ed[0]), text=texto_opcion))
 
-                # 🚀 Redefinimos los anchos para que encastren perfecto como bloques de Tetris
-                self.dd_edicion = ft.Dropdown(label="Edición", width=340, options=opciones_edicion)
-                
-                # --- Buscador de rivales ---
-                self.txt_filtro_rival_admin = ft.TextField(
-                    label="🔍 Buscar Rival...", width=340, height=45, bgcolor="#1A1A1A", border_color="white24", on_change=self._filtrar_dropdown_rivales
-                )
-                self.dd_rival_admin = ft.Dropdown(label="Rival Seleccionado", width=340, bgcolor="#2D2D2D", border_color="white24")
-                
-                self.dd_cond_admin = ft.Dropdown(label="Condición", width=160, bgcolor="#2D2D2D", border_color="white24", options=[
-                    ft.dropdown.Option(key="1", text="Local"),
-                    ft.dropdown.Option(key="-1", text="Visitante"),
-                    ft.dropdown.Option(key="0", text="Neutral"),
-                ])
-                self.txt_fecha_admin = ft.TextField(label="Fecha (YYYY-MM-DD HH:MM)", width=230, bgcolor="#2D2D2D", border_color="white24", hint_text="Ej: 2026-03-24 20:30")
-                self.txt_gc_admin = ft.TextField(label="Goles CAI", width=120, bgcolor="#2D2D2D", border_color="white24", keyboard_type=ft.KeyboardType.NUMBER)
-                self.txt_gr_admin = ft.TextField(label="Goles Rival", width=120, bgcolor="#2D2D2D", border_color="white24", keyboard_type=ft.KeyboardType.NUMBER)
+                if len(opciones_edicion) == 0:
+                    opciones_edicion.append(ft.dropdown.Option(key="0", text="Sin torneos activos"))
 
-                # 5. Rellenar listas desplegables desde la caché (Instantáneo)
+                # 🚀 5. PRE-CARGAMOS RIVALES
                 rivales = getattr(self, 'cache_admin_rivales', [])
                 self.opciones_originales_rivales = [ft.dropdown.Option(key=str(r[0]), text=r[1]) for r in rivales]
-                self.dd_rival_admin.options = list(self.opciones_originales_rivales)
+
+                # 🚀 1. CÁLCULO ESTRICTO CORREGIDO (11px por letra)
+                ancho_pantalla = self.page.width if self.page.width else 600
+                ancho_max_permitido = ancho_pantalla - 60 # Tope máximo para celular
+                
+                # Buscamos quién tiene el texto más largo (Edición o Rival)
+                len_max_edicion = max([len(opt.text) for opt in opciones_edicion]) if opciones_edicion else 20
+                len_max_rival = max([len(opt.text) for opt in self.opciones_originales_rivales]) if self.opciones_originales_rivales else 20
+                
+                texto_mas_largo = max(len_max_edicion, len_max_rival)
+                
+                # 11px por letra + 80px (bordes y flechita) = Ancho Perfecto
+                ancho_ideal = (texto_mas_largo * 11) + 80
+                
+                # La medida maestra: será el ancho ideal, pero si supera la pantalla, se frena.
+                medida_maestra = min(ancho_ideal, ancho_max_permitido)
+
+                # Anchos fijos para los campos de abajo
+                ancho_condicion = min(160, medida_maestra)
+                ancho_fecha = min(250, medida_maestra)
+                ancho_goles = 120 # Fijo para que el Wrap detecte si chocan
+
+                # 🚀 2. CREAMOS LOS CAMPOS UNIFORMES
+                self.dd_edicion = ft.Dropdown(
+                    label="Edición", width=medida_maestra, bgcolor="#2D2D2D", border_color="white24", options=opciones_edicion
+                )
+                if len(opciones_edicion) == 1 and opciones_edicion[0].key == "0":
+                    self.dd_edicion.value = "0"
+                
+                self.txt_filtro_rival_admin = ft.TextField(
+                    label="🔍 Buscar Rival...", width=medida_maestra, height=45, bgcolor="#1A1A1A", border_color="white24", on_change=self._filtrar_dropdown_rivales
+                )
+                
+                self.dd_rival_admin = ft.Dropdown(
+                    label="Rival Seleccionado", width=medida_maestra, bgcolor="#2D2D2D", border_color="white24", options=list(self.opciones_originales_rivales)
+                )
+                
+                self.dd_cond_admin = ft.Dropdown(
+                    label="Condición", width=ancho_condicion, bgcolor="#2D2D2D", border_color="white24", options=[
+                        ft.dropdown.Option(key="1", text="Local"),
+                        ft.dropdown.Option(key="-1", text="Visitante"),
+                        ft.dropdown.Option(key="0", text="Neutral"),
+                    ]
+                )
+                
+                self.txt_fecha_admin = ft.TextField(
+                    label="Fecha y Hora (HH:MM DD-MM-AAAA)", 
+                    width=ancho_fecha, 
+                    bgcolor="#2D2D2D", 
+                    border_color="white24", 
+                    hint_text="Ej: 20:30 24-03-2026"
+                )
+                
+                self.txt_gc_admin = ft.TextField(
+                    label="Goles CAI", width=ancho_goles, bgcolor="#2D2D2D", border_color="white24", keyboard_type=ft.KeyboardType.NUMBER
+                )
+                self.txt_gr_admin = ft.TextField(
+                    label="Goles Rival", width=ancho_goles, bgcolor="#2D2D2D", border_color="white24", keyboard_type=ft.KeyboardType.NUMBER
+                )
 
                 # 6. Inteligencia: Si estamos editando, autocompletar todo leyendo de la caché
                 if partido_id and hasattr(self, 'cache_partidos_admin_data'):
@@ -4684,7 +4741,28 @@ class SistemaIndependiente:
                         for opt in self.dd_edicion.options:
                             if opt.text == torneo_nombre: self.dd_edicion.value = opt.key
                         self.dd_cond_admin.value = str(partido[12])
-                        self.txt_fecha_admin.value = str(partido[7]) if partido[7] else ""
+                        
+                        # 🚀 INVERSIÓN DE FECHA PARA LECTURA HUMANA
+                        if partido[7]:
+                            fecha_bd = partido[7]
+                            if isinstance(fecha_bd, str):
+                                try:
+                                    # Convertimos de texto SQL a objeto
+                                    fecha_dt = datetime.strptime(fecha_bd, "%Y-%m-%d %H:%M:%S")
+                                    self.txt_fecha_admin.value = fecha_dt.strftime("%H:%M %d-%m-%Y")
+                                except ValueError:
+                                    # Fallback si viene sin segundos
+                                    try:
+                                        fecha_dt = datetime.strptime(fecha_bd, "%Y-%m-%d %H:%M")
+                                        self.txt_fecha_admin.value = fecha_dt.strftime("%H:%M %d-%m-%Y")
+                                    except:
+                                        self.txt_fecha_admin.value = fecha_bd
+                            else:
+                                # Si ya es un objeto datetime
+                                self.txt_fecha_admin.value = fecha_bd.strftime("%H:%M %d-%m-%Y")
+                        else:
+                            self.txt_fecha_admin.value = ""
+
                         self.txt_gc_admin.value = str(partido[4]) if partido[4] is not None else ""
                         self.txt_gr_admin.value = str(partido[5]) if partido[5] is not None else ""
 
@@ -4696,22 +4774,38 @@ class SistemaIndependiente:
                 if partido_id: botones_accion.append(btn_eliminar)
                 botones_accion.append(btn_guardar)
 
-                # --- FORMULARIO CON SCROLL AUTOMÁTICO Y WRAP ---
+                fila_botones = ft.Row(
+                    controls=botones_accion,
+                    wrap=True,           
+                    spacing=10,          
+                    run_spacing=10,      
+                    alignment=ft.MainAxisAlignment.END 
+                )
+
+                # 🚀 3. EL CONTENEDOR TOMA LA MEDIDA MAESTRA EXACTA
                 contenido_formulario = ft.Container(
-                    width=750, # 🚀 1. Ensanchamos el contenedor principal para que los elementos entren lado a lado
-                    content=ft.Row( # 🚀 2. Cambiamos Column por Row
-                        wrap=True,  # 🚀 3. LA MAGIA: Flujo de izquierda a derecha y salto automático de línea
+                    width=medida_maestra,
+                    content=ft.Column( 
                         spacing=15,
-                        run_spacing=15, # Espacio vertical entre las filas que se generen
                         scroll=ft.ScrollMode.AUTO, 
                         controls=[
+                            # 🚀 LA SOLUCIÓN: Un contenedor vacío de 10px de alto. 
+                            # Al estar adentro del scroll, obliga a que empiece más abajo.
+                            ft.Container(height=10), 
+                            
                             self.dd_edicion, 
                             self.txt_filtro_rival_admin, 
                             self.dd_rival_admin, 
                             self.dd_cond_admin, 
                             self.txt_fecha_admin,
-                            self.txt_gc_admin, 
-                            self.txt_gr_admin # 🚀 4. Todos sueltos al mismo nivel, el wrap se encarga de acomodarlos
+                            ft.Row(
+                                controls=[self.txt_gc_admin, self.txt_gr_admin],
+                                wrap=True,
+                                spacing=15,
+                                run_spacing=15
+                            ),
+                            # Le damos un poquito de aire abajo también por las dudas
+                            ft.Container(height=10) 
                         ]
                     )
                 )
@@ -4720,8 +4814,8 @@ class SistemaIndependiente:
                     modal=True,
                     title=ft.Text("Editar Partido" if partido_id else "Nuevo Partido", weight="bold"),
                     content=contenido_formulario, 
-                    actions=botones_accion,
-                    actions_alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                    actions=[fila_botones],
+                    actions_padding=ft.padding.only(left=20, right=20, bottom=20)
                 )
                 self.page.open(self.dlg_admin_partido)
             except Exception as ex:
@@ -4746,16 +4840,17 @@ class SistemaIndependiente:
 
         # --- TRADUCTOR INTELIGENTE DE FECHAS ---
         try:
-            if "/" in fecha_str:
-                # Formato Argentino: DD/MM/YYYY HH:MM
-                fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y %H:%M")
-            else:
-                # Formato SQL: YYYY-MM-DD HH:MM
-                fecha_obj = datetime.strptime(fecha_str, "%Y-%m-%d %H:%M")
-                
+            # Reemplazamos las barras '/' por guiones '-' de forma invisible 
+            # por si el usuario se confunde y tipea barras por costumbre
+            fecha_str_limpia = fecha_str.replace("/", "-")
+            
+            # Leemos tu formato: HH:MM DD-MM-YYYY
+            fecha_obj = datetime.strptime(fecha_str_limpia, "%H:%M %d-%m-%Y")
+            
+            # Lo traducimos al formato que la base de datos SQL exige (YYYY-MM-DD HH:MM:SS)
             fecha_sql = fecha_obj.strftime("%Y-%m-%d %H:%M:%S")
         except ValueError:
-            GestorMensajes.mostrar(self.page, "Error", "La fecha debe ser DD/MM/YYYY HH:MM o YYYY-MM-DD HH:MM", "error")
+            GestorMensajes.mostrar(self.page, "Error", "La fecha debe tener el formato exacto: HH:MM DD-MM-AAAA\nEjemplo: 20:30 24-03-2026", "error")
             return
         # -----------------------------------------------
 
