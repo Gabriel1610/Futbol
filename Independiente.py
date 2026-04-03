@@ -4673,16 +4673,14 @@ class SistemaIndependiente:
 
                 # 🚀 1. CÁLCULO ESTRICTO CORREGIDO (11px por letra)
                 ancho_pantalla = self.page.width if self.page.width else 600
-                ancho_max_permitido = ancho_pantalla - 60 # Tope máximo para celular
-                
+                ancho_max_permitido = ancho_pantalla - 100 # Tope máximo para celular
                 # Buscamos quién tiene el texto más largo (Edición o Rival)
                 len_max_edicion = max([len(opt.text) for opt in opciones_edicion]) if opciones_edicion else 20
                 len_max_rival = max([len(opt.text) for opt in self.opciones_originales_rivales]) if self.opciones_originales_rivales else 20
                 
                 texto_mas_largo = max(len_max_edicion, len_max_rival)
                 
-                # 11px por letra + 80px (bordes y flechita) = Ancho Perfecto
-                ancho_ideal = (texto_mas_largo * 11) + 80
+                ancho_ideal = texto_mas_largo * 9
                 
                 # La medida maestra: será el ancho ideal, pero si supera la pantalla, se frena.
                 medida_maestra = min(ancho_ideal, ancho_max_permitido)
@@ -4732,34 +4730,41 @@ class SistemaIndependiente:
 
                 # 6. Inteligencia: Si estamos editando, autocompletar todo leyendo de la caché
                 if partido_id and hasattr(self, 'cache_partidos_admin_data'):
+                    # Buscamos los datos del partido en la memoria (caché)
                     partido = next((p for p in self.cache_partidos_admin_data if p[0] == partido_id), None)
                     if partido:
+                        # Rellenamos rival y edición
                         rival_nombre = partido[1]
                         torneo_nombre = partido[3]
                         for opt in self.dd_rival_admin.options:
                             if opt.text == rival_nombre: self.dd_rival_admin.value = opt.key
                         for opt in self.dd_edicion.options:
                             if opt.text == torneo_nombre: self.dd_edicion.value = opt.key
-                        self.dd_cond_admin.value = str(partido[12])
                         
-                        # 🚀 INVERSIÓN DE FECHA PARA LECTURA HUMANA
+                        self.dd_cond_admin.value = str(partido[12])
+
+                        # 🚀 CARGA DE FECHA EN FORMATO HH:MM DD-MM-AAAA
                         if partido[7]:
-                            fecha_bd = partido[7]
-                            if isinstance(fecha_bd, str):
+                            fecha_db = str(partido[7])
+                            try:
+                                # Intento 1: Formato estándar SQL (YYYY-MM-DD HH:MM:SS)
+                                f_obj = datetime.strptime(fecha_db, "%Y-%m-%d %H:%M:%S")
+                                self.txt_fecha_admin.value = f_obj.strftime("%H:%M %d-%m-%Y")
+                            except:
                                 try:
-                                    # Convertimos de texto SQL a objeto
-                                    fecha_dt = datetime.strptime(fecha_bd, "%Y-%m-%d %H:%M:%S")
-                                    self.txt_fecha_admin.value = fecha_dt.strftime("%H:%M %d-%m-%Y")
-                                except ValueError:
-                                    # Fallback si viene sin segundos
+                                    # Intento 2: Formato SQL sin segundos (YYYY-MM-DD HH:MM)
+                                    f_obj = datetime.strptime(fecha_db, "%Y-%m-%d %H:%M")
+                                    self.txt_fecha_admin.value = f_obj.strftime("%H:%M %d-%m-%Y")
+                                except:
                                     try:
-                                        fecha_dt = datetime.strptime(fecha_bd, "%Y-%m-%d %H:%M")
-                                        self.txt_fecha_admin.value = fecha_dt.strftime("%H:%M %d-%m-%Y")
+                                        # 🚀 Intento 3 (LA SOLUCIÓN): Formato desde la UI (DD-MM-YYYY HH:MM)
+                                        # Normalizamos las barras a guiones por si la BD devolvió DD/MM/YYYY
+                                        fecha_limpia = fecha_db.replace("/", "-")
+                                        f_obj = datetime.strptime(fecha_limpia, "%d-%m-%Y %H:%M")
+                                        self.txt_fecha_admin.value = f_obj.strftime("%H:%M %d-%m-%Y")
                                     except:
-                                        self.txt_fecha_admin.value = fecha_bd
-                            else:
-                                # Si ya es un objeto datetime
-                                self.txt_fecha_admin.value = fecha_bd.strftime("%H:%M %d-%m-%Y")
+                                        # Si todo falla, cargamos lo que venga
+                                        self.txt_fecha_admin.value = fecha_db
                         else:
                             self.txt_fecha_admin.value = ""
 
