@@ -5,7 +5,7 @@ USE independiente;
 -- 1. Tabla de Campeonatos
 -- Se separa para no repetir nombre y anio en cada partido
 CREATE TABLE campeonatos (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id INT PRIMARY KEY,
     nombre VARCHAR(50) NOT NULL UNIQUE
 );
 
@@ -20,15 +20,11 @@ CREATE TABLE anios (
 
 -- 3. Tabla de Rivales (MOVIDA ARRIBA para que partidos pueda referenciarla)
 CREATE TABLE rivales (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id INT PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL UNIQUE,
-    otro_nombre VARCHAR(100) DEFAULT NULL UNIQUE,
     -- El nombre principal no puede estar en blanco (puros espacios)
     CONSTRAINT chk_rival_nombre_no_vacio
-        CHECK (TRIM(nombre) <> ''),
-    -- Si tiene un nombre alternativo, no puede ser exactamente igual al principal
-    CONSTRAINT chk_nombres_diferentes
-        CHECK (nombre <> otro_nombre)
+        CHECK (TRIM(nombre) <> '')
 );
 
 -- 4. Tabla de Usuarios
@@ -87,13 +83,13 @@ CREATE TABLE ediciones (
 
 -- 6. Tabla de Partidos
 CREATE TABLE partidos (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id INT PRIMARY KEY,
     rival_id INT NOT NULL,
     fecha_hora DATETIME NOT NULL,
+    condicion TINYINT NULL,
     
     -- LA MAGIA: Crea una columna invisible que extrae solo el día (YYYY-MM-DD) y no permite duplicados ya que Independiente no puede jugar más de 1 partido en una misma fecha
     fecha_unica DATE GENERATED ALWAYS AS (DATE(fecha_hora)) STORED UNIQUE,
-
     goles_independiente INT DEFAULT NULL, -- NULL porque al crearlo quizas no se jugo aun
     goles_rival INT DEFAULT NULL,         -- NULL porque al crearlo quizas no se jugo aun
     edicion_id INT NOT NULL,
@@ -107,7 +103,9 @@ CREATE TABLE partidos (
     CONSTRAINT chk_goles_independiente
         CHECK (goles_independiente >= 0),
     CONSTRAINT chk_goles_rival
-        CHECK (goles_rival >= 0)
+        CHECK (goles_rival >= 0),
+    CONSTRAINT chk_condicion
+        CHECK (condicion BETWEEN -1 AND 1)
 );
 
 -- 7. Tabla de Pronosticos (Resultados tirados por usuarios)

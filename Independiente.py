@@ -1480,9 +1480,14 @@ class SistemaIndependiente:
              
         self.loading_modal = ft.ProgressBar(width=200, color="amber", bgcolor="#222222")
         
-        # Ancho dinámico para que no se salga del celular
-        ancho_pantalla = self.page.width if self.page.width else 600
-        ancho_modal = min(650, ancho_pantalla - 20)
+        # Sumamos 120px extra para la nueva columna de "Perfil de Desvío"
+        ancho_ideal_tabla = 50 + ANCHO_COLUMNA_USUARIO + 150 + 150 + 120 + 120 + 100
+        
+        # 2. Obtenemos el ancho real de la pantalla del dispositivo (dejando 20px de margen)
+        ancho_pantalla = (self.page.width - 20) if self.page.width else 600
+        
+        # 3. El modal usará el ancho ideal, SALVO que la pantalla sea más chica
+        ancho_modal = min(ancho_ideal_tabla, ancho_pantalla)
         
         columna_content = ft.Column(
             controls=[
@@ -1507,6 +1512,28 @@ class SistemaIndependiente:
             for i, row in enumerate(datos, start=1):
                 user = row[0]
                 val = row[1]
+                desvio = row[2] # Extraemos el tercer elemento (el STDDEV)
+                
+                # --- NUEVA LÓGICA PARA EL DESVÍO CON CLASIFICACIÓN ---
+                if desvio is None or val is None:
+                    txt_desvio = "-"
+                    color_desvio = "white70"
+                    clasif_desvio = "-"
+                else:
+                    valor_desvio_float = float(desvio)
+                    txt_desvio = f"{valor_desvio_float:.2f}".replace('.', ',')
+                    
+                    # Definimos los rangos de consistencia (puedes ajustar los números)
+                    if valor_desvio_float < 0.8:
+                        clasif_desvio = "🎯 Consistente"
+                        color_desvio = "green"       # Verde para los predecibles
+                    elif valor_desvio_float < 1.5:
+                        clasif_desvio = "📊 Normal"
+                        color_desvio = "amber"       # Amarillo para los que varían normal
+                    else:
+                        clasif_desvio = "🎢 Inestable"
+                        color_desvio = "red"         # Rojo para los muy volátiles
+                # -----------------------------------------------------
                 
                 if val is None:
                     txt_val = "-"
@@ -1537,6 +1564,8 @@ class SistemaIndependiente:
                     ft.DataCell(ft.Container(content=ft.Text(user, weight="bold", color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                     ft.DataCell(ft.Container(content=ft.Text(txt_val, weight="bold", color=color_val), width=150, alignment=ft.alignment.center)),
                     ft.DataCell(ft.Container(content=ft.Text(clasificacion, weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
+                    ft.DataCell(ft.Container(content=ft.Text(txt_desvio, weight="bold", color=color_desvio), width=120, alignment=ft.alignment.center)),
+                    ft.DataCell(ft.Container(content=ft.Text(clasif_desvio, weight="bold", color=color_desvio), width=120, alignment=ft.alignment.center_left)),
                 ]))
             
             tabla = ft.DataTable(
@@ -1545,6 +1574,8 @@ class SistemaIndependiente:
                     ft.DataColumn(ft.Container(content=ft.Text("Usuario", weight="bold", color="white"), width=ANCHO_COLUMNA_USUARIO, alignment=ft.alignment.center_left)),
                     ft.DataColumn(ft.Container(content=ft.Text("Optimismo/\nPesimismo", text_align="center", weight="bold", color="white"), width=150, alignment=ft.alignment.center), numeric=True),
                     ft.DataColumn(ft.Container(content=ft.Text("Clasificación", weight="bold", color="white"), width=150, alignment=ft.alignment.center_left)),
+                    ft.DataColumn(ft.Container(content=ft.Text("Desvío est.", tooltip="Mide si el usuario es consistente o tiene cambios bruscos", weight="bold", color="white"), width=120, alignment=ft.alignment.center), numeric=True),
+                    ft.DataColumn(ft.Container(content=ft.Text("Perfil", tooltip="Nivel de volatilidad en las predicciones", weight="bold", color="white"), width=120, alignment=ft.alignment.center_left)),
                 ],
                 rows=filas,
                 heading_row_color="black",
@@ -1559,17 +1590,10 @@ class SistemaIndependiente:
             altura_tabla = 60 + (len(filas) * 50) + 30
             altura_contenedor = min(270, altura_tabla)
 
-            contenedor_tabla_nativa = ft.Row(
-                scroll=ft.ScrollMode.ALWAYS,
-                controls=[
-                    ft.Container(
-                        height=altura_contenedor,
-                        content=ft.Column(
-                            controls=[tabla],
-                            scroll=ft.ScrollMode.ALWAYS
-                        )
-                    )
-                ]
+            contenedor_tabla = ft.Row(
+                controls=[tabla],
+                scroll=ft.ScrollMode.ADAPTIVE,
+                expand=True
             )
             
             # Ajuste dinámico del modal sin dejar espacios vacíos
@@ -1579,7 +1603,7 @@ class SistemaIndependiente:
             columna_content.controls = [
                 ft.Text(titulo, size=18, weight="bold", color="white"),
                 ft.Container(height=10),
-                contenedor_tabla_nativa,
+                contenedor_tabla,
                 ft.Container(height=10),
                 ft.Row([ft.ElevatedButton("Cerrar", on_click=lambda e: self._limpiar_memoria_dialogo(self.dlg_opt_pes))], alignment=ft.MainAxisAlignment.END)
             ]

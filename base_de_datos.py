@@ -38,7 +38,7 @@ class BaseDeDatos:
         # 2. Cargamos las variables de entorno desde el archivo .env oculto (si existe)
         ruta_env = os.path.join(carpeta_actual, ".env")
         if os.path.exists(ruta_env):
-            load_dotenv(dotenv_path=ruta_env)
+            load_dotenv(override=True)
 
         # 3. Leemos las variables (ahora buscará primero en el .env, y si no, en el sistema)
         db_user = os.getenv("DB_USER")
@@ -2081,7 +2081,8 @@ class BaseDeDatos:
             sql = f"""
             SELECT 
                 u.username,
-                stats.indice_promedio
+                stats.indice_promedio,
+                stats.desvio_estandar    -- NUEVO CAMPO A EXPORTAR
             FROM usuarios u
             LEFT JOIN (
                 SELECT 
@@ -2089,7 +2090,14 @@ class BaseDeDatos:
                     AVG(
                         (CAST(pr.pred_goles_independiente AS SIGNED) - CAST(pr.pred_goles_rival AS SIGNED)) - 
                         (CAST(p.goles_independiente AS SIGNED) - CAST(p.goles_rival AS SIGNED))
-                    ) as indice_promedio
+                    ) as indice_promedio,
+                    
+                    -- NUEVO CÁLCULO: Desvío Estándar
+                    STDDEV(
+                        (CAST(pr.pred_goles_independiente AS SIGNED) - CAST(pr.pred_goles_rival AS SIGNED)) - 
+                        (CAST(p.goles_independiente AS SIGNED) - CAST(p.goles_rival AS SIGNED))
+                    ) as desvio_estandar
+                    
                 FROM pronosticos pr
                 INNER JOIN (
                     -- Último pronóstico por partido
