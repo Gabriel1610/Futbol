@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import mysql.connector
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
 # Cargamos las variables del .env (las mismas que usas para Flet)
 load_dotenv(override=True)
@@ -20,15 +22,21 @@ def conectar_bd():
         ssl_ca="isrgrootx1.pem" # Tu certificado de TiDB
     )
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Responde cuando el usuario escribe /start"""
-    mensaje = (
-        "¡Hola! Bienvenido al Prode. 🔴\n"
-        "Para cargar tu pronóstico usa el comando:\n"
-        "/pronostico golesLocal-golesVisitante\n"
-        "Ejemplo: /pronostico 2-1"
-    )
-    await update.message.reply_text(mensaje)
+async def mostrar_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Responde a cualquier texto o /start mostrando el menú principal"""
+    
+    # 1. Definimos los botones (Es una lista dentro de otra lista, representando filas)
+    botones = [
+        ["1_ Cargar pronóstico"]
+    ]
+    
+    # 2. Creamos el teclado visual. resize_keyboard=True hace que no ocupe media pantalla
+    menu = ReplyKeyboardMarkup(botones, resize_keyboard=True)
+    
+    mensaje = "¡Hola! Bienvenido al Prode. 🔴\nPor favor, selecciona una opción abajo:"
+    
+    # 3. Enviamos el mensaje y le "adjuntamos" el menú
+    await update.message.reply_text(mensaje, reply_markup=menu)
 
 async def recibir_pronostico(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Procesa el comando /pronostico 2-1"""
@@ -72,7 +80,12 @@ if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
     
     # Le enseñamos qué comandos escuchar
-    app.add_handler(CommandHandler("start", start))
+    # Escucha el comando tradicional /start
+    app.add_handler(CommandHandler("start", mostrar_menu))
+    # ¡La magia! Escucha CUALQUIER texto normal, excluyendo comandos
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mostrar_menu))
+    # Tu comando de pronóstico queda igual
+    app.add_handler(CommandHandler("pronostico", recibir_pronostico))
     app.add_handler(CommandHandler("pronostico", recibir_pronostico))
     
     # Se queda escuchando para siempre
