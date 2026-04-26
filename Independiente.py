@@ -308,10 +308,8 @@ class SistemaIndependiente:
 
     def _configurar_ventana(self):
         self.page.title = "Pronósticos CAI"
-        # ELIMINADO: self.page.favicon = NOMBRE_ICONO (Ya sabemos que en la web esto no va)
         
         if not self.page.web:
-            # Aquí está el truco de Windows: Forzamos estrictamente el formato .ico
             self.page.window.icon = NOMBRE_ICONO
             self.page.window.maximized = True
         
@@ -2011,7 +2009,6 @@ class SistemaIndependiente:
             # para que el gráfico no sea excesivamente kilométrico de deslizar.
             espacio_por_barra = 50 if cant_partidos < 40 else 30
             ancho_grafico_dinamico = max((ancho - 100), cant_partidos * espacio_por_barra)
-            necesita_scroll_h = (cant_partidos * espacio_por_barra) > (ancho - 100)
 
             # 2. Configurar Gráfico
             chart = ft.BarChart(
@@ -3929,9 +3926,6 @@ class SistemaIndependiente:
                     # Al hacer clic, abrimos el modal para editar pasándole el ID
                     evt_edit = lambda e, id_p=p_id: self._abrir_modal_partido_admin(e, partido_id=id_p)
 
-                    # Destacar fila si la estábamos editando
-                    color_row = "#8B0000" if p_id == getattr(self, 'partido_admin_editando_id', None) else None
-
                     filas_part_admin.append(ft.DataRow(
                         cells=[
                             ft.DataCell(ft.Container(content=ft.Text(fecha_str, color="white", size=12), width=120, alignment=ft.alignment.center_left, on_click=evt_edit)),
@@ -3941,12 +3935,7 @@ class SistemaIndependiente:
                             ft.DataCell(ft.Container(content=ft.Text(res_txt, color="cyan", weight="bold"), width=85, alignment=ft.alignment.center_left, on_click=evt_edit)),
                         ],
                         data=p_id,
-                        # 🚀 FORMA CORRECTA EN FLET: Usamos un diccionario de estados
-                        color={
-                            ft.ControlState.HOVERED: ft.Colors.TRANSPARENT,
-                            ft.ControlState.PRESSED: ft.Colors.TRANSPARENT,
-                            ft.ControlState.DEFAULT: color_row if color_row else ft.Colors.TRANSPARENT
-                        }
+                        color=ft.Colors.TRANSPARENT
                     ))
                 self.tabla_partidos_admin.rows = filas_part_admin
                 # 🚀 GUARDAMOS LA COPIA ORIGINAL Y MANTENEMOS EL FILTRO ACTIVO
