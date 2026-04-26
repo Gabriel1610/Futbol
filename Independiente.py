@@ -6065,19 +6065,6 @@ class SistemaIndependiente:
                 if not datos:
                     GestorMensajes.mostrar(self.page, "Info", "No hay datos históricos para calcular errores con este filtro.", "info")
                     return
-
-                # --- LÓGICA DE FILTRADO (Top 10 + Empates) ---
-                filas_filtradas = []
-                limite_ranking = 10
-                valor_corte = -1
-                for i, fila in enumerate(datos):
-                    error_actual = fila[8] 
-                    if i < limite_ranking:
-                        filas_filtradas.append(fila)
-                        if i == (limite_ranking - 1): valor_corte = error_actual
-                    elif error_actual == valor_corte:
-                        filas_filtradas.append(fila)
-                    else: break
                 
                 # --- CÁLCULO DE ANCHOS (Ajustado para que entre el año completo) ---
                 w_cols = [ANCHO_COLUMNA_USUARIO, 120, 115, 115, 60, 60, 80] 
@@ -6111,7 +6098,8 @@ class SistemaIndependiente:
                 rows_controls = []
                 previous_error = None
 
-                for fila in filas_filtradas:
+                # 🌟 AHORA ITERAMOS DIRECTAMENTE SOBRE "datos" 🌟
+                for fila in datos:
                     user = fila[0]
                     rival = fila[1]
                     
@@ -6205,7 +6193,7 @@ class SistemaIndependiente:
                             ],
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         ),
-                        ft.Text("Top 10 (con empates) - Ordenado por error absoluto", size=12, color="white54"),
+                        ft.Text(f"Top {LIMITE_MAYORES_ERRORES if 'LIMITE_MAYORES_ERRORES' in globals() else 10} (con empates) - Ordenado por error absoluto", size=12, color="white54"),
                         ft.Divider(color="white24"),
                         contenedor_tabla_nativa, # <--- La tabla desliza horizontalmente por su cuenta
                         ft.Container(height=10),
@@ -6220,7 +6208,8 @@ class SistemaIndependiente:
                 alto_pantalla = self.page.height if self.page.height else 700
                 
                 ancho_dialogo = min(800, ancho_pantalla - 20)
-                altura_estimada = 60 + (len(filas_filtradas) * 50) + 220
+                # 🌟 Altura calculada directamente con len(datos)
+                altura_estimada = 60 + (len(datos) * 50) + 220
                 alto_dialogo = min(alto_pantalla - 50, altura_estimada)
 
                 contenedor_dialogo = ft.Container(
@@ -6243,9 +6232,12 @@ class SistemaIndependiente:
 
             except Exception as ex:
                 self._limpiar_memoria_dialogo(self.dlg_carga_errores)
+                import traceback
                 GestorMensajes.mostrar(self.page, "Error", f"Error al generar tabla: {ex}", "error")
-                self._enviar_alerta_correo_admins("Error al generar tabla de mayores errores", f"Ocurrió un error al generar la tabla de mayores errores: {ex}", tipo=str(ex), nombre_función="SistemaIndependiente._generar_tabla_mayores_errores._tarea")
+                # self._enviar_alerta_correo_admins("Error al generar tabla de mayores errores", f"Ocurrió un error al generar la tabla de mayores errores: {ex}", tipo=str(ex), nombre_función="SistemaIndependiente._generar_tabla_mayores_errores._tarea")
 
+        import threading
+        import time
         threading.Thread(target=_tarea, daemon=True).start()
 
 if __name__ == "__main__":

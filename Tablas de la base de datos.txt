@@ -27,19 +27,22 @@ CREATE TABLE rivales (
         CHECK (TRIM(nombre) <> '')
 );
 
--- 4. Tabla de Usuarios
+-- 4. Tabla de Usuarios (Actualizada para WhatsApp)
 CREATE TABLE usuarios (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
     email VARCHAR(255) NULL UNIQUE,
+    id_telegram BIGINT UNIQUE;
     token_recuperacion VARCHAR(6) NULL,
     token_expiracion DATETIME NULL,
     fecha_ultima_notificacion DATETIME DEFAULT NULL,
     tipo VARCHAR(20) NOT NULL DEFAULT 'comun',
+    
     CONSTRAINT chk_tipo_usuario
         CHECK (tipo IN ('comun', 'administrador')),
+        
     CONSTRAINT chk_email_formato
         CHECK (
         -- 1. Estructura basica garantizada
@@ -130,3 +133,18 @@ CREATE TABLE pronosticos (
     CONSTRAINT chk_pred_rival
         CHECK (pred_goles_rival >= 0)
 );
+
+SELECT id, username, email, LENGTH(email) AS cantidad_letras
+FROM usuarios 
+WHERE email IS NOT NULL 
+  AND NOT (
+      email LIKE '_%@_%._%' 
+      AND (LENGTH(email) - LENGTH(REPLACE(email, '@', ''))) = 1
+      AND SUBSTRING_INDEX(SUBSTRING_INDEX(email, '@', -1), '.', 1) REGEXP '^[a-zA-Z0-9-]+$'
+      AND email NOT LIKE '.%' 
+      AND email NOT LIKE '%.@%'
+      AND email NOT LIKE '%@-%'  
+      AND email NOT LIKE '%-'    
+      AND email NOT LIKE '%-.%'  
+      AND email NOT LIKE '%.-%'  
+  );

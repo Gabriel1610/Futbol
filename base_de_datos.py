@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 PUNTOS = 3
 MÁXIMA_CANTIDAD_DE_PUNTOS = 9
+LIMITE_MAYORES_ERRORES = 10
 MAYOR_ENTERO = 999999999
 
 # Configuración del Logger
@@ -90,6 +91,71 @@ class BaseDeDatos:
             return cursor.fetchall()
         except Exception as e:
             return []
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def buscar_usuario_para_asociar(self, identificador):
+        """Busca un usuario por username o email y retorna sus datos."""
+        conexion = None
+        cursor = None
+        try:
+            conexion = self.abrir()
+            # dictionary=True nos permite acceder a los datos por el nombre de la columna
+            cursor = conexion.cursor(dictionary=True)
+            sql = "SELECT id, username, email FROM usuarios WHERE username = %s OR email = %s"
+            cursor.execute(sql, (identificador, identificador))
+            return cursor.fetchone()
+        except Exception as e:
+            logger.error(f"Error buscando usuario para asociar: {e}")
+            return None
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+    
+    def obtener_usuario_por_telegram(self, id_telegram):
+        """Busca el username de un usuario usando su ID de Telegram."""
+        conexion = None
+        cursor = None
+        try:
+            conexion = self.abrir()
+            # Usamos dictionary=True para que devuelva los nombres de columnas
+            cursor = conexion.cursor(dictionary=True)
+            sql = "SELECT username FROM usuarios WHERE id_telegram = %s"
+            cursor.execute(sql, (id_telegram,))
+            res = cursor.fetchone()
+            
+            if res:
+                return res['username']
+            return None
+        except Exception as e:
+            logger.error(f"Error buscando por Telegram ID: {e}")
+            return None
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def actualizar_id_telegram(self, username, id_telegram):
+        """Vincula el ID de Telegram a la cuenta del usuario en TiDB."""
+        conexion = None
+        cursor = None
+        try:
+            conexion = self.abrir()
+            cursor = conexion.cursor()
+            
+            # 1. Por extrema seguridad, si este ID de Telegram estaba vinculado a otra cuenta, lo limpiamos
+            sql_clean = "UPDATE usuarios SET id_telegram = NULL WHERE id_telegram = %s"
+            cursor.execute(sql_clean, (id_telegram,))
+            
+            # 2. Asociamos el ID al usuario correcto
+            sql_update = "UPDATE usuarios SET id_telegram = %s WHERE username = %s"
+            cursor.execute(sql_update, (id_telegram, username))
+            
+            conexion.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Error actualizando ID de Telegram: {e}")
+            raise e
         finally:
             if cursor: cursor.close()
             if conexion: conexion.close()
@@ -1584,7 +1650,7 @@ class BaseDeDatos:
 
     def obtener_ranking_mayores_errores(self, usuario=None, edicion_id=None, anio=None):
         """
-        Devuelve el TOP de pronósticos con mayor error absoluto.
+        Devuelve el TOP 10 de pronósticos con mayor error absoluto (incluyendo empates).
         Adaptado al esquema: JOIN con rivales, fecha_hora, etc.
         Filtro agregado: Solo el ÚLTIMO pronóstico de cada usuario por partido.
         """
@@ -1608,33 +1674,49 @@ class BaseDeDatos:
 
         where_clause = " AND ".join(filtros)
 
-        # SQL Corregido
+        # SQL Modificado usando RANK() para manejar los empates por fila real
         sql = f"""
+            WITH ErroresClasificados AS (
+                SELECT 
+                    u.username, 
+                    r.nombre as rival,          
+                    p.fecha_hora,               
+                    pr.fecha_prediccion,        
+                    pr.pred_goles_independiente,
+                    pr.pred_goles_rival,        
+                    p.goles_independiente,      
+                    p.goles_rival,              
+                    (ABS(p.goles_independiente - pr.pred_goles_independiente) + ABS(p.goles_rival - pr.pred_goles_rival)) as error_abs,
+                    RANK() OVER (
+                        ORDER BY (ABS(p.goles_independiente - pr.pred_goles_independiente) + ABS(p.goles_rival - pr.pred_goles_rival)) DESC
+                    ) as puesto_ranking
+                FROM pronosticos pr
+                
+                -- FILTRO CLAVE: Solo el último pronóstico de cada usuario para cada partido
+                INNER JOIN (
+                    SELECT MAX(id) as max_id
+                    FROM pronosticos
+                    GROUP BY usuario_id, partido_id
+                ) ultimos ON pr.id = ultimos.max_id
+                
+                JOIN partidos p ON pr.partido_id = p.id
+                JOIN rivales r ON p.rival_id = r.id  
+                JOIN usuarios u ON pr.usuario_id = u.id
+                WHERE {where_clause}
+            )
             SELECT 
-                u.username, 
-                r.nombre as rival,          -- JOIN con rivales para sacar el nombre
-                p.fecha_hora,               -- Corregido: fecha_hora
-                pr.fecha_prediccion,        -- Corregido: fecha_prediccion
-                pr.pred_goles_independiente,-- Corregido
-                pr.pred_goles_rival,        -- Corregido
-                p.goles_independiente,      -- Corregido
-                p.goles_rival,              -- Corregido
-                (ABS(p.goles_independiente - pr.pred_goles_independiente) + ABS(p.goles_rival - pr.pred_goles_rival)) as error_abs
-            FROM pronosticos pr
-            
-            -- FILTRO CLAVE: Solo el último pronóstico de cada usuario para cada partido
-            INNER JOIN (
-                SELECT MAX(id) as max_id
-                FROM pronosticos
-                GROUP BY usuario_id, partido_id
-            ) ultimos ON pr.id = ultimos.max_id
-            
-            JOIN partidos p ON pr.partido_id = p.id
-            JOIN rivales r ON p.rival_id = r.id  -- JOIN necesario
-            JOIN usuarios u ON pr.usuario_id = u.id
-            WHERE {where_clause}
-            ORDER BY error_abs DESC, p.fecha_hora DESC
-            LIMIT 50
+                username, 
+                rival, 
+                fecha_hora, 
+                fecha_prediccion, 
+                pred_goles_independiente, 
+                pred_goles_rival, 
+                goles_independiente, 
+                goles_rival, 
+                error_abs
+            FROM ErroresClasificados
+            WHERE puesto_ranking <= {LIMITE_MAYORES_ERRORES}
+            ORDER BY error_abs DESC, fecha_hora DESC
         """
         
         cursor.execute(sql, tuple(params))
@@ -1717,7 +1799,7 @@ class BaseDeDatos:
         """
         Obtiene las ediciones de torneos (ID, Nombre, Año, Finalizado).
         Si solo_finalizados es True, filtra para mostrar SOLO aquellas que tienen partidos jugados.
-        Ordenado por año descendente y nombre.
+        Ordenado por ID descendente para mostrar lo más reciente arriba de todo.
         """
         conexion = None
         cursor = None
@@ -1737,7 +1819,7 @@ class BaseDeDatos:
                     WHERE p.edicion_id = e.id 
                       AND p.goles_independiente IS NOT NULL
                 )
-                ORDER BY a.numero DESC, c.nombre ASC
+                ORDER BY e.id DESC
                 """
             else:
                 sql = """
@@ -1745,7 +1827,7 @@ class BaseDeDatos:
                 FROM ediciones e
                 JOIN campeonatos c ON e.campeonato_id = c.id
                 JOIN anios a ON e.anio_id = a.id
-                ORDER BY a.numero DESC, c.nombre ASC
+                ORDER BY e.id DESC
                 """
                 
             cursor.execute(sql)
@@ -1755,7 +1837,7 @@ class BaseDeDatos:
             return []
         finally:
             if cursor: cursor.close()
-            if conexion: conexion.close() 
+            if conexion: conexion.close()
 
     def obtener_anios(self):
         """Obtiene la lista de años disponibles en la base de datos."""
