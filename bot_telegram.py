@@ -32,7 +32,7 @@ class RobotTelegram:
         """Inicializa las configuraciones, la base de datos y la app de Telegram."""
         load_dotenv(override=True)
         self.token = os.getenv("TELEGRAM_TOKEN")
-        self.email_emisor = os.getenv("EMAIL_EMISOR")
+        self.email_emisor = os.getenv("EMAIL_USER")
         self.email_pass = os.getenv("EMAIL_PASSWORD")
         self.limite_errores = 10 # Podría ser un env también
 
