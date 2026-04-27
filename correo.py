@@ -1,15 +1,20 @@
+import os
 import smtplib
 import ssl
 from email.message import EmailMessage
 import random
 import threading
+from dotenv import load_dotenv
 from ventana_mensaje import GestorMensajes
 
 class GestorCorreo:
     def __init__(self):
-        # TUS CREDENCIALES
-        self.email_emisor = "gabrielydeindependiente@gmail.com"  # Tu correo de Gmail
-        self.email_password = "" 
+        # Carga las variables de entorno desde el archivo .env (útil en modo local)
+        load_dotenv()
+        
+        # TUS CREDENCIALES OBTENIDAS DE LAS VARIABLES DE ENTORNO
+        self.email_emisor = os.getenv("EMAIL_USER")
+        self.email_password = os.getenv("EMAIL_PASSWORD")
         
     def generar_codigo(self):
         """Genera un código numérico de 6 dígitos."""
@@ -22,6 +27,11 @@ class GestorCorreo:
         - Si es_registro=False: Envía mensaje de Recuperación de contraseña.
         """
         def _enviar():
+            # Verificación de seguridad rápida por si faltan las credenciales
+            if not self.email_emisor or not self.email_password:
+                print("❌ Faltan credenciales de email (EMAIL_USER o EMAIL_PASSWORD).")
+                return
+                
             try:
                 msg = EmailMessage()
                 
@@ -74,8 +84,9 @@ class GestorCorreo:
         una ventana de mensaje. Si no es admin, no hace nada visual.
         """
         # Verificamos si existe usuario logueado y si está en la lista de admins
-        if hasattr(self, 'usuario_actual') and self.usuario_actual in self.lista_administradores:
+        if hasattr(self, 'usuario_actual') and self.usuario_actual in getattr(self, 'lista_administradores', []):
             # Usamos GestorMensajes para mostrar el error en pantalla
-            GestorMensajes.mostrar(self.page, titulo, mensaje, tipo)
-            # Como puede ser llamado desde un hilo secundario, forzamos update
-            self.page.update()
+            if hasattr(self, 'page'):
+                GestorMensajes.mostrar(self.page, titulo, mensaje, tipo)
+                # Como puede ser llamado desde un hilo secundario, forzamos update
+                self.page.update()
