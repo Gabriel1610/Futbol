@@ -6281,8 +6281,8 @@ if __name__ == "__main__":
         ft.app(target=main, assets_dir=ruta_assets)
         
     elif puerto_nube:
-        # MODO 2: RENDER (Nube)
-        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=int(puerto_nube), host="0.0.0.0", assets_dir=ruta_assets)
+        # MODO 2: RENDER (Nube) - Encendemos como servidor puro sin pedirle que abra ventanas
+        ft.app(target=main, port=int(puerto_nube), host="0.0.0.0", assets_dir=ruta_assets)
         
     else:
         # MODO 3: DEPURACIÓN LOCAL (Navegador)
