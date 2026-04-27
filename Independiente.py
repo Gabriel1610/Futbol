@@ -6286,4 +6286,5 @@ if __name__ == "__main__":
         
     else:
         # MODO 3: DEPURACIÓN LOCAL (Navegador)
-        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8555, assets_dir=ruta_assets)
+        puerto = int(os.environ.get("PORT", 8080))
+        ft.app(target=main, view=ft.AppView.WEB_BROWSER, host="0.0.0.0", port=puerto)
