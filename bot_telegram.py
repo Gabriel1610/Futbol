@@ -287,33 +287,6 @@ class RobotTelegram:
                                        reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True))
         return self.esperando_menu_estadisticas
 
-    def _enviar_correo_codigo(self, destinatario, codigo):
-        """Lógica interna para envío de emails."""
-        if not self.email_emisor or not self.email_pass:
-            print("❌ Faltan credenciales de email en el .env")
-            return False
-        try:
-            msg = EmailMessage()
-            msg['Subject'] = 'Código de Asociación - Prode Independiente 🔴'
-            msg['From'] = self.email_emisor
-            msg['To'] = destinatario
-            
-            cuerpo = (
-                f"¡Hola!\n\n"
-                f"Alguien ha solicitado asociar tu cuenta del Prode a un dispositivo móvil en Telegram.\n\n"
-                f"Tu código de seguridad es: {codigo}\n\n"
-                f"Si no fuiste vos, ignorá este mensaje."
-            )
-            msg.set_content(cuerpo)
-            
-            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-                smtp.login(self.email_emisor, self.email_pass)
-                smtp.send_message(msg)
-            return True
-        except Exception as e:
-            print(f"Error enviando correo: {e}")
-            return False
-
     async def cancelar_conversacion(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Permite al usuario abortar cualquier proceso escribiendo /cancelar."""
         await update.message.reply_text("Operación cancelada.")

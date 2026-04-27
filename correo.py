@@ -9,7 +9,6 @@ class GestorCorreo:
     def __init__(self):
         # TUS CREDENCIALES
         self.email_emisor = "gabrielydeindependiente@gmail.com"  # Tu correo de Gmail
-        # Aquí pega la contraseña de aplicación de 16 letras que generaste en la captura
         self.email_password = "vjpz rjcz nkgq zqaq" 
         
     def generar_codigo(self):
