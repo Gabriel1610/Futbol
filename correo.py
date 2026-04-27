@@ -9,7 +9,7 @@ class GestorCorreo:
     def __init__(self):
         # TUS CREDENCIALES
         self.email_emisor = "gabrielydeindependiente@gmail.com"  # Tu correo de Gmail
-        self.email_password = "hjil rxzh rocd jztp" 
+        self.email_password = "" 
         
     def generar_codigo(self):
         """Genera un código numérico de 6 dígitos."""
