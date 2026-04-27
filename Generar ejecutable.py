@@ -2,7 +2,6 @@ import os
 import subprocess
 import shutil
 import time
-import stat
 import datetime
 import sys
 
