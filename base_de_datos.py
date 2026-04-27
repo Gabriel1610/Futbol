@@ -160,6 +160,30 @@ class BaseDeDatos:
             if cursor: cursor.close()
             if conexion: conexion.close()
     
+    def obtener_id_telegram_por_username(self, username):
+        """Busca el ID de Telegram asociado a un nombre de usuario específico."""
+        conexion = None
+        cursor = None
+        try:
+            # Usamos el método abrir() ya definido en tu clase
+            conexion = self.abrir()
+            cursor = conexion.cursor()
+            
+            # Consultamos la columna id_telegram filtrando por username
+            sql = "SELECT id_telegram FROM usuarios WHERE username = %s"
+            cursor.execute(sql, (username,))
+            resultado = cursor.fetchone()
+            
+            # Si se encuentra el usuario, retornamos el ID (índice 0), sino None
+            return resultado[0] if resultado else None
+            
+        except Exception as e:
+            logger.error(f"Error al obtener ID de Telegram para {username}: {e}")
+            return None
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+            
     def actualizar_rival(self, id_rival, nuevo_nombre):
         """Actualiza el nombre de un rival usando su ID."""
         conexion = None
@@ -2280,6 +2304,41 @@ class BaseDeDatos:
         finally:
             if cursor: cursor.close()
             if conexion: conexion.close()
+        
+    def obtener_partidos_futuros_crudo(self):
+        """Devuelve ID, rival y fecha exacta de los partidos futuros que aún tienen usuarios pendientes de pronosticar."""
+        try:
+            conexion = self.abrir()
+            cursor = conexion.cursor()
+            
+            # La subconsulta EXISTS asegura que el partido solo se devuelva si 
+            # falta al menos un usuario con Telegram asociado por pronosticar.
+            query = """
+                SELECT p.id, r.nombre, p.fecha_hora
+                FROM partidos p
+                JOIN rivales r ON p.rival_id = r.id
+                WHERE p.fecha_hora > DATE_SUB(NOW(), INTERVAL 3 HOUR)
+                  AND EXISTS (
+                      SELECT 1 
+                      FROM usuarios u 
+                      WHERE u.id_telegram IS NOT NULL 
+                        AND u.id NOT IN (
+                            SELECT usuario_id 
+                            FROM pronosticos pr 
+                            WHERE pr.partido_id = p.id
+                        )
+                  );
+            """
+            cursor.execute(query)
+            return cursor.fetchall()
+            
+        except Exception as e:
+            print(f"Error obteniendo partidos futuros: {e}")
+            return []
+        finally:
+            if 'conexion' in locals() and conexion.is_connected():
+                cursor.close()
+                conexion.close()
 
     def obtener_pendientes_notificacion(self, dias=5):
         """

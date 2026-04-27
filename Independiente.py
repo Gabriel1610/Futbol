@@ -4212,6 +4212,45 @@ class SistemaIndependiente:
             
         threading.Thread(target=_cargar, daemon=True).start()
 
+    def obtener_usuarios_sin_pronostico_por_partido(self, partido_id):
+        """Devuelve id_telegram y username de quienes no pronosticaron este partido específico."""
+        try:
+            conexion = self.conectar()
+            cursor = conexion.cursor()
+            query = """
+                SELECT id_telegram, username
+                FROM usuarios
+                WHERE id_telegram IS NOT NULL
+                  AND id NOT IN (
+                      SELECT usuario_id FROM pronosticos WHERE partido_id = %s
+                  );
+            """
+            cursor.execute(query, (partido_id,))
+            return cursor.fetchall()
+        except Exception as e:
+            print(f"Error obteniendo usuarios colgados: {e}")
+            return []
+        finally:
+            if 'conexion' in locals() and conexion.is_connected():
+                cursor.close()
+                conexion.close()
+    
+    def _notificar_robot_actualizacion(self):
+        """Envía el comando de actualización al bot usando requests."""
+        import requests
+        token = os.getenv("TELEGRAM_TOKEN")
+        # Necesitamos tu ID de Telegram (Gabriel)
+        bd = BaseDeDatos()
+        admin_id = bd.obtener_id_telegram_por_username("Gabriel") 
+        
+        if token and admin_id:
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            params = {"chat_id": admin_id, "text": "/actualizar_cronometros"}
+            try:
+                requests.get(url, params=params, timeout=5)
+            except:
+                pass
+
     def _iniciar_cambio_email(self, e):
         """Valida el email replicando los CHECK de SQL, verifica disponibilidad y envía código."""
         nuevo_email = self.input_conf_email.value.strip() if self.input_conf_email.value else ""
@@ -4636,11 +4675,13 @@ class SistemaIndependiente:
             self._limpiar_memoria_dialogo(self.dlg_modal_equipo)
             self._recargar_datos(actualizar_partidos=True, actualizar_copas=False)
 
-    def _abrir_modal_partido_admin(self, e, partido_id=None, edicion_id=None, rival_id=None, condicion=None, fecha_str=None, goles_cai=None, goles_rival=None):
+    def _abrir_modal_partido_admin(self, e, partido_id=None, edicion_id=None):
         """Abre el formulario de partidos con carga asíncrona para evitar congelamientos."""
         
         # 🚀 LA SOLUCIÓN: Guardamos el ID en la memoria de la clase
-        self.partido_admin_editando_id = partido_id 
+        self.partido_admin_editando_id = partido_id
+        self.fecha_dt_original = None
+        self.rival_original_editar = None
         
         # 1. ABRIR DIÁLOGO DE CARGA INMEDIATAMENTE
         loading_content = ft.Column(
@@ -4750,7 +4791,9 @@ class SistemaIndependiente:
                         rival_nombre = partido[1]
                         torneo_nombre = partido[3]
                         for opt in self.dd_rival_admin.options:
-                            if opt.text == rival_nombre: self.dd_rival_admin.value = opt.key
+                            if opt.text == rival_nombre: 
+                                self.dd_rival_admin.value = opt.key
+                                self.rival_original_editar = opt.key
                         for opt in self.dd_edicion.options:
                             if opt.text == torneo_nombre: self.dd_edicion.value = opt.key
                         
@@ -4763,11 +4806,13 @@ class SistemaIndependiente:
                                 # Intento 1: Formato estándar SQL (YYYY-MM-DD HH:MM:SS)
                                 f_obj = datetime.strptime(fecha_db, "%Y-%m-%d %H:%M:%S")
                                 self.txt_fecha_admin.value = f_obj.strftime("%H:%M %d-%m-%Y")
+                                self.fecha_dt_original = f_obj.replace(second=0, microsecond=0)
                             except:
                                 try:
                                     # Intento 2: Formato SQL sin segundos (YYYY-MM-DD HH:MM)
                                     f_obj = datetime.strptime(fecha_db, "%Y-%m-%d %H:%M")
                                     self.txt_fecha_admin.value = f_obj.strftime("%H:%M %d-%m-%Y")
+                                    self.fecha_dt_original = f_obj.replace(second=0, microsecond=0)
                                 except:
                                     try:
                                         # 🚀 Intento 3 (LA SOLUCIÓN): Formato desde la UI (DD-MM-YYYY HH:MM)
@@ -4775,6 +4820,7 @@ class SistemaIndependiente:
                                         fecha_limpia = fecha_db.replace("/", "-")
                                         f_obj = datetime.strptime(fecha_limpia, "%d-%m-%Y %H:%M")
                                         self.txt_fecha_admin.value = f_obj.strftime("%H:%M %d-%m-%Y")
+                                        self.fecha_dt_original = f_obj.replace(second=0, microsecond=0)
                                     except:
                                         # Si todo falla, cargamos lo que venga
                                         self.txt_fecha_admin.value = fecha_db
@@ -4858,14 +4904,8 @@ class SistemaIndependiente:
 
         # --- TRADUCTOR INTELIGENTE DE FECHAS ---
         try:
-            # Reemplazamos las barras '/' por guiones '-' de forma invisible 
-            # por si el usuario se confunde y tipea barras por costumbre
             fecha_str_limpia = fecha_str.replace("/", "-")
-            
-            # Leemos tu formato: HH:MM DD-MM-YYYY
             fecha_obj = datetime.strptime(fecha_str_limpia, "%H:%M %d-%m-%Y")
-            
-            # Lo traducimos al formato que la base de datos SQL exige (YYYY-MM-DD HH:MM:SS)
             fecha_sql = fecha_obj.strftime("%Y-%m-%d %H:%M:%S")
         except ValueError:
             GestorMensajes.mostrar(self.page, "Error", "La fecha debe tener el formato exacto: HH:MM DD-MM-AAAA\nEjemplo: 20:30 24-03-2026", "error")
@@ -4875,7 +4915,7 @@ class SistemaIndependiente:
         gc_val = int(gc) if gc else None
         gr_val = int(gr) if gr else None
 
-        # --- NUEVO: ESCUDO ANTI-VIAJES EN EL TIEMPO ---
+        # --- ESCUDO ANTI-VIAJES EN EL TIEMPO ---
         if gc_val is not None or gr_val is not None:
             hora_actual = self.obtener_hora_argentina()
             if fecha_obj > hora_actual:
@@ -4883,12 +4923,28 @@ class SistemaIndependiente:
                 return
         # ----------------------------------------------
 
-        # --- NUEVO: CIERRE INSTANTÁNEO ---
-        # Cerramos la ventana en el mismo milisegundo en que haces clic 
-        # para eliminar la sensación de "congelamiento" de la interfaz.
-        self._limpiar_memoria_dialogo(self.dlg_admin_partido)
+        # --- DETECCIÓN ESTRICTA DE CAMBIOS ---
+        es_nuevo = self.partido_admin_editando_id is None
+        activar_cambios = False
         
-        # Mostramos un pequeño aviso flotante de que el proceso comenzó
+        if not es_nuevo:
+            # 1. Chequeo de Fecha
+            if hasattr(self, 'fecha_dt_original') and self.fecha_dt_original:
+                try:
+                    if fecha_obj != self.fecha_dt_original:
+                        activar_cambios = True
+                except ValueError:
+                    activar_cambios = True
+                    
+            # 2. Chequeo de Rival (🌟 NUEVA LÓGICA)
+            if not activar_cambios and hasattr(self, 'rival_original_editar') and self.rival_original_editar:
+                # Comparamos el ID del rival que el usuario seleccionó ahora con el que estaba antes
+                if str(rival_id) != str(self.rival_original_editar):
+                    activar_cambios = True
+        # ----------------------------------------------
+
+        # --- CIERRE INSTANTÁNEO ---
+        self._limpiar_memoria_dialogo(self.dlg_admin_partido)
         GestorMensajes.mostrar(self.page, "Procesando", "Guardando y recalculando posiciones...", "info")
 
         def _tarea():
@@ -4899,9 +4955,12 @@ class SistemaIndependiente:
                 else:
                     bd.insertar_partido_manual(torneo_id, rival_id, condicion, fecha_sql, gc_val, gr_val)
 
-                # Mandamos a recargar toda la app (esto es lo que demora los 2 segundos)
-                # Al terminar, las barras amarillas desaparecerán solas indicando el éxito.
                 self._recargar_datos(actualizar_partidos=True, actualizar_pronosticos=True, actualizar_ranking=True, actualizar_admin=True)
+
+                # --- NOTIFICAR A TELEGRAM ---
+                # 🌟 Ahora evalúa las tres posibilidades: nuevo, fecha cambiada o rival cambiado
+                if es_nuevo or activar_cambios:
+                    self._notificar_robot_actualizacion()
 
             except Exception as ex:
                 GestorMensajes.mostrar(self.page, "Error de BD", f"Error crítico: {ex}", "error")
@@ -4920,6 +4979,7 @@ class SistemaIndependiente:
                 bd.eliminar_partido_manual(self.partido_admin_editando_id)
                 GestorMensajes.mostrar(self.page, "Éxito", "Partido borrado permanentemente.", "exito")
                 self._recargar_datos(actualizar_partidos=True, actualizar_pronosticos=True, actualizar_ranking=True, actualizar_admin=True)
+                self._notificar_robot_actualizacion()
             except Exception as ex:
                 GestorMensajes.mostrar(self.page, "Error de BD", f"Error: {ex}", "error")
 
@@ -6287,4 +6347,4 @@ if __name__ == "__main__":
     else:
         # MODO 3: DEPURACIÓN LOCAL (Navegador)
         puerto = int(os.environ.get("PORT", 8080))
-        ft.app(target=main, view=ft.AppView.WEB_BROWSER, host="0.0.0.0", port=puerto)
+        ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=puerto)

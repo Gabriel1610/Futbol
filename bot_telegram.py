@@ -1,5 +1,8 @@
 import os
 import random
+import datetime
+from datetime import timedelta
+import pytz
 import smtplib
 from email.message import EmailMessage
 from dotenv import load_dotenv
@@ -25,8 +28,9 @@ class RobotTelegram:
         esperando_tipo_mufa, esperando_edicion_mufa,
         esperando_tipo_mejor_predictor, esperando_edicion_mejor_predictor,
         esperando_tipo_racha_record, esperando_edicion_racha_record,
-        esperando_tipo_racha_actual, esperando_edicion_racha_actual # 🌟 NUEVOS ESTADOS
-    ) = range(1, 27)
+        esperando_tipo_racha_actual, esperando_edicion_racha_actual,
+        esperando_tipo_cambios, esperando_edicion_cambios
+    ) = range(1, 29)
 
     def __init__(self):
         """Inicializa las configuraciones, la base de datos y la app de Telegram."""
@@ -44,6 +48,9 @@ class RobotTelegram:
         
         # Registramos los flujos
         self._setup_handlers()
+
+        # 🚀 DISPARAMOS EL CÁLCULO DE CRONÓMETROS 
+        self._programar_cronometros_partidos()
     
     # --- MÉTODOS GENÉRICOS PARA RANKINGS ---
     
@@ -168,6 +175,8 @@ class RobotTelegram:
                     MessageHandler(filters.Regex("^9_ Racha récord$"), self._crear_iniciar("🔥 *Racha Récord*\n\n¿Qué datos querés consultar?", self.esperando_tipo_racha_record)),
                     # 10. Racha Actual
                     MessageHandler(filters.Regex("^10_ Racha actual$"), self._crear_iniciar("⏳ *Racha Actual*\n\n¿Qué datos querés consultar?", self.esperando_tipo_racha_actual)),
+                    # 11. Cambios de Pronósticos
+                    MessageHandler(filters.Regex("^11_ Cambio de pronósticos$"), self._crear_iniciar("🔄 *Estabilidad de Pronósticos*\n\n¿Qué datos querés consultar?", self.esperando_tipo_cambios)),
 
                     MessageHandler(filters.Regex("^🔙 Volver al menú$"), self.mostrar_menu)
                 ],
@@ -218,14 +227,74 @@ class RobotTelegram:
 
                 # 10. Racha Actual
                 self.esperando_tipo_racha_actual: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_racha_actual, self.esperando_tipo_racha_actual, self.esperando_edicion_racha_actual, 'dicc_racha_actual', solo_finalizados=True))],
-                self.esperando_edicion_racha_actual: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_racha_actual, self.esperando_edicion_racha_actual, 'dicc_racha_actual'))]
+                self.esperando_edicion_racha_actual: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_racha_actual, self.esperando_edicion_racha_actual, 'dicc_racha_actual'))],
+
+                # 11. Cambios de Pronósticos
+                self.esperando_tipo_cambios: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_cambios, self.esperando_tipo_cambios, self.esperando_edicion_cambios, 'dicc_cambios', solo_finalizados=True))],
+                self.esperando_edicion_cambios: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_cambios, self.esperando_edicion_cambios, 'dicc_cambios'))]
             },
             fallbacks=[CommandHandler("cancelar", self.cancelar_conversacion)],
         )
-
+        self.app.add_handler(CommandHandler("actualizar_cronometros", self.forzar_actualizacion_cronometros))
         self.app.add_handler(CommandHandler("start", self.mostrar_menu))
         self.app.add_handler(conv_handler)
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.mostrar_menu))
+
+    def _programar_cronometros_partidos(self):
+        """Busca partidos futuros y crea alarmas con nombre para poder resetearlas."""
+        partidos = self.db.obtener_partidos_futuros_crudo()
+        if not partidos: return
+        
+        zona_horaria = pytz.timezone('America/Argentina/Buenos_Aires')
+        ahora = datetime.datetime.now(zona_horaria)
+        
+        for p_id, rival, fecha in partidos:
+            fecha_local = zona_horaria.localize(fecha)
+            horas_aviso = [96, 48, 24, 1]
+            
+            for horas in horas_aviso:
+                fecha_alarma = fecha_local - timedelta(hours=horas)
+                if fecha_alarma > ahora:
+                    self.app.job_queue.run_once(
+                        self._disparar_recordatorio, 
+                        when=fecha_alarma, 
+                        data={'partido_id': p_id, 'rival': rival, 'fecha': fecha_local, 'horas': horas},
+                        name="recordatorio_partido" # 🌟 NOMBRE CLAVE PARA BORRARLAS
+                    )
+        print("⏰ Cronómetros configurados.")
+
+    async def _disparar_recordatorio(self, context: ContextTypes.DEFAULT_TYPE):
+        """Se ejecuta cuando un cronómetro llega a 0."""
+        datos = context.job.data
+        partido_id = datos['partido_id']
+        rival = datos['rival']
+        horas_faltantes = datos['horas']
+        fecha_str = datos['fecha'].strftime('%d/%m a las %H:%M')
+        
+        # Buscamos quiénes NO pronosticaron este partido en concreto
+        colgados = self.db.obtener_usuarios_sin_pronostico_por_partido(partido_id)
+        if not colgados: return # Si todos pronosticaron, muere acá sin molestar
+        
+        # Botones para ofrecer atajo directo o volver al menú
+        botones = [["1_ Cargar pronóstico"], ["🔙 Volver al menú"]]
+        teclado = ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        
+        # Armamos el texto adaptativo según si falta 1 hora o varios días
+        if horas_faltantes == 1:
+            alerta = "🚨 *¡ÚLTIMA OPORTUNIDAD!* 🚨\nFalta solo *1 HORA*"
+        else:
+            alerta = f"⚠️ *RECORDATORIO* ⚠️\nFaltan solo *{horas_faltantes} horas*"
+            
+        for tg_id, username in colgados:
+            mensaje = (
+                f"{alerta} para el partido contra *{rival}* ({fecha_str}).\n\n"
+                f"Todavía no tenemos tu pronóstico registrado, {username}.\n\n"
+                f"👇 ¡Usá el botón de abajo para cargarlo rápido y sumar puntos!"
+            )
+            try:
+                await context.bot.send_message(chat_id=tg_id, text=mensaje, parse_mode="Markdown", reply_markup=teclado)
+            except Exception as e:
+                print(f"No se pudo avisar a {username}: {e}")
 
     # --- MÉTODOS DE APOYO (HELPERS) ---
 
@@ -280,7 +349,8 @@ class RobotTelegram:
             ["3_ Optimismo/Pesimismo", "4_ Mayores errores"],
             ["5_ Ranking Falso Profeta", "6_ Estilos de decisión"],
             ["7_ Ranking mufas", "8_ Mejor predictor"],
-            ["9_ Racha récord", "10_ Racha actual"], # 🌟 NUEVO BOTÓN AGRUPADO
+            ["9_ Racha récord", "10_ Racha actual"],
+            ["11_ Cambio de pronósticos"],
             ["🔙 Volver al menú"]
         ]
         await update.message.reply_text("📊 *Panel de Estadísticas*", parse_mode="Markdown", 
@@ -1175,6 +1245,83 @@ class RobotTelegram:
         await self.mostrar_menu(update, context)
         return ConversationHandler.END
     
+    # ==========================================
+    # FLUJO 13: ESTABILIDAD DE PRONÓSTICOS
+    # ==========================================
+    async def imprimir_tabla_cambios(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edicion_id, titulo):
+        """Construye y envía el ranking de Estabilidad (Cambios de pronóstico)."""
+        datos = self.db.obtener_ranking_estabilidad(edicion_id=edicion_id, anio=None)
+        
+        if not datos:
+            await update.message.reply_text("📉 Todavía no hay datos históricos de pronósticos para esta selección.")
+            await self.mostrar_menu(update, context)
+            return ConversationHandler.END
+            
+        # Filtramos y ordenamos igual que en la versión de Flet
+        datos_validos = [row for row in datos if row[1] is not None]
+        datos_validos.sort(key=lambda x: float(x[1]))
+        
+        mensajes = []
+        mensaje_actual = f"🔄 *Estabilidad de Pronósticos: {titulo}* 🔄\n"
+        mensaje_actual += "_Promedio de veces que cada usuario guarda/cambia su pronóstico por partido._\n\n"
+        
+        for i, row in enumerate(datos_validos, start=1):
+            user = row[0]
+            val_cambios = float(row[1])
+            txt_cambios = f"{val_cambios:.2f}".replace('.', ',')
+            
+            # Lógica de colores y estilos traducida de Flet a Telegram
+            if val_cambios <= 1.10:
+                estilo = "🧱 Firme"
+                emoji_color = "🟤" # brown
+            elif val_cambios <= 1.50:
+                estilo = "👍 Estable"
+                emoji_color = "🟡" # amber
+            elif val_cambios <= 2.50:
+                estilo = "🔄 Cambiante"
+                emoji_color = "🔵" # blue
+            else: 
+                estilo = "📉 Muy volátil"
+                emoji_color = "🔴" # red
+                
+            bloque = f"*{i}º {user}*\n"
+            bloque += f"└ {emoji_color} Promedio: {txt_cambios} veces/partido\n"
+            bloque += f"└ Perfil: {estilo}\n\n"
+            
+            # Control de paginación de Telegram
+            if len(mensaje_actual) + len(bloque) > 3800:
+                mensajes.append(mensaje_actual)
+                mensaje_actual = bloque
+            else:
+                mensaje_actual += bloque
+                
+        if mensaje_actual:
+            mensajes.append(mensaje_actual)
+            
+        # Envío secuencial de los globos de texto
+        for m in mensajes:
+            await update.message.reply_text(m, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+        
+        await self.mostrar_menu(update, context)
+        return ConversationHandler.END
+    
+    async def forzar_actualizacion_cronometros(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Borra todas las alarmas programadas y las vuelve a crear desde la DB."""
+        # Solo el admin puede disparar esto (Seguridad)
+        id_telegram = update.effective_user.id
+        if self.db.obtener_usuario_por_telegram(id_telegram) != "Gabriel":
+            return
+
+        # 1. Buscamos y borramos todos los jobs con el nombre que definimos
+        jobs_actuales = context.job_queue.get_jobs_by_name("recordatorio_partido")
+        for job in jobs_actuales:
+            job.schedule_removal()
+            
+        # 2. Volvemos a leer la DB y programar todo de cero
+        self._programar_cronometros_partidos()
+        
+        await update.message.reply_text("✅ Agenda de cronómetros actualizada correctamente.")
+
     def run(self):
         """Lanza el bot."""
         print("Bot escuchando...")
