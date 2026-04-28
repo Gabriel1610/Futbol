@@ -183,7 +183,7 @@ class BaseDeDatos:
         finally:
             if cursor: cursor.close()
             if conexion: conexion.close()
-            
+
     def actualizar_rival(self, id_rival, nuevo_nombre):
         """Actualiza el nombre de un rival usando su ID."""
         conexion = None
@@ -1541,6 +1541,28 @@ class BaseDeDatos:
             if cursor: cursor.close()
             if conexion: conexion.close()
     
+    def obtener_usuarios(self):
+        """Obtiene la lista completa de usuarios (ID y nombre de usuario)."""
+        conexion = None
+        cursor = None
+        try:
+            conexion = self.abrir()
+            cursor = conexion.cursor()
+            
+            # Traemos el ID para lógica interna y el username para los botones
+            sql = "SELECT id, username FROM usuarios ORDER BY username ASC"
+            
+            cursor.execute(sql)
+            resultados = cursor.fetchall()
+            return resultados
+            
+        except Exception as e:
+            logger.error(f"Error al obtener la lista de usuarios: {e}")
+            return []
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+            
     def obtener_estadisticas_tendencia_pronostico(self, usuario, edicion_id=None, anio=None):
         """
         Calcula la cantidad de partidos en cada categoría de tendencia (Optimismo/Pesimismo)

@@ -29,8 +29,11 @@ class RobotTelegram:
         esperando_tipo_mejor_predictor, esperando_edicion_mejor_predictor,
         esperando_tipo_racha_record, esperando_edicion_racha_record,
         esperando_tipo_racha_actual, esperando_edicion_racha_actual,
-        esperando_tipo_cambios, esperando_edicion_cambios
-    ) = range(1, 29)
+        esperando_tipo_cambios, esperando_edicion_cambios,
+        esperando_menu_rankings, esperando_menu_perfil,
+        esperando_tipo_perfil,
+        esperando_edicion_perfil, esperando_usuario_perfil
+    ) = range(1, 34)
 
     def __init__(self):
         """Inicializa las configuraciones, la base de datos y la app de Telegram."""
@@ -125,6 +128,33 @@ class RobotTelegram:
         return await funcion_imprimir(update, context, edicion_id=edicion_id, titulo=texto)
 
     # --- FÁBRICAS DE CALLBACKS (Solución al error de __name__) ---
+    def _generar_botones_ediciones(self, incluir_historico=True):
+        """Genera el teclado con todos los torneos disponibles leyendo la BD."""
+        ediciones = self.db.obtener_ediciones()
+        botones = []
+        
+        # Opcionalmente agregamos el botón Histórico al principio
+        if incluir_historico:
+            botones.append(["Histórico"])
+            
+        # Armamos los botones de a dos columnas
+        fila_temp = []
+        for ed in ediciones:
+            # ed[1] es el nombre (ej. LPF) y ed[2] es el año
+            fila_temp.append(f"{ed[1]} {ed[2]}")
+            if len(fila_temp) == 2:
+                botones.append(fila_temp)
+                fila_temp = []
+                
+        # Si quedó alguno suelto, lo agregamos al final
+        if fila_temp:
+            botones.append(fila_temp)
+            
+        # Opciones de navegación predeterminadas
+        botones.append(["🔙 Atrás", "🔙 Volver al menú principal"])
+        
+        return botones
+    
     def _crear_iniciar(self, mensaje: str, estado_siguiente: int):
         async def enrutador(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await self._iniciar_ranking_generico(update, context, mensaje, estado_siguiente)
@@ -154,31 +184,29 @@ class RobotTelegram:
                 MessageHandler(filters.Regex("^2_ Ver Estadísticas$"), self.iniciar_ver_estadisticas)
             ],
             states={
+                # --- NUEVA RAÍZ DE ESTADÍSTICAS ---
                 self.esperando_menu_estadisticas: [
-                    # 1. Posiciones
-                    MessageHandler(filters.Regex("^1_ Ver posiciones$"), self._crear_iniciar("📊 *Tabla de Posiciones*\n\n¿Qué ranking querés consultar?", self.esperando_tipo_tabla)),
-                    # 2. Consultar pronósticos
-                    MessageHandler(filters.Regex("^2_ Consultar pronósticos$"), self._crear_iniciar("🔎 *Consultar Pronósticos*\n\n¿Qué datos querés consultar?", self.esperando_tipo_pronosticos)),
-                    # 3. Optimismo/Pesimismo
-                    MessageHandler(filters.Regex("^3_ Optimismo/Pesimismo$"), self._crear_iniciar("🧠 *Índice de Optimismo/Pesimismo*\n\n¿Qué datos querés consultar?", self.esperando_tipo_opt_pes)),
-                    # 4. Mayores Errores
-                    MessageHandler(filters.Regex("^4_ Mayores errores$"), self._crear_iniciar("🤦‍♂️ *Ranking de Mayores Errores*\n\n¿Qué datos querés consultar?", self.esperando_tipo_mayores_errores)),
-                    # 5. Falso Profeta
-                    MessageHandler(filters.Regex("^5_ Ranking Falso Profeta$"), self._crear_iniciar("🤡 *Ranking Falso Profeta*\n\n¿Qué datos querés consultar?", self.esperando_tipo_falso_profeta)),
-                    # 6. Estilos de Decisión
-                    MessageHandler(filters.Regex("^6_ Estilos de decisión$"), self._crear_iniciar("⏱️ *Estilos de Decisión*\n\n¿Qué datos querés consultar?", self.esperando_tipo_estilo_decision)),
-                    # 7. Ranking Mufas
-                    MessageHandler(filters.Regex("^7_ Ranking mufas$"), self._crear_iniciar("🌩️ *Ranking Mufa*\n\n¿Qué datos querés consultar?", self.esperando_tipo_mufa)),
-                    # 8. Mejor Predictor
-                    MessageHandler(filters.Regex("^8_ Mejor predictor$"), self._crear_iniciar("🎯 *Ranking Mejor Predictor*\n\n¿Qué datos querés consultar?", self.esperando_tipo_mejor_predictor)),
-                    # 9. Racha Récord
-                    MessageHandler(filters.Regex("^9_ Racha récord$"), self._crear_iniciar("🔥 *Racha Récord*\n\n¿Qué datos querés consultar?", self.esperando_tipo_racha_record)),
-                    # 10. Racha Actual
-                    MessageHandler(filters.Regex("^10_ Racha actual$"), self._crear_iniciar("⏳ *Racha Actual*\n\n¿Qué datos querés consultar?", self.esperando_tipo_racha_actual)),
-                    # 11. Cambios de Pronósticos
-                    MessageHandler(filters.Regex("^11_ Cambio de pronósticos$"), self._crear_iniciar("🔄 *Estabilidad de Pronósticos*\n\n¿Qué datos querés consultar?", self.esperando_tipo_cambios)),
+                    MessageHandler(filters.Regex("^1_ Rankings$"), self.iniciar_menu_rankings),
+                    MessageHandler(filters.Regex("^2_ Perfil de la comunidad$"), self.iniciar_menu_perfil),
+                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
+                ],
 
-                    MessageHandler(filters.Regex("^🔙 Volver al menú$"), self.mostrar_menu)
+                # --- SUBMENÚ: RANKINGS ---
+                self.esperando_menu_rankings: [
+                    MessageHandler(filters.Regex("^1_ Ver posiciones$"), self._crear_iniciar("🏆 *Tabla de Posiciones*\n\n¿Qué posiciones querés ver?", self.esperando_tipo_tabla)),
+                    MessageHandler(filters.Regex("^2_ Consultar pronósticos$"), self._crear_iniciar("👀 *Consultar Pronósticos*\n\n¿Qué querés consultar?", self.esperando_tipo_pronosticos)),
+                    MessageHandler(filters.Regex("^3_ Optimismo/Pesimismo$"), self._crear_iniciar("☯️ *Optimismo/Pesimismo*\n\n¿Qué datos querés consultar?", self.esperando_tipo_opt_pes)),
+                    MessageHandler(filters.Regex("^4_ Mayores errores$"), self._crear_iniciar("📉 *Mayores Errores*\n\n¿Qué datos querés consultar?", self.esperando_tipo_mayores_errores)),
+                    MessageHandler(filters.Regex("^5_ Ranking Falso Profeta$"), self._crear_iniciar("🤥 *Falso Profeta*\n\n¿Qué datos querés consultar?", self.esperando_tipo_falso_profeta)),
+                    MessageHandler(filters.Regex("^6_ Estilos de decisión$"), self._crear_iniciar("🧠 *Estilos de Decisión*\n\n¿Qué datos querés consultar?", self.esperando_tipo_estilo_decision)),
+                    MessageHandler(filters.Regex("^7_ Ranking mufas$"), self._crear_iniciar("🐈‍⬛ *Ranking Mufas*\n\n¿Qué datos querés consultar?", self.esperando_tipo_mufa)),
+                    MessageHandler(filters.Regex("^8_ Mejor predictor$"), self._crear_iniciar("🎯 *Mejor Predictor*\n\n¿Qué datos querés consultar?", self.esperando_tipo_mejor_predictor)),
+                    MessageHandler(filters.Regex("^9_ Racha récord$"), self._crear_iniciar("🔥 *Racha Récord*\n\n¿Qué datos querés consultar?", self.esperando_tipo_racha_record)),
+                    MessageHandler(filters.Regex("^10_ Racha actual$"), self._crear_iniciar("⏳ *Racha Actual*\n\n¿Qué datos querés consultar?", self.esperando_tipo_racha_actual)),
+                    MessageHandler(filters.Regex("^11_ Cambio de pronósticos$"), self._crear_iniciar("🔄 *Estabilidad de Pronósticos*\n\n¿Qué datos querés consultar?", self.esperando_tipo_cambios)),
+                    
+                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_ver_estadisticas),
+                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
                 ],
                 
                 # --- FLUJOS BASE (Se mantienen igual) ---
@@ -231,7 +259,28 @@ class RobotTelegram:
 
                 # 11. Cambios de Pronósticos
                 self.esperando_tipo_cambios: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_cambios, self.esperando_tipo_cambios, self.esperando_edicion_cambios, 'dicc_cambios', solo_finalizados=True))],
-                self.esperando_edicion_cambios: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_cambios, self.esperando_edicion_cambios, 'dicc_cambios'))]
+                self.esperando_edicion_cambios: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_cambios, self.esperando_edicion_cambios, 'dicc_cambios'))],
+
+                # --- FLUJO PERFIL DE COMUNIDAD (CASCADA) ---
+                self.esperando_menu_perfil: [
+                    MessageHandler(filters.Regex("^1_ Estilo de pronóstico$"), self.setear_grafico_estilo),
+                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_ver_estadisticas)
+                ],
+
+                self.esperando_tipo_perfil: [
+                    MessageHandler(filters.Regex("^Histórico$|^Por Torneo$"), self.preguntar_tiempo_perfil),
+                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_menu_perfil)
+                ],
+
+                self.esperando_edicion_perfil: [
+                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.setear_grafico_estilo),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_edicion_perfil)
+                ],
+
+                self.esperando_usuario_perfil: [
+                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.setear_grafico_estilo),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.calcular_y_mostrar_grafico_perfil)
+                ],
             },
             fallbacks=[CommandHandler("cancelar", self.cancelar_conversacion)],
         )
@@ -344,6 +393,17 @@ class RobotTelegram:
         return ConversationHandler.END
 
     async def iniciar_ver_estadisticas(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Menú principal de estadísticas (Raíz)."""
+        botones = [
+            ["1_ Rankings", "2_ Perfil de la comunidad"],
+            ["🔙 Volver al menú principal"]
+        ]
+        await update.message.reply_text("📊 *Panel de Estadísticas*\n\nElegí una categoría para explorar:", parse_mode="Markdown", 
+                                       reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True))
+        return self.esperando_menu_estadisticas
+
+    async def iniciar_menu_rankings(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Submenú con todos los rankings actuales."""
         botones = [
             ["1_ Ver posiciones", "2_ Consultar pronósticos"],
             ["3_ Optimismo/Pesimismo", "4_ Mayores errores"],
@@ -351,11 +411,33 @@ class RobotTelegram:
             ["7_ Ranking mufas", "8_ Mejor predictor"],
             ["9_ Racha récord", "10_ Racha actual"],
             ["11_ Cambio de pronósticos"],
-            ["🔙 Volver al menú"]
+            ["🔙 Atrás", "🔙 Volver al menú principal"]
         ]
-        await update.message.reply_text("📊 *Panel de Estadísticas*", parse_mode="Markdown", 
+        await update.message.reply_text("🏆 *Rankings del Prode*\n\nSeleccioná un ranking para consultar:", parse_mode="Markdown", 
                                        reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True))
-        return self.esperando_menu_estadisticas
+        return self.esperando_menu_rankings
+
+    async def iniciar_menu_perfil(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Submenú para los gráficos y porcentajes con explicación detallada."""
+        botones = [
+            ["1_ Estilo de pronóstico"],
+            ["🔙 Atrás", "🔙 Volver al menú principal"]
+        ]
+        
+        # Armamos el mensaje con la explicación de cada botón
+        mensaje = (
+            "👥 *Perfil de la comunidad*\n\n"
+            "Elegí qué estadísticas querés ver:\n\n"
+            "📊 *1_ Estilo de pronóstico:* Desglosa tus predicciones mostrando el porcentaje "
+            "de veces que pronosticaste victoria, empate o derrota del Rojo."
+        )
+        
+        await update.message.reply_text(
+            mensaje, 
+            parse_mode="Markdown", 
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
+        return self.esperando_menu_perfil
 
     async def cancelar_conversacion(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Permite al usuario abortar cualquier proceso escribiendo /cancelar."""
@@ -1304,6 +1386,193 @@ class RobotTelegram:
         
         await self.mostrar_menu(update, context)
         return ConversationHandler.END
+
+    async def procesar_edicion_y_preguntar_usuario(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 2: Guarda la edición elegida y arma el teclado con todos los usuarios."""
+        texto_edicion = update.message.text
+        
+        # 1. Guardamos la edición en la memoria temporal
+        if texto_edicion == "Histórico":
+            context.user_data['perfil_edicion_id'] = None
+            context.user_data['perfil_anio'] = None
+        else:
+            # Aquí podés mapear el nombre del torneo a su ID si lo preferís
+            context.user_data['perfil_edicion_id'] = texto_edicion 
+            context.user_data['perfil_anio'] = None
+
+        # 2. Identificamos quién está consultando
+        id_telegram = update.effective_user.id
+        usuario_actual = self.db.obtener_usuario_por_telegram(id_telegram)
+        
+        # 3. Obtenemos todos los usuarios (id, username) de la tabla usuarios
+        usuarios_db = self.db.obtener_usuarios() 
+        
+        botones = []
+        
+        # Primero el botón "Yo" para el usuario que está operando
+        if usuario_actual:
+            botones.append([f"Yo ({usuario_actual})"])
+            
+        # Armamos los botones de los demás usuarios de a dos por fila
+        fila_temp = []
+        for u in usuarios_db:
+            # u[1] es el username (índice 1 de la tupla devuelta por SELECT id, username)
+            nombre_u = u[1] 
+            
+            # Solo agregamos si el nombre en la BD es distinto al "Yo" actual
+            # Usamos strip() por si hay espacios invisibles en la base de datos
+            if str(nombre_u).strip().lower() != str(usuario_actual).strip().lower():
+                fila_temp.append(nombre_u)
+                
+                # Cuando completamos una fila de 2, la agregamos a la lista principal
+                if len(fila_temp) == 2:
+                    botones.append(fila_temp)
+                    fila_temp = []
+        
+        # ⚠️ IMPORTANTE: Si quedó un usuario "suelto" en la última fila, lo agregamos ahora
+        if fila_temp:
+            botones.append(fila_temp)
+            
+        # Agregamos los botones de navegación al final
+        botones.append(["🔙 Atrás", "🔙 Volver al menú principal"])
+        
+        # 4. Enviamos el mensaje con el teclado dinámico
+        await update.message.reply_text(
+            "👤 ¿De qué usuario querés ver el reporte?", 
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
+        return self.esperando_usuario_perfil
+
+    async def calcular_y_mostrar_grafico_perfil(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 3: Lee la memoria, procesa los datos y dibuja los emojis."""
+        texto_usuario = update.message.text
+        
+        # Si eligió "Yo (Gabriel)", extraemos solo "Gabriel"
+        if texto_usuario.startswith("Yo ("):
+            usuario_seleccionado = texto_usuario[4:-1]
+        else:
+            usuario_seleccionado = texto_usuario
+
+        # Recuperamos los datos de la memoria
+        tipo_grafico = context.user_data.get('tipo_grafico_perfil')
+        edicion_id = context.user_data.get('perfil_edicion_id')
+        anio = context.user_data.get('perfil_anio')
+
+        # --- LÓGICA ESPECÍFICA PARA "ESTILO DE PRONÓSTICO" ---
+        if tipo_grafico == "estilo_pronostico":
+            stats = self.db.obtener_estadisticas_estilo_pronostico(usuario_seleccionado, edicion_id, anio)
+            
+            if not stats or stats[0] == 0:
+                await update.message.reply_text("ℹ️ No hay datos suficientes para generar el reporte de este usuario.")
+                context.user_data.clear()
+                
+                # 🌟 MODIFICACIÓN: Si no hay datos, también vuelve al menú principal
+                await self.mostrar_menu(update, context)
+                return ConversationHandler.END
+
+            total = stats[0]
+            sin_pron = stats[1]
+            victorias = stats[2]
+            empates = stats[3]
+            derrotas = stats[4]
+
+            def calc_pct(val): return (val / total) * 100 if total > 0 else 0
+
+            # Armamos el "Gráfico de torta de texto"
+            mensaje = f"📊 *Estilo de pronóstico: {usuario_seleccionado}*\n"
+            mensaje += f"Partidos analizados: _{total}_\n\n"
+            
+            if victorias > 0: mensaje += f"🟢 *Victorias:* {calc_pct(victorias):.1f}% ({victorias})\n"
+            if empates > 0:   mensaje += f"🟡 *Empates:* {calc_pct(empates):.1f}% ({empates})\n"
+            if derrotas > 0:  mensaje += f"🔴 *Derrotas:* {calc_pct(derrotas):.1f}% ({derrotas})\n"
+            if sin_pron > 0:  mensaje += f"⚪ *Sin pronóstico:* {calc_pct(sin_pron):.1f}% ({sin_pron})\n"
+
+            await update.message.reply_text(mensaje, parse_mode="Markdown")
+
+        # Limpiamos la memoria por prolijidad
+        context.user_data.clear()
+        
+        # 🌟 MODIFICACIÓN PRINCIPAL: Volver al menú principal y cerrar el flujo de conversación
+        await self.mostrar_menu(update, context)
+        return ConversationHandler.END   
+
+    async def setear_grafico_estilo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """PASO 1: Pregunta si quiere ver datos Históricos o por un Torneo específico."""
+        context.user_data['tipo_grafico_perfil'] = 'estilo_pronostico' # Identificador del reporte
+        
+        botones = [["Histórico", "Por Torneo"], ["🔙 Atrás", "🔙 Volver al menú principal"]]
+        await update.message.reply_text(
+            "📊 *Estilo de pronóstico*\n\n¿Querés ver los datos de toda la historia o de un torneo en particular?",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
+        return self.esperando_tipo_perfil
+    
+    async def preguntar_tiempo_perfil(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """PASO 2: Bifurca. Si es Histórico, salta al usuario. Si es Torneo, muestra la lista."""
+        opcion = update.message.text
+
+        if opcion == "Histórico":
+            context.user_data['perfil_edicion_id'] = None
+            context.user_data['perfil_anio'] = None
+            # Salto directo al paso del usuario
+            return await self.preguntar_usuario_perfil(update, context)
+        
+        elif opcion == "Por Torneo":
+            # Usamos tu generador de botones de ediciones (solo torneos, sin 'Histórico')
+            botones = self._generar_botones_ediciones(incluir_historico=False)
+            await update.message.reply_text(
+                "🏆 *Seleccioná el Torneo*",
+                reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+            )
+            return self.esperando_edicion_perfil
+        
+        return self.esperando_tipo_perfil
+
+    async def procesar_edicion_perfil(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """PASO 2b: Guarda el torneo elegido y pasa a preguntar el usuario."""
+        texto_edicion = update.message.text
+        
+        # 1. Buscamos el ID numérico que corresponde al texto del botón
+        ediciones = self.db.obtener_ediciones()
+        edicion_id_real = None
+        
+        for ed in ediciones:
+            # ed[0] es ID, ed[1] es el nombre (ej. LPF), ed[2] es el año
+            if f"{ed[1]} {ed[2]}" == texto_edicion:
+                edicion_id_real = ed[0]
+                break
+                
+        # 2. Guardamos el ID real en la memoria, no el texto
+        context.user_data['perfil_edicion_id'] = edicion_id_real 
+        context.user_data['perfil_anio'] = None
+        
+        return await self.preguntar_usuario_perfil(update, context)
+
+    async def preguntar_usuario_perfil(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """PASO 3 (Genérico): Pregunta por 'Yo' o el resto de la comunidad."""
+        id_telegram = update.effective_user.id
+        usuario_actual = self.db.obtener_usuario_por_telegram(id_telegram)
+        usuarios_db = self.db.obtener_usuarios()
+        
+        botones = []
+        if usuario_actual:
+            botones.append([f"Yo ({usuario_actual})"])
+            
+        fila = []
+        for u in usuarios_db:
+            nombre = u[1]
+            if str(nombre).strip().lower() != str(usuario_actual).strip().lower():
+                fila.append(nombre)
+                if len(fila) == 2:
+                    botones.append(fila)
+                    fila = []
+        if fila: botones.append(fila)
+            
+        botones.append(["🔙 Atrás", "🔙 Volver al menú principal"])
+        await update.message.reply_text("👤 ¿De qué usuario querés ver el reporte?", 
+                                       reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True))
+        return self.esperando_usuario_perfil
     
     async def forzar_actualizacion_cronometros(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Borra todas las alarmas programadas y las vuelve a crear desde la DB."""
