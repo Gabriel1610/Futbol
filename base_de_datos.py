@@ -86,7 +86,7 @@ class BaseDeDatos:
         try:
             conexion = self.abrir()
             cursor = conexion.cursor()
-            sql = "SELECT id, nombre FROM rivales ORDER BY nombre ASC"
+            sql = "SELECT id, nombre FROM rivales ORDER BY LOWER(nombre) ASC"
             cursor.execute(sql)
             return cursor.fetchall()
         except Exception as e:
@@ -375,7 +375,7 @@ class BaseDeDatos:
             conexion = self.abrir()
             cursor = conexion.cursor()
             
-            sql = "SELECT id, nombre FROM rivales ORDER BY nombre ASC"
+            sql = "SELECT id, nombre FROM rivales ORDER BY LOWER(nombre) ASC"
             cursor.execute(sql)
             return cursor.fetchall()
         except Exception as e:
@@ -1180,13 +1180,68 @@ class BaseDeDatos:
         finally:
             if 'cursor' in locals() and cursor: cursor.close()
             if conexion: conexion.close()
+    
+    def obtener_partidos_por_rival(self, rival_id):
+        """Devuelve todos los partidos asociados a un equipo."""
+        conexion = None
+        cursor = None
+        try:
+            conexion = self.abrir()
+            cursor = conexion.cursor(dictionary=True)
+            sql = """
+                SELECT 
+                    p.id, p.fecha_hora, p.condicion, p.goles_independiente as goles_cai, p.goles_rival,
+                    c.nombre as torneo, a.numero as anio
+                FROM partidos p
+                JOIN ediciones e ON p.edicion_id = e.id
+                JOIN campeonatos c ON e.campeonato_id = c.id
+                JOIN anios a ON e.anio_id = a.id
+                WHERE p.rival_id = %s
+                ORDER BY p.fecha_hora DESC
+            """
+            cursor.execute(sql, (rival_id,))
+            return cursor.fetchall()
+        except Exception as e:
+            logger.error(f"Error buscando partidos del rival: {e}")
+            return []
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def eliminar_rival_y_partidos(self, rival_id):
+        """Elimina todos los partidos de un equipo y luego el equipo mismo."""
+        conexion = self.abrir()
+        try:
+            cursor = conexion.cursor()
+            
+            # 1. Los pronósticos se borrarán automáticamente por el ON DELETE CASCADE de MySQL.
+            # Solo necesitamos borrar los partidos atados a este rival_id.
+            cursor.execute("DELETE FROM partidos WHERE rival_id = %s", (rival_id,))
+            
+            # 2. Ahora que no hay partidos atados, podemos borrar el equipo.
+            cursor.execute("DELETE FROM rivales WHERE id = %s", (rival_id,))
+            
+            conexion.commit()
+            return True
+        except Exception as e:
+            conexion.rollback()
+            raise e
+        finally:
+            if 'cursor' in locals() and cursor: cursor.close()
+            if conexion: conexion.close()
 
     def eliminar_rival_manual(self, rival_id):
+        import mysql.connector
         conexion = self.abrir()
         try:
             cursor = conexion.cursor()
             cursor.execute("DELETE FROM rivales WHERE id = %s", (rival_id,))
             conexion.commit()
+        except mysql.connector.Error as e:
+            if e.errno == 1451:
+                # Error de clave foránea: El equipo está siendo usado en la tabla 'partidos'
+                raise Exception("No se puede eliminar este equipo porque ya tiene partidos registrados en el sistema.")
+            raise e
         finally:
             if 'cursor' in locals() and cursor: cursor.close()
             if conexion: conexion.close()
@@ -1609,7 +1664,7 @@ class BaseDeDatos:
             if cursor: cursor.close()
             if conexion: conexion.close()
     
-    def obtener_usuarios(self):
+    def obtener_usuarios_con_id(self):
         """Obtiene la lista completa de usuarios (ID y nombre de usuario)."""
         conexion = None
         cursor = None

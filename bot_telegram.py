@@ -20,7 +20,7 @@ class RobotTelegram:
         esperando_identificador, esperando_codigo, esperando_partido_id,
         esperando_pronostico, esperando_tipo_tabla, esperando_edicion_tabla,
         esperando_tipo_pronosticos, esperando_edicion_pronosticos, esperando_usuario_pronosticos,
-        esperando_tipo_opt_pes, esperando_edicion_opt_pes,
+        esperando_tipo_opt_pes, esperando_edicion_opt_pes, esperando_accion_opt_pes,
         esperando_tipo_mayores_errores, esperando_edicion_mayores_errores,
         esperando_tipo_falso_profeta, esperando_edicion_falso_profeta,
         esperando_menu_estadisticas, 
@@ -36,8 +36,11 @@ class RobotTelegram:
         esperando_menu_administracion, esperando_fecha_resultado, esperando_goles_resultado,
         esperando_edicion_ver_partidos,
         esperando_menu_admin_partidos, esperando_menu_admin_equipos,
-        esperando_nombre_nuevo_equipo
-    ) = range(1, 41)
+        esperando_nombre_nuevo_equipo,
+        esperando_equipo_a_editar, esperando_nuevo_nombre_equipo,
+        esperando_equipo_a_eliminar,
+        esperando_confirmacion_eliminar_equipo
+    ) = range(1, 46)
 
     def __init__(self):
         """Inicializa las configuraciones, la base de datos y la app de Telegram."""
@@ -225,19 +228,272 @@ class RobotTelegram:
     async def iniciar_admin_equipos(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Submenú de gestión de Equipos."""
         botones = [
-            ["3_ Agregar equipo"],
+            ["1_ Agregar", "2_ Editar"],
+            ["3_ Eliminar"],
             ["🔙 Atrás", "🔙 Volver al menú principal"]
         ]
         mensaje = (
             "🛡️ *Gestión de Equipos*\n\n"
             "Elegí una opción:\n\n"
-            "➕ *3_ Agregar equipo:* Añadí un nuevo club rival a la base de datos."
+            "➕ *1_ Agregar:* Añadí un nuevo club rival a la base de datos.\n"
+            "✏️ *2_ Editar:* Modificá el nombre de un club existente.\n"
+            "🗑️ *3_ Eliminar:* Borrá un equipo (solo si no tiene partidos registrados)."
         )
         await update.message.reply_text(
             mensaje, parse_mode="Markdown", reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
         )
         return self.esperando_menu_admin_equipos
 
+    async def iniciar_eliminar_equipo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 1 Eliminar: Imprime la lista de equipos usando la función reutilizable."""
+        pregunta = "🗑️ *Respondé con el NÚMERO del equipo que querés eliminar:*"
+        # Reutilizamos la función mágica que creaste en el paso anterior
+        exito = await self._mostrar_lista_equipos(update, context, pregunta)
+        
+        if not exito:
+            return await self.iniciar_admin_equipos(update, context)
+            
+        return self.esperando_equipo_a_eliminar
+
+    async def procesar_equipo_a_eliminar(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 2 Eliminar: Valida el número y elimina, o deriva si hay conflicto."""
+        texto = update.message.text.strip()
+        mapa = context.user_data.get('mapa_equipos', {})
+        
+        if texto not in mapa:
+            await update.message.reply_text("❌ Número inválido. Ingresá un número de la lista o tocá \"Atrás\".")
+            return self.esperando_equipo_a_eliminar
+            
+        equipo_elegido = mapa[texto]
+        
+        try:
+            # Mandamos a eliminar de forma limpia
+            self.db.eliminar_rival_manual(equipo_elegido['id'])
+            
+            await update.message.reply_text(
+                f"✅ ¡El equipo *{equipo_elegido['nombre']}* fue eliminado correctamente de la base de datos!",
+                parse_mode="Markdown"
+            )
+            context.user_data.pop('mapa_equipos', None)
+            return await self.iniciar_admin_equipos(update, context)
+            
+        except Exception as e:
+            # 🌟 INTERCEPTAMOS EL ERROR DE MYSQL (Error 1451 configurado en tu BaseDeDatos)
+            if "No se puede eliminar este equipo porque ya tiene partidos registrados" in str(e):
+                context.user_data['equipo_a_eliminar_forzado'] = equipo_elegido
+                
+                botones = [
+                    ["1_ Ver partidos", "2_ Sí"],
+                    ["3_ No"],
+                    ["🔙 Atrás", "🔙 Volver al menú principal"]
+                ]
+                
+                mensaje = (
+                    f"⚠️ *ATENCIÓN: EQUIPO CON HISTORIAL* ⚠️\n\n"
+                    f"El equipo *{equipo_elegido['nombre']}* posee partidos en la base de datos.\n\n"
+                    f"Si decidís eliminarlo, *se borrarán de manera definitiva todos sus partidos y los pronósticos* "
+                    f"que hayan hecho los usuarios. Esto alterará drásticamente el Prode: cambiarán las tablas de posiciones, "
+                    f"los puntos acumulados, la efectividad y los historiales de la comunidad.\n\n"
+                    f"Elegí una opción:\n\n"
+                    f"📋 *1_ Ver partidos:* Muestra los partidos registrados con este equipo.\n"
+                    f"🗑️ *2_ Sí:* Eliminar el equipo y destruir todo su historial de partidos.\n"
+                    f"🚫 *3_ No:* Cancelar la operación."
+                )
+                
+                await update.message.reply_text(
+                    mensaje, parse_mode="Markdown", reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+                )
+                return self.esperando_confirmacion_eliminar_equipo
+            else:
+                await update.message.reply_text(f"❌ Error: {e}\n\nElegí otro número o tocá \"Atrás\".")
+                return self.esperando_equipo_a_eliminar
+
+    async def procesar_confirmacion_eliminar_equipo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 3 Eliminar: Decide qué hacer con el equipo bloqueado."""
+        texto = update.message.text.strip()
+        equipo = context.user_data.get('equipo_a_eliminar_forzado')
+        
+        if not equipo:
+            await update.message.reply_text("❌ La sesión expiró. Volvé a empezar.")
+            return await self.iniciar_admin_equipos(update, context)
+            
+        if texto == "1_ Ver partidos":
+            partidos = self.db.obtener_partidos_por_rival(equipo['id'])
+            if not partidos:
+                await update.message.reply_text("No se encontraron partidos.")
+                return self.esperando_confirmacion_eliminar_equipo
+                
+            mensajes = []
+            mensaje_actual = f"📋 *Partidos de {equipo['nombre']}*\n\n"
+            
+            for p in partidos:
+                fecha_str = p['fecha_hora'].strftime('%d/%m/%Y %H:%M') if p['fecha_hora'] else "A conf."
+                torneo = f"{p['torneo']} {p['anio']}"
+                
+                if p['condicion'] == -1:
+                    encuentro = f"{equipo['nombre']} vs Independiente"
+                    res = f"{p['goles_rival']} - {p['goles_cai']}"
+                else:
+                    encuentro = f"Independiente vs {equipo['nombre']}"
+                    res = f"{p['goles_cai']} - {p['goles_rival']}"
+                
+                estado = f"✅ Finalizado ({res})" if p['goles_cai'] is not None else "⏳ Pendiente"
+                
+                bloque = f"📅 {fecha_str}\n🏆 {torneo}\n⚔️ {encuentro}\n📊 {estado}\n—\n"
+                
+                if len(mensaje_actual) + len(bloque) > 3800:
+                    mensajes.append(mensaje_actual)
+                    mensaje_actual = bloque
+                else:
+                    mensaje_actual += bloque
+                    
+            if mensaje_actual: mensajes.append(mensaje_actual)
+                
+            for m in mensajes:
+                await update.message.reply_text(m, parse_mode="Markdown")
+                
+            # No retornamos a ningún lado, nos quedamos esperando que decida "2_ Sí" o "3_ No"
+            return self.esperando_confirmacion_eliminar_equipo
+            
+        elif texto == "2_ Sí":
+            try:
+                # 1. Primero borramos todos los partidos (y sus pronósticos caen solos)
+                self.db.eliminar_partidos_por_rival(equipo['id'])
+                
+                # 2. Ahora que el equipo está "limpio", lo borramos
+                self.db.eliminar_equipo_forzado(equipo['id']) # O usar self.db.eliminar_rival_manual(equipo['id'])
+                
+                await update.message.reply_text(
+                    f"✅ *¡ELIMINACIÓN FORZADA EXITOSA!*\n\nEl equipo *{equipo['nombre']}* y todo su rastro "
+                    f"fueron borrados permanentemente del Prode.",
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                await update.message.reply_text(f"❌ Error crítico al intentar eliminar: {e}")
+            
+            context.user_data.pop('equipo_a_eliminar_forzado', None)
+            context.user_data.pop('mapa_equipos', None)
+            return await self.iniciar_admin_equipos(update, context)
+            
+        elif texto == "3_ No":
+            await update.message.reply_text("🚫 Operación cancelada. El equipo y sus partidos están a salvo.")
+            context.user_data.pop('equipo_a_eliminar_forzado', None)
+            return await self.iniciar_admin_equipos(update, context)
+            
+        else:
+            await update.message.reply_text("❌ Opción inválida. Tocá \"1_ Ver partidos\", \"2_ Sí\" o \"3_ No\".")
+            return self.esperando_confirmacion_eliminar_equipo
+
+    async def _mostrar_lista_equipos(self, update: Update, context: ContextTypes.DEFAULT_TYPE, texto_pregunta: str):
+        """Función reutilizable: Lista los equipos enumerados desde 1 y devuelve un mapa de IDs."""
+        rivales = self.db.obtener_rivales()
+        if not rivales:
+            await update.message.reply_text("❌ No hay equipos registrados en la base de datos.")
+            return False
+            
+        mapa_equipos = {}
+        mensajes = []
+        mensaje_actual = "🛡️ *Listado de Equipos*\n\n"
+        
+        # Iteramos empezando desde el número 1
+        for i, rival in enumerate(rivales, start=1):
+            r_id = rival[0]
+            r_nombre = rival[1]
+            
+            # Guardamos la relación { "1": {"id": 15, "nombre": "Boca"} }
+            mapa_equipos[str(i)] = {'id': r_id, 'nombre': r_nombre}
+            
+            bloque = f"*{i}_* {r_nombre}\n"
+            
+            # Paginación para no superar el límite de 4000 caracteres de Telegram
+            if len(mensaje_actual) + len(bloque) > 3800:
+                mensajes.append(mensaje_actual)
+                mensaje_actual = bloque
+            else:
+                mensaje_actual += bloque
+                
+        if mensaje_actual:
+            mensajes.append(mensaje_actual)
+            
+        # Enviamos los globos de texto (todos menos el último van sin botones)
+        for m in mensajes[:-1]:
+            await update.message.reply_text(m, parse_mode="Markdown")
+            
+        # Enviamos el último globo de texto que incluye la pregunta y los botones
+        botones = [["🔙 Atrás", "🔙 Volver al menú principal"]]
+        await update.message.reply_text(
+            mensajes[-1] + f"\n\n{texto_pregunta}",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
+        
+        # Guardamos el mapa en la memoria para que el siguiente paso lo pueda leer
+        context.user_data['mapa_equipos'] = mapa_equipos
+        return True
+
+    async def iniciar_editar_equipo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 1 Editar: Imprime la lista de equipos usando la función reutilizable."""
+        pregunta = "✏️ *Respondé con el NÚMERO del equipo que querés editar:*"
+        exito = await self._mostrar_lista_equipos(update, context, pregunta)
+        
+        if not exito:
+            return await self.iniciar_admin_equipos(update, context)
+            
+        return self.esperando_equipo_a_editar
+
+    async def procesar_equipo_a_editar(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 2 Editar: Valida el número y pide el nuevo nombre."""
+        texto = update.message.text.strip()
+        mapa = context.user_data.get('mapa_equipos', {})
+        
+        if texto not in mapa:
+            await update.message.reply_text("❌ Número inválido. Ingresá un número de la lista o tocá \"Atrás\".")
+            return self.esperando_equipo_a_editar
+            
+        equipo_elegido = mapa[texto]
+        context.user_data['equipo_a_editar'] = equipo_elegido
+        
+        botones = [["🔙 Atrás", "🔙 Volver al menú principal"]]
+        await update.message.reply_text(
+            f"✏️ Elegiste editar: *{equipo_elegido['nombre']}*\n\n"
+            f"Ingresá el *nuevo nombre* para este club:",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
+        return self.esperando_nuevo_nombre_equipo
+
+    async def procesar_nuevo_nombre_equipo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 3 Editar: Valida, recorta espacios y guarda en DB."""
+        nuevo_nombre = update.message.text.strip() # Recorta por izquierda y derecha
+        equipo = context.user_data.get('equipo_a_editar')
+        
+        if not equipo:
+            await update.message.reply_text("❌ La sesión expiró. Empecemos de nuevo.")
+            return await self.iniciar_admin_equipos(update, context)
+            
+        if not nuevo_nombre:
+            await update.message.reply_text("❌ El nombre no puede estar vacío. Intentá de nuevo o tocá \"Atrás\".")
+            return self.esperando_nuevo_nombre_equipo
+            
+        try:
+            # Usamos la función actualizar_rival que ya tiene el manejo de errores MySQL integrado
+            self.db.actualizar_rival(equipo['id'], nuevo_nombre)
+            
+            await update.message.reply_text(
+                f"✅ ¡Excelente! El equipo *{equipo['nombre']}* ahora se llama *{nuevo_nombre}* en la base de datos.",
+                parse_mode="Markdown"
+            )
+            
+            # Limpiamos la memoria
+            context.user_data.pop('mapa_equipos', None)
+            context.user_data.pop('equipo_a_editar', None)
+            
+            return await self.iniciar_admin_equipos(update, context)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}\n\nIngresá otro nombre o tocá \"Atrás\".")
+            return self.esperando_nuevo_nombre_equipo
+        
     async def iniciar_agregar_equipo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Paso 1 Equipos: Solicita el nombre del nuevo club."""
         botones = [["🔙 Atrás", "🔙 Volver al menú principal"]]
@@ -258,7 +514,7 @@ class RobotTelegram:
         if not texto:
             await update.message.reply_text(
                 "❌ El nombre no puede estar vacío.\n"
-                "Por favor, ingresá un nombre válido o tocá 'Atrás'."
+                "Por favor, ingresá un nombre válido o tocá \"Atrás\"."
             )
             return self.esperando_nombre_nuevo_equipo
             
@@ -277,7 +533,7 @@ class RobotTelegram:
             # Si MySQL tira error por duplicado o vacío (capturado en base_de_datos.py)
             await update.message.reply_text(
                 f"❌ Error: {e}\n\n"
-                f"Intentá con otro nombre o tocá 'Atrás'."
+                f"Intentá con otro nombre o tocá \"Atrás\"."
             )
             return self.esperando_nombre_nuevo_equipo
     
@@ -344,7 +600,7 @@ class RobotTelegram:
                 else:
                     resultado_str = "⏳ Pendiente"
                     
-            bloque = f"🔹 *ID {p_id}* | 📅 {fecha_str}\n"
+            bloque = f"📅 *{fecha_str}*\n"
             bloque += f"⚔️ {partido_str}\n"
             bloque += f"📊 {resultado_str}\n—\n"
             
@@ -387,7 +643,7 @@ class RobotTelegram:
             if fecha_ingresada > fecha_actual:
                 await update.message.reply_text(
                     "❌ La fecha ingresada es en el futuro.\n"
-                    "Por favor, ingresá una fecha del presente o pasado, o tocá 'Atrás'."
+                    "Por favor, ingresá una fecha del presente o pasado, o tocá \"Atrás\"."
                 )
                 return self.esperando_fecha_resultado
                 
@@ -397,7 +653,7 @@ class RobotTelegram:
             if not partido:
                 await update.message.reply_text(
                     f"❌ No se encontró ningún partido oficial registrado el *{texto_fecha}*.\n"
-                    "Revisá la fecha, ingresala nuevamente o tocá 'Atrás'.",
+                    "Revisá la fecha, ingresala nuevamente o tocá \"Atrás\".",
                     parse_mode="Markdown"
                 )
                 return self.esperando_fecha_resultado
@@ -490,11 +746,11 @@ class RobotTelegram:
             await update.message.reply_text(
                 "❌ Formato inválido.\n"
                 "Debe ser solo números separados por un guion. Ejemplo: 2-0\n\n"
-                "Intentá de nuevo o tocá 'Atrás'."
+                "Intentá de nuevo o tocá \"Atrás\"."
             )
             return self.esperando_goles_resultado
         except Exception as e:
-            await update.message.reply_text(f"❌ Error en la base de datos: {e}\nIntentá de nuevo o tocá 'Atrás'.")
+            await update.message.reply_text(f"❌ Error en la base de datos: {e}\nIntentá de nuevo o tocá \"Atrás\".")
             return self.esperando_goles_resultado
 
     # --- MÉTODOS PRIVADOS DE CONFIGURACIÓN ---
@@ -538,8 +794,15 @@ class RobotTelegram:
                 # --- FLUJOS BASE (Se mantienen igual) ---
                 self.esperando_identificador: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_identificador)],
                 self.esperando_codigo: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_codigo)],
-                self.esperando_partido_id: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_partido_id)],
-                self.esperando_pronostico: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_pronostico)],
+                self.esperando_partido_id: [
+                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_partido_id)
+                ],
+                
+                self.esperando_pronostico: [
+                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_pronostico)
+                ],
 
                 # --- FLUJOS GENÉRICOS ---
                 # 1. Posiciones
@@ -555,6 +818,12 @@ class RobotTelegram:
                 self.esperando_tipo_opt_pes: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_opt_pes, self.esperando_tipo_opt_pes, self.esperando_edicion_opt_pes, 'dicc_opt_pes'))],
                 self.esperando_edicion_opt_pes: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_opt_pes, self.esperando_edicion_opt_pes, 'dicc_opt_pes'))],
                 
+                self.esperando_accion_opt_pes: [
+                    MessageHandler(filters.Regex("^1_ Ver referencias$"), self.procesar_accion_opt_pes),
+                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_menu_rankings),
+                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
+                ],
+
                 # 4. Mayores Errores (Usa solo_finalizados=True)
                 self.esperando_tipo_mayores_errores: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_mayores_errores, self.esperando_tipo_mayores_errores, self.esperando_edicion_mayores_errores, 'dicc_errores', solo_finalizados=True))],
                 self.esperando_edicion_mayores_errores: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_mayores_errores, self.esperando_edicion_mayores_errores, 'dicc_errores'))],
@@ -644,7 +913,9 @@ class RobotTelegram:
 
                 self.esperando_menu_admin_equipos: [
                     # 🌟 RUTA DE ENTRADA A AGREGAR EQUIPO
-                    MessageHandler(filters.Regex("^1_ Agregar equipo$"), self.iniciar_agregar_equipo),
+                    MessageHandler(filters.Regex("^1_ Agregar$"), self.iniciar_agregar_equipo),
+                    MessageHandler(filters.Regex("^2_ Editar$"), self.iniciar_editar_equipo),
+                    MessageHandler(filters.Regex("^3_ Eliminar$"), self.iniciar_eliminar_equipo),
                     MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_administracion),
                     MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
                 ],
@@ -653,6 +924,31 @@ class RobotTelegram:
                     MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_admin_equipos),
                     MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu),
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_nombre_nuevo_equipo)
+                ],
+
+                self.esperando_equipo_a_editar: [
+                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_admin_equipos),
+                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_equipo_a_editar)
+                ],
+                
+                self.esperando_nuevo_nombre_equipo: [
+                    # Si toca atrás mientras iba a escribir el nuevo nombre, lo devolvemos a la lista numérica
+                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_editar_equipo),
+                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_nuevo_nombre_equipo)
+                ],
+
+                self.esperando_equipo_a_eliminar: [
+                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_admin_equipos),
+                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_equipo_a_eliminar)
+                ],
+
+                self.esperando_confirmacion_eliminar_equipo: [
+                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_eliminar_equipo),
+                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_confirmacion_eliminar_equipo)
                 ],
             },
             fallbacks=[CommandHandler("cancelar", self.cancelar_conversacion)],
@@ -779,6 +1075,11 @@ class RobotTelegram:
             # 🌟 NUEVO: Agregamos el texto explicativo si es admin
             if es_admin:
                 mensaje += "\n⚙️ *5_ Administración:* Panel exclusivo para gestionar el bot."
+            
+            mensaje += (
+                "\n\n🌐 *¿Sabías que podés hacer mucho más en nuestra web?*\n"
+                "Entrá ahora en: https://independiente.onrender.com"
+            )
                 
         else:
             botones = [["1_ Asociar cuenta"]]
@@ -974,7 +1275,7 @@ class RobotTelegram:
     # FLUJO 2: CARGAR PRONÓSTICO
     # ==========================================
     async def iniciar_carga_pronostico(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Paso 1: Valida al usuario y muestra la lista de partidos futuros."""
+        """Paso 1: Valida al usuario y muestra la lista de partidos futuros enumerados desde el 1."""
         id_telegram = update.message.from_user.id
         username = self.db.obtener_usuario_por_telegram(id_telegram)
         
@@ -995,11 +1296,9 @@ class RobotTelegram:
             return ConversationHandler.END
             
         mensaje = "📅 *Partidos Disponibles para Pronosticar:*\n\n"
-        
-        # 🌟 CAMBIO: En lugar de guardar solo los IDs, guardamos un diccionario con el nombre del rival y la localía
         partidos_info = {}
         
-        for p in partidos_futuros:
+        for i, p in enumerate(partidos_futuros, start=1):
             p_id = p[0]
             rival = p[1]
             torneo = p[3]
@@ -1008,13 +1307,12 @@ class RobotTelegram:
             pred_cai = p[8]
             pred_rival = p[9]
             
-            # Guardamos la info en la memoria de este partido
-            partidos_info[str(p_id)] = {'rival': rival, 'condicion': condicion}
+            # Guardamos el ID de BD adentro de un diccionario oculto
+            partidos_info[str(i)] = {'id': p_id, 'rival': rival, 'condicion': condicion}
             
-            # Formateamos el texto dependiendo de si Independiente es visitante o local (-1 o 1)
+            # 1. Armamos el texto del partido y el pronóstico previo (si existe) según la localía
             if condicion == -1:
                 partido_str = f"{rival} vs Independiente"
-                # Formateamos el pronóstico previo si es que existe
                 if pred_cai is not None:
                     txt_previo = f"{rival} {pred_rival} - {pred_cai} Independiente"
             else:
@@ -1022,10 +1320,10 @@ class RobotTelegram:
                 if pred_cai is not None:
                     txt_previo = f"Independiente {pred_cai} - {pred_rival} {rival}"
                 
-            mensaje += f"🔹 *ID: {p_id}* | {partido_str}\n"
+            # 2. Ensamblamos el bloque del mensaje
+            mensaje += f"*{i}_* {partido_str}\n"
             mensaje += f"🏆 {torneo} | 🗓️ {fecha_display}\n"
             
-            # 🌟 CAMBIO: Ahora el pronóstico actual muestra el nombre real
             if pred_cai is not None:
                 mensaje += f"👉 _Tu pronóstico actual: {txt_previo}_\n"
             else:
@@ -1033,39 +1331,51 @@ class RobotTelegram:
                 
             mensaje += "—\n"
             
-        mensaje += "\n✍️ Respondé con el *NÚMERO DE ID* del partido que querés pronosticar (o escribí /cancelar):"
+        # 3. Pregunta final
+        mensaje += "\n✍️ Respondé con el *NÚMERO* del partido que querés pronosticar:"
         
-        # Guardamos el diccionario completo en la memoria del usuario
         context.user_data['partidos_info'] = partidos_info
         
-        await update.message.reply_text(mensaje, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+        # Botón para volver
+        botones_volver = [["🔙 Volver al menú principal"]]
+        
+        await update.message.reply_text(
+            mensaje, 
+            parse_mode="Markdown", 
+            reply_markup=ReplyKeyboardMarkup(botones_volver, resize_keyboard=True)
+        )
         return self.esperando_partido_id
-
+    
     async def procesar_partido_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Paso 2: Valida el ID y le pide el resultado."""
+        """Paso 2: Valida el NÚMERO visual y le pide el resultado."""
         texto = update.message.text.strip()
         partidos_info = context.user_data.get('partidos_info', {})
         
         if texto not in partidos_info:
             await update.message.reply_text(
-                "❌ Ese ID no es válido o el partido ya no pertenece al futuro.\n"
-                "Intentá de nuevo con un ID de la lista o escribí /cancelar."
+                "❌ Ese número no es válido\n"
+                "Intentá de nuevo con un NÚMERO de la lista o escribí /cancelar."
             )
             return self.esperando_partido_id
             
-        context.user_data['partido_id_elegido'] = int(texto)
-        # 🌟 CAMBIO: Separamos la info específica del partido que acaba de elegir
-        context.user_data['info_partido_elegido'] = partidos_info[texto]
+        # Extraemos el ID real desde la memoria
+        info_partido_elegido = partidos_info[texto]
+        context.user_data['partido_id_elegido'] = info_partido_elegido['id']
+        context.user_data['info_partido_elegido'] = info_partido_elegido
+        
+        # 🌟 NUEVO: Creamos el botón para el teclado
+        botones = [["🔙 Volver al menú principal"]]
         
         await update.message.reply_text(
             "⚽ *¡Excelente!*\n\n"
             "Ahora escribí tu pronóstico con el formato *GolesCAI-GolesRival*.\n"
             "Ejemplo: *2-0* o *1-1*\n\n"
             "_(Recordá que siempre el primer número corresponde a Independiente)_",
-            parse_mode="Markdown"
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True) # 🌟 Se inyecta el botón acá
         )
         return self.esperando_pronostico
-
+    
     async def procesar_pronostico(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Paso 3: Guarda el resultado en la base de datos."""
         texto = update.message.text.strip()
@@ -1151,7 +1461,7 @@ class RobotTelegram:
         ranking = self.db.obtener_ranking(edicion_id=edicion_id)
         
         # 2. Obtenemos la lista completa de todos los usuarios del sistema
-        usuarios_db = self.db.obtener_usuarios()
+        usuarios_db = self.db.obtener_usuarios_con_id()
         todos_los_usuarios = [u[1] for u in usuarios_db]
         
         # 3. Identificamos quiénes sí tienen puntos en esta tabla
@@ -1215,7 +1525,7 @@ class RobotTelegram:
 
         id_telegram = update.message.from_user.id
         username_propio = self.db.obtener_usuario_por_telegram(id_telegram)
-        usuarios_db = self.db.obtener_usuarios()
+        usuarios_db = self.db.obtener_usuarios_con_id()
         usuarios = [u[1] for u in usuarios_db]
 
         botones = [["1_ De todos"], ["2_ Míos"]]
@@ -1292,13 +1602,33 @@ class RobotTelegram:
             pred_rival = row[7]
             fecha_pred = row[9].strftime('%d/%m/%Y %H:%M:%S') if row[9] else "N/A"
 
+            # 🌟 NUEVO: Extraemos los datos del resultado real, puntos y error
+            real_cai = row[3]
+            real_rival = row[4]
+            puntos = row[8]
+            error_abs = row[10]
+
             bloque = ""
             if target_user == "todos":
                 bloque += f"👤 *{user}*\n"
                 
-            bloque += f"⚽ vs {rival} | 📅 {fecha_partido}\n"
+            # 🌟 NUEVO: Formateamos el rival para incluir el resultado si existe
+            if real_cai is not None and real_rival is not None:
+                texto_rival = f"{rival} ({real_cai}-{real_rival})"
+            else:
+                texto_rival = rival
+                
+            bloque += f"⚽ vs {texto_rival} | 📅 {fecha_partido}\n"
             bloque += f"👉 *Independiente {pred_cai} - {pred_rival} {rival}*\n"
             bloque += f"⏱️ _Cargado el: {fecha_pred}_\n"
+            
+            # 🌟 NUEVO: Agregamos Puntos y Error Absoluto solo si corresponden
+            # (Si es NULL en la BD es porque el partido no se jugó o el usuario cambió el pronóstico después)
+            if puntos is not None:
+                txt_puntos = f"🏅 Puntos: {int(puntos)}"
+                txt_error = f" | ❌ Error abs: {int(error_abs)}" if error_abs is not None else ""
+                bloque += f"{txt_puntos}{txt_error}\n"
+                
             bloque += "—\n"
 
             if len(mensaje_actual) + len(bloque) > 3800:
@@ -1375,12 +1705,51 @@ class RobotTelegram:
             mensaje += f"└ Índice: {txt_val} | {clasificacion}\n"
             mensaje += f"└ Perfil: {txt_desvio} | {clasif_desvio}\n\n"
             
-        await update.message.reply_text(mensaje, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+        botones = [
+            ["1_ Ver referencias"],
+            ["🔙 Atrás", "🔙 Volver al menú principal"]
+        ]
         
-        # 🌟 CAMBIO: Agregado self.
-        await self.mostrar_menu(update, context)
-        return ConversationHandler.END
-    
+        await update.message.reply_text(
+            mensaje, 
+            parse_mode="Markdown", 
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
+        
+        return self.esperando_accion_opt_pes
+
+    async def procesar_accion_opt_pes(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Muestra el glosario detallado reflejando el sesgo vs la realidad futbolística."""
+        mensaje_ref = (
+            "📋 *REFERENCIAS DE OPTIMISMO Y PESIMISMO*\n\n"
+            "El *Índice* compara tus expectativas con el rendimiento real de los equipos. "
+            "Ser optimista no significa predecir una victoria, sino esperar que a Independiente le vaya *mejor* de lo que realmente le termina yendo.\n\n"
+            "🔴 *Muy optimista (≥ +1.50):* Tus expectativas están muy por encima de la realidad. Si predijiste perder 2-0 y perdimos 4-0, sos muy optimista porque esperabas un escenario mucho más favorable.\n"
+            "🙂 *Optimista (+0.50 a +1.49):* Tendés a sobreestimar el desempeño del equipo, esperando resultados levemente mejores a los reales.\n"
+            "⚖️ *Neutral (-0.49 a +0.49):* Tus predicciones son un reflejo sumamente fiel de la realidad futbolística y el nivel mostrado en el campo.\n"
+            "😐 *Pesimista (-0.50 a -1.49):* Solés subestimar el rendimiento real, esperando resultados peores a los que finalmente se logran (ej: esperar un empate y que el equipo gane).\n"
+            "🔵 *Muy pesimista (≤ -1.50):* Tus expectativas están sistemáticamente muy por debajo de lo que el equipo termina demostrando en cada partido.\n\n"
+            "El *Perfil (Variabilidad)* mide qué tan constante es ese sesgo a lo largo del tiempo:\n"
+            "🎯 *Consistente (< 0.80):* Mantenés siempre la misma postura. Si sos optimista, lo sos casi siempre por el mismo margen de error.\n"
+            "📊 *Normal (0.80 a 1.49):* Tus expectativas fluctúan de forma natural según el rival o el contexto del torneo.\n"
+            "🎢 *Inestable (≥ 1.50):* Tu tendencia es impredecible. Podés pasar de una fe ciega a un pesimismo extremo entre un partido y otro."
+        )
+        
+        # 🌟 NUEVO: Creamos un teclado solo con las opciones de salida
+        botones = [
+            ["🔙 Atrás", "🔙 Volver al menú principal"]
+        ]
+        
+        # 🌟 NUEVO: Adjuntamos el reply_markup para forzar el scroll de Telegram
+        await update.message.reply_text(
+            mensaje_ref, 
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
+        
+        # Nos mantenemos en el estado de acción esperando que toque "Atrás" o "Volver"
+        return self.esperando_accion_opt_pes
+
     # ==========================================
     # FLUJO 6: MAYORES ERRORES
     # ==========================================
@@ -2024,7 +2393,7 @@ class RobotTelegram:
         usuario_actual = self.db.obtener_usuario_por_telegram(id_telegram)
         
         # Obtenemos todos los usuarios de la base de datos (lista de tuplas: [(id, username), ...])
-        usuarios_db = self.db.obtener_usuarios()
+        usuarios_db = self.db.obtener_usuarios_con_id()
         
         botones = []
         
