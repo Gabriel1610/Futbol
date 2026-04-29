@@ -1151,6 +1151,7 @@ class BaseDeDatos:
 
     # ---------------- RIVALES ----------------
     def insertar_rival_manual(self, nombre):
+        import mysql.connector
         conexion = self.abrir()
         try:
             cursor = conexion.cursor()
@@ -1158,6 +1159,14 @@ class BaseDeDatos:
             nuevo_id = cursor.fetchone()[0]
             cursor.execute("INSERT INTO rivales (id, nombre) VALUES (%s, %s)", (nuevo_id, nombre))
             conexion.commit()
+            return True
+        except mysql.connector.Error as e:
+            if e.errno == 1062:
+                raise Exception("Ya existe un equipo con ese nombre en la base de datos.")
+            elif e.errno == 3819:
+                if 'chk_rival_nombre_no_vacio' in str(e).lower():
+                    raise Exception("El nombre del equipo no puede estar vacío ni contener solo espacios.")
+            raise e
         finally:
             if 'cursor' in locals() and cursor: cursor.close()
             if conexion: conexion.close()
@@ -1466,6 +1475,65 @@ class BaseDeDatos:
         except Exception as e:
             logger.error(f"Error obteniendo pronósticos: {e}")
             return []
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def obtener_partido_por_fecha_exacta(self, fecha_dmy):
+        """Busca un partido en la base de datos usando una fecha exacta DD/MM/AAAA."""
+        try:
+            # Convertimos el formato de entrada DD/MM/YYYY a YYYY-MM-DD para MySQL
+            fecha_obj = datetime.strptime(fecha_dmy, "%d/%m/%Y")
+            fecha_ymd = fecha_obj.strftime("%Y-%m-%d")
+        except ValueError:
+            return None
+        
+        conexion = None
+        cursor = None
+        try:
+            conexion = self.abrir()
+            # Usamos dictionary=True para poder acceder a los datos por nombre (ej: partido['rival'])
+            cursor = conexion.cursor(dictionary=True)
+            
+            # Buscamos el partido filtrando solo por la fecha (ignorando la hora)
+            sql = """
+                SELECT 
+                    p.id, 
+                    r.nombre as rival, 
+                    p.fecha_hora, 
+                    p.condicion, 
+                    c.nombre as torneo, 
+                    a.numero as anio
+                FROM partidos p
+                JOIN rivales r ON p.rival_id = r.id
+                JOIN ediciones e ON p.edicion_id = e.id
+                JOIN campeonatos c ON e.campeonato_id = c.id
+                JOIN anios a ON e.anio_id = a.id
+                WHERE DATE(p.fecha_hora) = %s
+            """
+            cursor.execute(sql, (fecha_ymd,))
+            return cursor.fetchone() # Asume que Independiente no juega 2 partidos el mismo día
+        except Exception as e:
+            logger.error(f"Error buscando partido por fecha: {e}")
+            return None
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def actualizar_goles_partido(self, partido_id, goles_cai, goles_rival):
+        """Actualiza únicamente los goles de un partido específico."""
+        conexion = None
+        cursor = None
+        try:
+            conexion = self.abrir()
+            cursor = conexion.cursor()
+            
+            sql = "UPDATE partidos SET goles_independiente = %s, goles_rival = %s WHERE id = %s"
+            cursor.execute(sql, (goles_cai, goles_rival, partido_id))
+            conexion.commit()
+            return True
+        except Exception as e:
+            raise Exception(f"Error actualizando goles del partido: {e}")
         finally:
             if cursor: cursor.close()
             if conexion: conexion.close()
@@ -2749,6 +2817,37 @@ class BaseDeDatos:
             conexion.commit()
         except Exception as e:
             raise e
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def obtener_partidos_admin_por_edicion(self, edicion_id):
+        """Obtiene todos los partidos de una edición (futuros y pasados) ordenados por fecha DESC."""
+        conexion = None
+        cursor = None
+        try:
+            conexion = self.abrir()
+            # Usamos dictionary=True para manejar los campos por nombre fácilmente
+            cursor = conexion.cursor(dictionary=True)
+            
+            sql = """
+                SELECT 
+                    p.id, 
+                    r.nombre as rival, 
+                    p.fecha_hora, 
+                    p.condicion, 
+                    p.goles_independiente as goles_cai, 
+                    p.goles_rival
+                FROM partidos p
+                JOIN rivales r ON p.rival_id = r.id
+                WHERE p.edicion_id = %s
+                ORDER BY p.fecha_hora DESC
+            """
+            cursor.execute(sql, (edicion_id,))
+            return cursor.fetchall()
+        except Exception as e:
+            logger.error(f"Error obteniendo partidos admin: {e}")
+            return []
         finally:
             if cursor: cursor.close()
             if conexion: conexion.close()
