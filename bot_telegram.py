@@ -21,16 +21,16 @@ class RobotTelegram:
         esperando_pronostico, esperando_tipo_tabla, esperando_edicion_tabla,
         esperando_tipo_pronosticos, esperando_edicion_pronosticos, esperando_usuario_pronosticos,
         esperando_tipo_opt_pes, esperando_edicion_opt_pes, esperando_accion_opt_pes,
-        esperando_tipo_mayores_errores, esperando_edicion_mayores_errores,
-        esperando_tipo_falso_profeta, esperando_edicion_falso_profeta,
+        esperando_tipo_mayores_errores, esperando_edicion_mayores_errores, esperando_accion_mayores_errores,
+        esperando_tipo_falso_profeta, esperando_edicion_falso_profeta, esperando_accion_falso_profeta,
         esperando_menu_estadisticas, 
         esperando_tipo_estilo_decision, esperando_edicion_estilo_decision,
         esperando_accion_estilo_decision,
-        esperando_tipo_mufa, esperando_edicion_mufa,
+        esperando_tipo_mufa, esperando_edicion_mufa, esperando_accion_mufa,
         esperando_tipo_mejor_predictor, esperando_edicion_mejor_predictor,
         esperando_accion_mejor_predictor,
-        esperando_tipo_racha_record, esperando_edicion_racha_record,
-        esperando_tipo_racha_actual, esperando_edicion_racha_actual,
+        esperando_tipo_racha_record, esperando_edicion_racha_record, esperando_accion_racha_record,
+        esperando_tipo_racha_actual, esperando_edicion_racha_actual, esperando_accion_racha_actual,
         esperando_tipo_cambios, esperando_edicion_cambios,
         esperando_accion_cambios,
         esperando_menu_rankings, esperando_menu_perfil,
@@ -50,7 +50,7 @@ class RobotTelegram:
         esperando_fecha_partido_a_editar, esperando_editar_partido_rival,
         esperando_editar_partido_edicion, esperando_editar_partido_condicion,
         esperando_editar_partido_fecha_final
-    ) = range(1, 60)
+    ) = range(1, 65)
 
     def __init__(self):
         """Inicializa las configuraciones, la base de datos y la app de Telegram."""
@@ -682,7 +682,7 @@ class RobotTelegram:
             condicion = partido['condicion']
             torneo = f"{partido['torneo']} {partido['anio']}"
             
-            # 🌟 NUEVO: Formateamos fecha y hora (ej: 24/04/2026 a las 15:30)
+            # Formateamos fecha y hora (ej: 24/04/2026 a las 15:30)
             fecha_dt = partido['fecha_hora']
             fecha_str = fecha_dt.strftime('%d/%m/%Y a las %H:%M') if fecha_dt else "A conf."
             
@@ -833,89 +833,107 @@ class RobotTelegram:
                 # 3. Optimismo/Pesimismo
                 self.esperando_tipo_opt_pes: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_opt_pes, self.esperando_tipo_opt_pes, self.esperando_edicion_opt_pes, 'dicc_opt_pes'))],
                 self.esperando_edicion_opt_pes: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_opt_pes, self.esperando_edicion_opt_pes, 'dicc_opt_pes'))],
-                
                 self.esperando_accion_opt_pes: [
-                    MessageHandler(filters.Regex("^1_ Ver referencias$"), self.procesar_accion_opt_pes),
-                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_menu_rankings),
-                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_menu_rankings),
+                    MessageHandler(filters.Regex("^1_ Ver referencias$"), self.procesar_accion_opt_pes)
                 ],
 
-                # 4. Mayores Errores (Usa solo_finalizados=True)
+                # 4. Mayores Errores
                 self.esperando_tipo_mayores_errores: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_mayores_errores, self.esperando_tipo_mayores_errores, self.esperando_edicion_mayores_errores, 'dicc_errores', solo_finalizados=True))],
                 self.esperando_edicion_mayores_errores: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_mayores_errores, self.esperando_edicion_mayores_errores, 'dicc_errores'))],
-                
+                self.esperando_accion_mayores_errores: [
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_menu_rankings)
+                ],
+
                 # 5. Falso Profeta
                 self.esperando_tipo_falso_profeta: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_falso_profeta, self.esperando_tipo_falso_profeta, self.esperando_edicion_falso_profeta, 'dicc_fp'))],
                 self.esperando_edicion_falso_profeta: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_falso_profeta, self.esperando_edicion_falso_profeta, 'dicc_fp'))],
-                
+                self.esperando_accion_falso_profeta: [
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_menu_rankings)
+                ],
+
                 # 6. Estilos de Decisión
                 self.esperando_tipo_estilo_decision: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_estilo_decision, self.esperando_tipo_estilo_decision, self.esperando_edicion_estilo_decision, 'dicc_estilos'))],
                 self.esperando_edicion_estilo_decision: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_estilo_decision, self.esperando_edicion_estilo_decision, 'dicc_estilos'))],
-                
                 self.esperando_accion_estilo_decision: [
-                    MessageHandler(filters.Regex("^1_ Ver referencias$"), self.procesar_accion_estilo_decision),
-                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_menu_rankings),
-                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_menu_rankings),
+                    MessageHandler(filters.Regex("^1_ Ver referencias$"), self.procesar_accion_estilo_decision)
                 ],
 
                 # 7. Ranking Mufa
                 self.esperando_tipo_mufa: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_mufa, self.esperando_tipo_mufa, self.esperando_edicion_mufa, 'dicc_mufa'))],
                 self.esperando_edicion_mufa: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_mufa, self.esperando_edicion_mufa, 'dicc_mufa'))],
-                
+                self.esperando_accion_mufa: [
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_menu_rankings)
+                ],
+
                 # 8. Mejor Predictor
                 self.esperando_tipo_mejor_predictor: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_mejor_predictor, self.esperando_tipo_mejor_predictor, self.esperando_edicion_mejor_predictor, 'dicc_predictor', solo_finalizados=True))],
                 self.esperando_edicion_mejor_predictor: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_mejor_predictor, self.esperando_edicion_mejor_predictor, 'dicc_predictor'))],
-                
                 self.esperando_accion_mejor_predictor: [
-                    MessageHandler(filters.Regex("^1_ Ver referencias$"), self.procesar_accion_mejor_predictor),
-                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_menu_rankings),
-                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_menu_rankings),
+                    MessageHandler(filters.Regex("^1_ Ver referencias$"), self.procesar_accion_mejor_predictor)
                 ],
 
                 # 9. Racha Récord
                 self.esperando_tipo_racha_record: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_racha_record, self.esperando_tipo_racha_record, self.esperando_edicion_racha_record, 'dicc_racha', solo_finalizados=True))],
                 self.esperando_edicion_racha_record: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_racha_record, self.esperando_edicion_racha_record, 'dicc_racha'))],
+                self.esperando_accion_racha_record: [
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_menu_rankings)
+                ],
 
                 # 10. Racha Actual
                 self.esperando_tipo_racha_actual: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_racha_actual, self.esperando_tipo_racha_actual, self.esperando_edicion_racha_actual, 'dicc_racha_actual', solo_finalizados=True))],
                 self.esperando_edicion_racha_actual: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_racha_actual, self.esperando_edicion_racha_actual, 'dicc_racha_actual'))],
-
+                self.esperando_accion_racha_actual: [
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_menu_rankings)
+                ],
+                
                 # 11. Cambios de Pronósticos
                 self.esperando_tipo_cambios: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_cambios, self.esperando_tipo_cambios, self.esperando_edicion_cambios, 'dicc_cambios', solo_finalizados=True))],
                 self.esperando_edicion_cambios: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_cambios, self.esperando_edicion_cambios, 'dicc_cambios'))],
-
                 self.esperando_accion_cambios: [
-                    MessageHandler(filters.Regex("^1_ Ver referencias$"), self.procesar_accion_cambios),
-                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_menu_rankings),
-                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_menu_rankings),
+                    MessageHandler(filters.Regex("^1_ Ver referencias$"), self.procesar_accion_cambios)
                 ],
 
                 # --- FLUJO PERFIL DE COMUNIDAD (CASCADA GENÉRICA) ---
                 self.esperando_menu_perfil: [
-                    MessageHandler(filters.Regex("^(1_ Estilo de pronóstico|2_ Tendencia de pronóstico|3_ Grado de firmeza)$"), self.iniciar_grafico_perfil_generico),
-                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_ver_estadisticas)
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_ver_estadisticas),
+                    MessageHandler(filters.Regex("^(1_ Estilo de pronóstico|2_ Tendencia de pronóstico|3_ Grado de firmeza)$"), self.iniciar_grafico_perfil_generico)
                 ],
 
                 self.esperando_tipo_perfil: [
-                    MessageHandler(filters.Regex("^Histórico$|^Por Torneo$"), self.preguntar_tiempo_perfil),
-                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_menu_perfil)
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_menu_perfil),
+                    MessageHandler(filters.Regex("^Histórico$|^Por Torneo$"), self.preguntar_tiempo_perfil)
                 ],
 
                 self.esperando_edicion_perfil: [
-                    # Al tocar Atrás, vuelve al paso 1 genérico recordando qué gráfico era
-                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_grafico_perfil_generico), 
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_grafico_perfil_generico), 
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_edicion_perfil)
                 ],
 
                 self.esperando_usuario_perfil: [
-                    # Al tocar Atrás, vuelve al paso 1 genérico recordando qué gráfico era
-                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_grafico_perfil_generico), 
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_grafico_perfil_generico), 
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.calcular_y_mostrar_grafico_perfil)
                 ],
 
                 self.esperando_accion_perfil: [
-                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_menu_perfil),
-                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_menu_perfil)
                 ],
 
                 # --- FLUJO DE ADMINISTRACIÓN ---
@@ -1152,7 +1170,7 @@ class RobotTelegram:
                 ["3_ Consultar pronósticos", "4_ Ver Estadísticas"]
             ]
             
-            # 🌟 NUEVO: Verificamos si es admin y agregamos el botón
+            # Verificamos si es admin y agregamos el botón
             es_admin = username in self.db.obtener_administradores()
             if es_admin:
                 botones.append(["5_ Administración"])
@@ -1166,7 +1184,7 @@ class RobotTelegram:
                 "📊 *4_ Ver Estadísticas:* Descubrí rachas, rankings curiosos y el perfil de la comunidad."
             )
             
-            # 🌟 NUEVO: Agregamos el texto explicativo si es admin
+            # Agregamos el texto explicativo si es admin
             if es_admin:
                 mensaje += "\n⚙️ *5_ Administración:* Panel exclusivo para gestionar el bot."
             
@@ -1694,7 +1712,7 @@ class RobotTelegram:
         context.user_data['partido_id_elegido'] = info_partido_elegido['id']
         context.user_data['info_partido_elegido'] = info_partido_elegido
         
-        # 🌟 NUEVO: Creamos el botón para el teclado
+        # Creamos el botón para el teclado
         botones = [["🔙 Volver al menú principal"]]
         
         await update.message.reply_text(
@@ -1933,7 +1951,7 @@ class RobotTelegram:
             pred_rival = row[7]
             fecha_pred = row[9].strftime('%d/%m/%Y %H:%M:%S') if row[9] else "N/A"
 
-            # 🌟 NUEVO: Extraemos los datos del resultado real, puntos y error
+            # Extraemos los datos del resultado real, puntos y error
             real_cai = row[3]
             real_rival = row[4]
             puntos = row[8]
@@ -1943,7 +1961,7 @@ class RobotTelegram:
             if target_user == "todos":
                 bloque += f"👤 *{user}*\n"
                 
-            # 🌟 NUEVO: Formateamos el rival para incluir el resultado si existe
+            # Formateamos el rival para incluir el resultado si existe
             if real_cai is not None and real_rival is not None:
                 texto_rival = f"{rival} ({real_cai}-{real_rival})"
             else:
@@ -1953,7 +1971,7 @@ class RobotTelegram:
             bloque += f"👉 *Independiente {pred_cai} - {pred_rival} {rival}*\n"
             bloque += f"⏱️ _Cargado el: {fecha_pred}_\n"
             
-            # 🌟 NUEVO: Agregamos Puntos y Error Absoluto solo si corresponden
+            # Agregamos Puntos y Error Absoluto solo si corresponden
             # (Si es NULL en la BD es porque el partido no se jugó o el usuario cambió el pronóstico después)
             if puntos is not None:
                 txt_puntos = f"🏅 Puntos: {int(puntos)}"
@@ -2066,12 +2084,12 @@ class RobotTelegram:
             "🎢 *Inestable (≥ 1.50):* Tu tendencia es impredecible. Podés pasar de una fe ciega a un pesimismo extremo entre un partido y otro."
         )
         
-        # 🌟 NUEVO: Creamos un teclado solo con las opciones de salida
+        # Creamos un teclado solo con las opciones de salida
         botones = [
             ["🔙 Atrás", "🔙 Volver al menú principal"]
         ]
         
-        # 🌟 NUEVO: Adjuntamos el reply_markup para forzar el scroll de Telegram
+        # Adjuntamos el reply_markup para forzar el scroll de Telegram
         await update.message.reply_text(
             mensaje_ref, 
             parse_mode="Markdown",
@@ -2126,13 +2144,23 @@ class RobotTelegram:
         if mensaje_actual:
             mensajes.append(mensaje_actual)
             
+        # Creamos los botones
+        botones = [
+            ["🔙 Atrás", "🔙 Volver al menú principal"]
+        ]
+            
         # Enviamos los globos de texto secuencialmente
-        for m in mensajes:
-            await update.message.reply_text(m, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+        for m in mensajes[:-1]:
+            await update.message.reply_text(m, parse_mode="Markdown")
+            
+        # Enviamos el último mensaje con el teclado y devolvemos el estado
+        await update.message.reply_text(
+            mensajes[-1], 
+            parse_mode="Markdown", 
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
         
-        # 🌟 CAMBIO: Agregado self.
-        await self.mostrar_menu(update, context)
-        return ConversationHandler.END
+        return self.esperando_accion_mayores_errores
     
     # ==========================================
     # FLUJO 7: RANKING FALSO PROFETA
@@ -2182,12 +2210,23 @@ class RobotTelegram:
         if mensaje_actual:
             mensajes.append(mensaje_actual)
             
-        for m in mensajes:
-            await update.message.reply_text(m, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+        # Creamos los botones de navegación
+        botones = [
+            ["🔙 Atrás", "🔙 Volver al menú principal"]
+        ]
+            
+        # Enviamos los globos de texto secuencialmente (sin botones)
+        for m in mensajes[:-1]:
+            await update.message.reply_text(m, parse_mode="Markdown")
+            
+        # Enviamos el último mensaje con el teclado y devolvemos el estado
+        await update.message.reply_text(
+            mensajes[-1], 
+            parse_mode="Markdown", 
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
         
-        # 🌟 CAMBIO: Uso de self.
-        await self.mostrar_menu(update, context)
-        return ConversationHandler.END
+        return self.esperando_accion_falso_profeta
 
     # ==========================================
     # FLUJO 8: ESTILOS DE DECISIÓN
@@ -2344,11 +2383,20 @@ class RobotTelegram:
         if mensaje_actual:
             mensajes.append(mensaje_actual)
             
-        for m in mensajes:
-            await update.message.reply_text(m, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+        botones = [
+            ["🔙 Atrás", "🔙 Volver al menú principal"]
+        ]
+            
+        for m in mensajes[:-1]:
+            await update.message.reply_text(m, parse_mode="Markdown")
+            
+        await update.message.reply_text(
+            mensajes[-1], 
+            parse_mode="Markdown", 
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
         
-        await self.mostrar_menu(update, context)
-        return ConversationHandler.END
+        return self.esperando_accion_mufa
 
     # ==========================================
     # FLUJO 10: MEJOR PREDICTOR
@@ -2484,13 +2532,23 @@ class RobotTelegram:
         if mensaje_actual:
             mensajes.append(mensaje_actual)
             
-        # Envío de los mensajes
-        for m in mensajes:
-            await update.message.reply_text(m, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+        # Creamos los botones de navegación
+        botones = [
+            ["🔙 Atrás", "🔙 Volver al menú principal"]
+        ]
+            
+        # Enviamos los globos de texto secuencialmente (sin botones)
+        for m in mensajes[:-1]:
+            await update.message.reply_text(m, parse_mode="Markdown")
+            
+        # Enviamos el último mensaje con el teclado y devolvemos el estado
+        await update.message.reply_text(
+            mensajes[-1], 
+            parse_mode="Markdown", 
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
         
-        # Vuelta al menú principal
-        await self.mostrar_menu(update, context)
-        return ConversationHandler.END
+        return self.esperando_accion_racha_record
 
     # ==========================================
     # FLUJO 12: RACHA ACTUAL
@@ -2535,13 +2593,23 @@ class RobotTelegram:
         if mensaje_actual:
             mensajes.append(mensaje_actual)
             
-        # Envío de los mensajes
-        for m in mensajes:
-            await update.message.reply_text(m, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+        # Creamos los botones de navegación
+        botones = [
+            ["🔙 Atrás", "🔙 Volver al menú principal"]
+        ]
+            
+        # Enviamos los globos de texto secuencialmente (sin botones)
+        for m in mensajes[:-1]:
+            await update.message.reply_text(m, parse_mode="Markdown")
+            
+        # Enviamos el último mensaje con el teclado y devolvemos el estado
+        await update.message.reply_text(
+            mensajes[-1], 
+            parse_mode="Markdown", 
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
         
-        # Vuelta al menú principal
-        await self.mostrar_menu(update, context)
-        return ConversationHandler.END
+        return self.esperando_accion_racha_actual
     
     # ==========================================
     # FLUJO 13: ESTABILIDAD DE PRONÓSTICOS
