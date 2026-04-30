@@ -1664,6 +1664,17 @@ class BaseDeDatos:
             if cursor: cursor.close()
             if conexion: conexion.close()
     
+    def obtener_ultima_fecha_pronostico(self, partido_id):
+        """Retorna la fecha del pronóstico más reciente para un partido."""
+        conexion = self.abrir()
+        cursor = conexion.cursor()
+        try:
+            cursor.execute("SELECT MAX(fecha_prediccion) FROM pronosticos WHERE partido_id = %s", (partido_id,))
+            return cursor.fetchone()[0]
+        finally:
+            cursor.close()
+            conexion.close()
+            
     def obtener_usuarios_con_id(self):
         """Obtiene la lista completa de usuarios (ID y nombre de usuario)."""
         conexion = None

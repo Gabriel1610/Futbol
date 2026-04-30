@@ -25,22 +25,32 @@ class RobotTelegram:
         esperando_tipo_falso_profeta, esperando_edicion_falso_profeta,
         esperando_menu_estadisticas, 
         esperando_tipo_estilo_decision, esperando_edicion_estilo_decision,
+        esperando_accion_estilo_decision,
         esperando_tipo_mufa, esperando_edicion_mufa,
         esperando_tipo_mejor_predictor, esperando_edicion_mejor_predictor,
+        esperando_accion_mejor_predictor,
         esperando_tipo_racha_record, esperando_edicion_racha_record,
         esperando_tipo_racha_actual, esperando_edicion_racha_actual,
         esperando_tipo_cambios, esperando_edicion_cambios,
+        esperando_accion_cambios,
         esperando_menu_rankings, esperando_menu_perfil,
         esperando_tipo_perfil,
         esperando_edicion_perfil, esperando_usuario_perfil,
+        esperando_accion_perfil,
         esperando_menu_administracion, esperando_fecha_resultado, esperando_goles_resultado,
         esperando_edicion_ver_partidos,
         esperando_menu_admin_partidos, esperando_menu_admin_equipos,
         esperando_nombre_nuevo_equipo,
         esperando_equipo_a_editar, esperando_nuevo_nombre_equipo,
         esperando_equipo_a_eliminar,
-        esperando_confirmacion_eliminar_equipo
-    ) = range(1, 46)
+        esperando_confirmacion_eliminar_equipo,
+        esperando_crear_partido_rival, esperando_crear_partido_edicion,
+        esperando_crear_partido_condicion, esperando_crear_partido_fecha,
+        esperando_crear_partido_goles,
+        esperando_fecha_partido_a_editar, esperando_editar_partido_rival,
+        esperando_editar_partido_edicion, esperando_editar_partido_condicion,
+        esperando_editar_partido_fecha_final
+    ) = range(1, 60)
 
     def __init__(self):
         """Inicializa las configuraciones, la base de datos y la app de Telegram."""
@@ -212,13 +222,16 @@ class RobotTelegram:
         """Submenú de gestión de Partidos."""
         botones = [
             ["1_ Cargar resultado", "2_ Ver partidos"],
+            ["3_ Crear partido", "4_ Editar partido"], # 🌟 CORRECCIÓN: Botones alineados con el handler
             ["🔙 Atrás", "🔙 Volver al menú principal"]
         ]
         mensaje = (
             "⚽ *Gestión de Partidos*\n\n"
             "Elegí una opción:\n\n"
             "📝 *1_ Cargar resultado:* Buscá un partido por fecha e ingresá su resultado.\n"
-            "📋 *2_ Ver partidos:* Consultá el listado completo de partidos de un torneo."
+            "📋 *2_ Ver partidos:* Consultá el listado completo de partidos de un torneo.\n"
+            "➕ *3_ Crear partido:* Registrá un nuevo encuentro en la base de datos.\n"
+            "✏️ *4_ Editar partido:* Modificá los datos de un partido ya creado."
         )
         await update.message.reply_text(
             mensaje, parse_mode="Markdown", reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
@@ -419,8 +432,11 @@ class RobotTelegram:
         for m in mensajes[:-1]:
             await update.message.reply_text(m, parse_mode="Markdown")
             
-        # Enviamos el último globo de texto que incluye la pregunta y los botones
-        botones = [["🔙 Atrás", "🔙 Volver al menú principal"]]
+        botones = [
+            ["🚫 Cancelar"],
+            ["🔙 Volver al menú principal"]
+        ]
+        
         await update.message.reply_text(
             mensajes[-1] + f"\n\n{texto_pregunta}",
             parse_mode="Markdown",
@@ -836,6 +852,12 @@ class RobotTelegram:
                 self.esperando_tipo_estilo_decision: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_estilo_decision, self.esperando_tipo_estilo_decision, self.esperando_edicion_estilo_decision, 'dicc_estilos'))],
                 self.esperando_edicion_estilo_decision: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_estilo_decision, self.esperando_edicion_estilo_decision, 'dicc_estilos'))],
                 
+                self.esperando_accion_estilo_decision: [
+                    MessageHandler(filters.Regex("^1_ Ver referencias$"), self.procesar_accion_estilo_decision),
+                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_menu_rankings),
+                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
+                ],
+
                 # 7. Ranking Mufa
                 self.esperando_tipo_mufa: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_mufa, self.esperando_tipo_mufa, self.esperando_edicion_mufa, 'dicc_mufa'))],
                 self.esperando_edicion_mufa: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_mufa, self.esperando_edicion_mufa, 'dicc_mufa'))],
@@ -844,6 +866,12 @@ class RobotTelegram:
                 self.esperando_tipo_mejor_predictor: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_mejor_predictor, self.esperando_tipo_mejor_predictor, self.esperando_edicion_mejor_predictor, 'dicc_predictor', solo_finalizados=True))],
                 self.esperando_edicion_mejor_predictor: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_mejor_predictor, self.esperando_edicion_mejor_predictor, 'dicc_predictor'))],
                 
+                self.esperando_accion_mejor_predictor: [
+                    MessageHandler(filters.Regex("^1_ Ver referencias$"), self.procesar_accion_mejor_predictor),
+                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_menu_rankings),
+                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
+                ],
+
                 # 9. Racha Récord
                 self.esperando_tipo_racha_record: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_racha_record, self.esperando_tipo_racha_record, self.esperando_edicion_racha_record, 'dicc_racha', solo_finalizados=True))],
                 self.esperando_edicion_racha_record: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_racha_record, self.esperando_edicion_racha_record, 'dicc_racha'))],
@@ -855,6 +883,12 @@ class RobotTelegram:
                 # 11. Cambios de Pronósticos
                 self.esperando_tipo_cambios: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla_cambios, self.esperando_tipo_cambios, self.esperando_edicion_cambios, 'dicc_cambios', solo_finalizados=True))],
                 self.esperando_edicion_cambios: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla_cambios, self.esperando_edicion_cambios, 'dicc_cambios'))],
+
+                self.esperando_accion_cambios: [
+                    MessageHandler(filters.Regex("^1_ Ver referencias$"), self.procesar_accion_cambios),
+                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_menu_rankings),
+                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
+                ],
 
                 # --- FLUJO PERFIL DE COMUNIDAD (CASCADA GENÉRICA) ---
                 self.esperando_menu_perfil: [
@@ -879,6 +913,11 @@ class RobotTelegram:
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.calcular_y_mostrar_grafico_perfil)
                 ],
 
+                self.esperando_accion_perfil: [
+                    MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_menu_perfil),
+                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
+                ],
+
                 # --- FLUJO DE ADMINISTRACIÓN ---
                 self.esperando_menu_administracion: [
                     MessageHandler(filters.Regex("^1_ Partidos$"), self.iniciar_admin_partidos),
@@ -888,9 +927,37 @@ class RobotTelegram:
                 
                 self.esperando_menu_admin_partidos: [
                     MessageHandler(filters.Regex("^1_ Cargar resultado$"), self.iniciar_carga_resultado),
-                    MessageHandler(filters.Regex("^2_ Ver partidos$"), self.iniciar_ver_partidos_admin), 
+                    MessageHandler(filters.Regex("^2_ Ver partidos$"), self.iniciar_ver_partidos_admin),
+                    MessageHandler(filters.Regex("^3_ Crear partido$"), self.iniciar_crear_partido), 
+                    MessageHandler(filters.Regex("^4_ Editar partido$"), self.iniciar_editar_partido),
                     MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_administracion),
                     MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
+                ],
+
+                self.esperando_crear_partido_rival: [
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_admin_partidos),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_crear_partido_rival)
+                ],
+                self.esperando_crear_partido_edicion: [
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_admin_partidos),
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_crear_partido_edicion)
+                ],
+                self.esperando_crear_partido_condicion: [
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_admin_partidos),
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_crear_partido_condicion)
+                ],
+                self.esperando_crear_partido_fecha: [
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_admin_partidos),
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_crear_partido_fecha)
+                ],
+                self.esperando_crear_partido_goles: [
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_admin_partidos),
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_crear_partido_goles)
                 ],
                 
                 self.esperando_edicion_ver_partidos: [
@@ -912,7 +979,7 @@ class RobotTelegram:
                 ],
 
                 self.esperando_menu_admin_equipos: [
-                    # 🌟 RUTA DE ENTRADA A AGREGAR EQUIPO
+                    # RUTA DE ENTRADA A AGREGAR EQUIPO
                     MessageHandler(filters.Regex("^1_ Agregar$"), self.iniciar_agregar_equipo),
                     MessageHandler(filters.Regex("^2_ Editar$"), self.iniciar_editar_equipo),
                     MessageHandler(filters.Regex("^3_ Eliminar$"), self.iniciar_eliminar_equipo),
@@ -949,6 +1016,33 @@ class RobotTelegram:
                     MessageHandler(filters.Regex("^🔙 Atrás$"), self.iniciar_eliminar_equipo),
                     MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu),
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_confirmacion_eliminar_equipo)
+                ],
+
+                # --- RUTAS DE EDICIÓN ---
+                self.esperando_fecha_partido_a_editar: [
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_admin_partidos),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_fecha_busqueda_editar)
+                ],
+                self.esperando_editar_partido_rival: [
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_admin_partidos),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_editar_partido_rival)
+                ],
+                self.esperando_editar_partido_edicion: [
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_admin_partidos),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_editar_partido_edicion)
+                ],
+                self.esperando_editar_partido_condicion: [
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_admin_partidos),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_editar_partido_condicion)
+                ],
+                self.esperando_editar_partido_fecha_final: [
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_admin_partidos),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_editar_partido_fecha_final)
                 ],
             },
             fallbacks=[CommandHandler("cancelar", self.cancelar_conversacion)],
@@ -1345,6 +1439,243 @@ class RobotTelegram:
             reply_markup=ReplyKeyboardMarkup(botones_volver, resize_keyboard=True)
         )
         return self.esperando_partido_id
+    
+    async def iniciar_crear_partido(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 1: Lista rivales para el nuevo partido."""
+        pregunta = "🤝 *Elegí el RIVAL para el nuevo partido:*"
+        exito = await self._mostrar_lista_equipos(update, context, pregunta)
+        if not exito:
+            return await self.iniciar_admin_partidos(update, context)
+        return self.esperando_crear_partido_rival
+
+    async def iniciar_editar_partido(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 1 Editar: Solicita la fecha actual del partido en BD."""
+        await update.message.reply_text(
+            "🔍 *Editar Partido*\n\nIngresá la fecha del partido que querés modificar (dd/mm/aaaa):",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([["🔙 Cancelar"]], resize_keyboard=True)
+        )
+        return self.esperando_fecha_partido_a_editar
+
+    async def procesar_fecha_busqueda_editar(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 2 Editar: Busca el partido y, si lo encuentra, pide el nuevo Rival."""
+        fecha_texto = update.message.text.strip()
+        # Reutilizamos la función de búsqueda por fecha exacta
+        partido = self.db.obtener_partido_por_fecha_exacta(fecha_texto)
+
+        if not partido:
+            await update.message.reply_text("❌ No se encontró ningún partido en esa fecha. Intentá de nuevo o tocá Cancelar.")
+            return self.esperando_fecha_partido_a_editar
+
+        context.user_data['partido_a_editar_id'] = partido['id']
+        context.user_data['partido_a_editar_goles'] = (partido.get('goles_cai'), partido.get('goles_rival'))
+        
+        # Extraemos y formateamos todos los detalles
+        rival = partido['rival']
+        condicion = partido['condicion']
+        torneo = f"{partido['torneo']} {partido['anio']}"
+        
+        fecha_dt = partido['fecha_hora']
+        fecha_str = fecha_dt.strftime('%d/%m/%Y a las %H:%M') if fecha_dt else "A confirmar"
+        
+        if condicion == -1:
+            partido_str = f"{rival} vs Independiente"
+            cond_str = "Visitante"
+        elif condicion == 1:
+            partido_str = f"Independiente vs {rival}"
+            cond_str = "Local"
+        else:
+            partido_str = f"Independiente vs {rival}"
+            cond_str = "Neutral"
+            
+        mensaje_encontrado = (
+            f"✅ *Partido encontrado*\n\n"
+            f"📅 *Fecha:* {fecha_str}\n"
+            f"🏆 *Torneo:* {torneo}\n"
+            f"⚔️ *Encuentro:* {partido_str}\n"
+            f"🏠 *Condición:* {cond_str}"
+        )
+        
+        await update.message.reply_text(mensaje_encontrado, parse_mode="Markdown")
+        
+        # Pasamos a pedir el nuevo Rival usando la función existente
+        pregunta = "🤝 *Elegí el NUEVO RIVAL (o seleccioná el mismo si no cambia):*"
+        await self._mostrar_lista_equipos(update, context, pregunta)
+        return self.esperando_editar_partido_rival
+
+    async def procesar_editar_partido_rival(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 3 Editar: Valida rival y pide la nueva Edición."""
+        texto = update.message.text.strip()
+        mapa = context.user_data.get('mapa_equipos', {})
+        if texto not in mapa:
+            await update.message.reply_text("❌ Elegí un número de la lista.")
+            return self.esperando_editar_partido_rival
+        
+        context.user_data['edit_rival_id'] = mapa[texto]['id']
+        botones = self._generar_botones_ediciones(incluir_historico=False)
+        botones.insert(0, ["🔙 Cancelar"])
+        
+        await update.message.reply_text("🏆 *Seleccioná el Torneo:*", parse_mode="Markdown", reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True))
+        return self.esperando_editar_partido_edicion
+
+    async def procesar_editar_partido_edicion(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 4 Editar: Valida edición y pide la Condición."""
+        texto_edicion = update.message.text.strip()
+        ediciones = self.db.obtener_ediciones()
+        ed_id = next((e[0] for e in ediciones if f"{e[1]} {e[2]}" == texto_edicion), None)
+        
+        if not ed_id:
+            await update.message.reply_text("❌ Torneo no válido.")
+            return self.esperando_editar_partido_edicion
+            
+        context.user_data['edit_edicion_id'] = ed_id
+        botones = [["1_ Local", "2_ Visitante"], ["3_ Neutral"], ["🔙 Cancelar"]]
+        await update.message.reply_text("🏠 *¿Condición de Independiente?*", parse_mode="Markdown", reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True))
+        return self.esperando_editar_partido_condicion
+
+    async def procesar_editar_partido_condicion(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 5 Editar: Valida condición y pide la nueva Fecha/Hora."""
+        opciones = {"1_ Local": 1, "2_ Visitante": -1, "3_ Neutral": 0}
+        if update.message.text not in opciones:
+            await update.message.reply_text("❌ Opción inválida.")
+            return self.esperando_editar_partido_condicion
+            
+        context.user_data['edit_condicion'] = opciones[update.message.text]
+        await update.message.reply_text("📅 *Ingresá la NUEVA fecha y hora* (dd/mm/aaaa hh:mm):", parse_mode="Markdown", reply_markup=ReplyKeyboardMarkup([["🔙 Cancelar"]], resize_keyboard=True))
+        return self.esperando_editar_partido_fecha_final
+
+    async def procesar_editar_partido_fecha_final(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 6 Editar: Valida restricción contra pronósticos y guarda."""
+        try:
+            nueva_fecha_dt = datetime.datetime.strptime(update.message.text.strip(), "%d/%m/%Y %H:%M")
+            partido_id = context.user_data['partido_a_editar_id']
+            
+            # Validamos contra el pronóstico más reciente
+            ultima_pred = self.db.obtener_ultima_fecha_pronostico(partido_id) # ⚠️ Debés agregar este método a BaseDeDatos
+            
+            if ultima_pred and nueva_fecha_dt < ultima_pred:
+                fecha_limite = ultima_pred.strftime('%d/%m/%Y %H:%M:%S')
+                await update.message.reply_text(f"🚫 *Error de Seguridad*\n\nNo podés poner una fecha menor al último pronóstico cargado ({fecha_limite}).", parse_mode="Markdown")
+                return self.esperando_editar_partido_fecha_final
+
+            # Guardamos los cambios
+            g_cai, g_rival = context.user_data['partido_a_editar_goles']
+            self.db.actualizar_partido_manual(
+                partido_id,
+                context.user_data['edit_edicion_id'],
+                context.user_data['edit_rival_id'],
+                context.user_data['edit_condicion'],
+                nueva_fecha_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                g_cai, g_rival
+            )
+            
+            await update.message.reply_text("✅ ¡Partido editado con éxito!")
+            return await self.iniciar_admin_partidos(update, context)
+            
+        except ValueError:
+            await update.message.reply_text("❌ Formato incorrecto. Usá dd/mm/aaaa hh:mm")
+            return self.esperando_editar_partido_fecha_final
+
+    async def procesar_crear_partido_rival(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 2: Valida rival y pide el torneo (edición)."""
+        texto = update.message.text.strip()
+        mapa = context.user_data.get('mapa_equipos', {})
+        if texto not in mapa:
+            await update.message.reply_text("❌ Número inválido. Elegí uno de la lista.")
+            return self.esperando_crear_partido_rival
+        
+        context.user_data['nuevo_partido_rival'] = mapa[texto]
+        botones = self._generar_botones_ediciones(incluir_historico=False)
+        botones.insert(0, ["🚫 Cancelar"])
+        
+        await update.message.reply_text(
+            "🏆 *Seleccioná el Torneo* para este partido:",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
+        return self.esperando_crear_partido_edicion
+
+    async def procesar_crear_partido_edicion(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 3: Valida edición y pide condición."""
+        texto_edicion = update.message.text.strip()
+        ediciones = self.db.obtener_ediciones()
+        ed_id = next((e[0] for e in ediciones if f"{e[1]} {e[2]}" == texto_edicion), None)
+        
+        if not ed_id:
+            await update.message.reply_text("❌ Torneo no válido. Usá los botones.")
+            return self.esperando_crear_partido_edicion
+            
+        context.user_data['nuevo_partido_edicion_id'] = ed_id
+        botones = [["1_ Local", "2_ Visitante"], ["3_ Neutral"], ["🚫 Cancelar"]]
+        
+        await update.message.reply_text(
+            "🏠 *¿En qué condición juega Independiente?*",
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
+        return self.esperando_crear_partido_condicion
+
+    async def procesar_crear_partido_condicion(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 4: Valida condición y pide fecha/hora."""
+        opciones = {"1_ Local": 1, "2_ Visitante": -1, "3_ Neutral": 0}
+        if update.message.text not in opciones:
+            await update.message.reply_text("❌ Elegí una opción válida.")
+            return self.esperando_crear_partido_condicion
+            
+        context.user_data['nuevo_partido_condicion'] = opciones[update.message.text]
+        await update.message.reply_text(
+            "📅 *Ingresá la fecha y hora* (Formato: DD/MM/AAAA HH:MM)\n"
+            "Ejemplo: 15/05/2026 21:00",
+            reply_markup=ReplyKeyboardMarkup([["🚫 Cancelar"]], resize_keyboard=True)
+        )
+        return self.esperando_crear_partido_fecha
+
+    async def procesar_crear_partido_fecha(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 5: Valida fecha. Si es pasado pide goles, si es futuro guarda."""
+        try:
+            fecha_dt = datetime.datetime.strptime(update.message.text.strip(), "%d/%m/%Y %H:%M")
+            context.user_data['nuevo_partido_fecha'] = fecha_dt
+            ahora = self.db.obtener_hora_argentina()
+            
+            if fecha_dt < ahora:
+                await update.message.reply_text(
+                    "⚽ El partido es del pasado. *Ingresá el resultado final* (Formato: GolesCAI-GolesRival)\n"
+                    "Ejemplo: 2-0",
+                    reply_markup=ReplyKeyboardMarkup([["🚫 Cancelar"]], resize_keyboard=True)
+                )
+                return self.esperando_crear_partido_goles
+            else:
+                # Es futuro, guardamos directo
+                return await self._guardar_nuevo_partido(update, context, None, None)
+        except ValueError:
+            await update.message.reply_text("❌ Formato incorrecto. Usá DD/MM/AAAA HH:MM")
+            return self.esperando_crear_partido_fecha
+
+    async def procesar_crear_partido_goles(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 6: Valida goles y guarda."""
+        texto = update.message.text.strip()
+        try:
+            partes = texto.split("-")
+            return await self._guardar_nuevo_partido(update, context, int(partes[0]), int(partes[1]))
+        except (ValueError, IndexError):
+            await update.message.reply_text("❌ Formato inválido. Ejemplo: 1-0")
+            return self.esperando_crear_partido_goles
+
+    async def _guardar_nuevo_partido(self, update, context, g_cai, g_rival):
+        """Función interna para insertar en BD y finalizar."""
+        try:
+            # Se eliminó la etiqueta de texto que causaba el SyntaxError
+            self.db.insertar_partido_manual(
+                context.user_data['nuevo_partido_edicion_id'],
+                context.user_data['nuevo_partido_rival']['id'],
+                context.user_data['nuevo_partido_condicion'],
+                context.user_data['nuevo_partido_fecha'].strftime("%Y-%m-%d %H:%M:%S"),
+                g_cai, g_rival
+            )
+            await update.message.reply_text("✅ ¡Partido creado con éxito!")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {e}")
+            
+        return await self.iniciar_admin_partidos(update, context)
     
     async def procesar_partido_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Paso 2: Valida el NÚMERO visual y le pide el resultado."""
@@ -1924,13 +2255,50 @@ class RobotTelegram:
                 
         if mensaje_actual:
             mensajes.append(mensaje_actual)
-            
-        for m in mensajes:
-            await update.message.reply_text(m, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
         
-        await self.mostrar_menu(update, context)
-        return ConversationHandler.END
+        botones = [
+            ["1_ Ver referencias"],
+            ["🔙 Atrás", "🔙 Volver al menú principal"]
+        ]
+            
+        for m in mensajes[:-1]:
+            await update.message.reply_text(m, parse_mode="Markdown")
+            
+        # Enviamos el último globo con el teclado
+        await update.message.reply_text(
+            mensajes[-1], 
+            parse_mode="Markdown", 
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
+        
+        return self.esperando_accion_estilo_decision
 
+    async def procesar_accion_estilo_decision(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Muestra el glosario detallado de los tiempos de carga con navegación completa."""
+        mensaje_ref = (
+            "📋 *REFERENCIAS DE ESTILOS DE DECISIÓN*\n\n"
+            "Este ranking analiza el promedio de tiempo de anticipación con el que cargás tus pronósticos antes del pitazo inicial:\n\n"
+            "🧠 *Convencido temprano (más de 3 días):* Sos de los que ya tienen el resultado en la cabeza apenas termina el partido anterior. No necesitás ver cómo llega el equipo ni quién es el árbitro.\n"
+            "🗓️ *Anticipado (1 a 3 días):* Organizás tu semana con tiempo. Cargás tus jugadas con tranquilidad, generalmente cuando sale la lista de concentrados.\n"
+            "⚖️ *Balanceado (6 a 24 horas):* El estilo más analítico. Esperás a las últimas noticias del día previo o la mañana del partido para decidir tu pálpito.\n"
+            "⏳ *Último momento (1 a 6 horas):* Vivís al límite. Cargás tu pronóstico mientras vas a la cancha o preparás la previa, con la formación confirmada en mano.\n"
+            "🔥 *Impulsivo (menos de 1 hora):* Pura adrenalina. Tu decisión es visceral y de último segundo, quizás influenciada por el clima del estadio o un pálpito repentino antes del cierre."
+        )
+        
+        # Teclado con ambas opciones para refrescar la vista y permitir navegación
+        botones = [
+            ["🔙 Atrás"],
+            ["🔙 Volver al menú principal"]
+        ]
+        
+        await update.message.reply_text(
+            mensaje_ref, 
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
+        
+        return self.esperando_accion_estilo_decision
+    
     # ==========================================
     # FLUJO 9: RANKING MUFA
     # ==========================================
@@ -2031,11 +2399,47 @@ class RobotTelegram:
         if mensaje_actual:
             mensajes.append(mensaje_actual)
             
-        for m in mensajes:
-            await update.message.reply_text(m, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+        botones = [
+            ["1_ Ver referencias"],
+            ["🔙 Atrás", "🔙 Volver al menú principal"]
+        ]
+            
+        for m in mensajes[:-1]:
+            await update.message.reply_text(m, parse_mode="Markdown")
+            
+        # Enviamos el último globo con el teclado activo
+        await update.message.reply_text(
+            mensajes[-1], 
+            parse_mode="Markdown", 
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
         
-        await self.mostrar_menu(update, context)
-        return ConversationHandler.END
+        return self.esperando_accion_mejor_predictor
+    
+    async def procesar_accion_mejor_predictor(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Muestra el glosario detallado sobre la precisión de los goles."""
+        mensaje_ref = (
+            "📋 *REFERENCIAS DE MEJOR PREDICTOR*\n\n"
+            "Este ranking premia la exactitud numérica. Se calcula sumando la diferencia absoluta entre tus goles pronosticados y los reales de ambos equipos:\n"
+            "_Fórmula: |Goles Independiente (Tu pred. - Real)| + |Goles Rival (Tu pred. - Real)|_\n\n"
+            "🎯 *Predictor perfecto (0,00):* Acertaste el resultado exacto. No hubo diferencia entre tu pálpito y la realidad.\n\n"
+            "👌 *Muy preciso (0,01 a 1,00):* Estuviste a solo un gol de diferencia en uno de los dos equipos. Un margen de error mínimo.\n\n"
+            "👍 *Aceptable (1,01 a 2,00):* Le erraste por un gol a cada equipo o por dos goles a uno solo. Es el promedio normal de la comunidad.\n\n"
+            "🎲 *Poco realista / arriesgado (más de 2,00):* Tus pronósticos están muy lejos de la realidad. Sos un jugador que toma decisiones arriesgadas o poco realistas."
+        )
+        
+        botones = [
+            ["🔙 Atrás"],
+            ["🔙 Volver al menú principal"]
+        ]
+        
+        await update.message.reply_text(
+            mensaje_ref, 
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
+        
+        return self.esperando_accion_mejor_predictor
     
     # ==========================================
     # FLUJO 11: RACHA RÉCORD
@@ -2182,7 +2586,6 @@ class RobotTelegram:
             bloque += f"└ {emoji_color} Promedio: {txt_cambios} veces/partido\n"
             bloque += f"└ Perfil: {estilo}\n\n"
             
-            # Control de paginación de Telegram
             if len(mensaje_actual) + len(bloque) > 3800:
                 mensajes.append(mensaje_actual)
                 mensaje_actual = bloque
@@ -2192,13 +2595,48 @@ class RobotTelegram:
         if mensaje_actual:
             mensajes.append(mensaje_actual)
             
-        # Envío secuencial de los globos de texto
-        for m in mensajes:
-            await update.message.reply_text(m, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+        # Botones de navegación
+        botones = [
+            ["1_ Ver referencias"],
+            ["🔙 Atrás", "🔙 Volver al menú principal"]
+        ]
+            
+        for m in mensajes[:-1]:
+            await update.message.reply_text(m, parse_mode="Markdown")
+            
+        # Enviamos el último globo con el teclado activo
+        await update.message.reply_text(
+            mensajes[-1], 
+            parse_mode="Markdown", 
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
         
-        await self.mostrar_menu(update, context)
-        return ConversationHandler.END
+        return self.esperando_accion_cambios
 
+    async def procesar_accion_cambios(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Muestra el glosario detallado sobre la estabilidad de los pálpitos."""
+        mensaje_ref = (
+            "📋 *REFERENCIAS DE ESTABILIDAD (CAMBIOS)*\n\n"
+            "Este ranking mide cuántas veces guardás o modificás un mismo pronóstico antes de que empiece el partido. Refleja tu seguridad o tus dudas al decidir:\n\n"
+            "🧱 *Firme (1,10 o menos):* Tenés las ideas claras. Una vez que cargás tu resultado, es casi imposible que lo cambies. Confías plenamente en tu primer pálpito.\n\n"
+            "👍 *Estable (1,11 a 1,50):* Sos un jugador equilibrado. Podés corregir un error de tipeo o ajustar un gol tras leer una noticia de último momento, pero no solés dudar.\n\n"
+            "🔄 *Cambiante (1,51 a 2,50):* Analizás mucho. Es probable que cambies tu jugada varias veces según las formaciones confirmadas o cómo sentís la previa del partido.\n\n"
+            "📉 *Muy volátil (más de 2,50):* La indecisión te define. Modificás tu pronóstico constantemente, buscando ajustar hasta el último detalle antes de que ruede la pelota."
+        )
+        
+        botones = [
+            ["🔙 Atrás"],
+            ["🔙 Volver al menú principal"]
+        ]
+        
+        await update.message.reply_text(
+            mensaje_ref, 
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
+        
+        return self.esperando_accion_cambios
+    
     async def calcular_y_mostrar_grafico_perfil(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Paso 3: Lee la memoria, procesa los datos y dibuja los emojis."""
         texto_usuario = update.message.text
@@ -2306,12 +2744,17 @@ class RobotTelegram:
 
             await update.message.reply_text(mensaje, parse_mode="Markdown")
 
-        # Limpiamos la memoria por prolijidad
-        context.user_data.clear()
+        botones = [
+            ["🔙 Atrás"],
+            ["🔙 Volver al menú principal"]
+        ]
         
-        # Volver al menú principal y cerrar el flujo de conversación
-        await self.mostrar_menu(update, context)
-        return ConversationHandler.END   
+        await update.message.reply_text(
+            "Elegí una opción para continuar:",
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
+
+        return self.esperando_accion_perfil 
 
     async def iniciar_grafico_perfil_generico(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """PASO 1 Genérico: Identifica el gráfico elegido y pregunta si es Histórico o por Torneo."""
