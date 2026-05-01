@@ -8,6 +8,7 @@ import smtplib
 import unicodedata
 from dotenv import load_dotenv
 import random
+import requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from tarjeta_acceso import TarjetaAcceso
@@ -2250,6 +2251,40 @@ class SistemaIndependiente:
                     actualizar_ranking=False,  
                     actualizar_copas=False
                 )
+
+                # --- AVISAR AL ADMINISTRADOR ---
+                if self.usuario_actual != "Gabriel":
+                    token = os.getenv("TELEGRAM_TOKEN")
+                    admin_id = bd.obtener_id_telegram_por_username("Gabriel")
+                    
+                    if token and admin_id:
+                        # Extraemos el nombre del rival usando el ID guardado
+                        nombre_rival = "Desconocido"
+                        for p in self.cache_partidos_admin_data if hasattr(self, 'cache_partidos_admin_data') else []:
+                            if p[0] == self.partido_a_pronosticar_id:
+                                nombre_rival = p[1]
+                                break
+                        
+                        texto_alerta = (
+                            f"🔔 *Nuevo Pronóstico*\n\n"
+                            f"👤 *Usuario:* {self.usuario_actual}\n"
+                            f"⚽ *Partido:* vs {nombre_rival}\n"
+                            f"👉 *Resultado:* {gc_str} - {gr_str}"
+                        )
+                        
+                        # Usamos la API de Telegram para enviar un mensaje directo (silencioso)
+                        url = f"https://api.telegram.org/bot{token}/sendMessage"
+                        params = {
+                            "chat_id": admin_id, 
+                            "text": texto_alerta, 
+                            "parse_mode": "Markdown",
+                            "disable_notification": True # Llega sin vibrar/sonar para no molestar
+                        }
+                        try:
+                            requests.get(url, params=params, timeout=5)
+                        except:
+                            pass
+                # --------------------------------------
                 
                 # 5. MOSTRAR LA RESPUESTA (Éxito)
                 VentanaCarga.cerrar(self.page)
@@ -4251,7 +4286,6 @@ class SistemaIndependiente:
     
     def _notificar_robot_actualizacion(self):
         """Envía el comando de actualización al bot usando requests."""
-        import requests
         token = os.getenv("TELEGRAM_TOKEN")
         # Necesitamos tu ID de Telegram (Gabriel)
         bd = BaseDeDatos()

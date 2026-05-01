@@ -607,10 +607,82 @@ class BaseDeDatos:
             if cursor: cursor.close()
             if conexion: conexion.close() 
 
+    def obtener_agenda_partidos_futuros(self):
+        """Devuelve ID, rival, fecha, edicion_id y nombre del torneo para configurar alarmas."""
+        conexion = None
+        cursor = None
+        try:
+            conexion = self.abrir()
+            cursor = conexion.cursor()
+            
+            query = """
+                SELECT p.id, r.nombre, p.fecha_hora, p.edicion_id, CONCAT(c.nombre, ' ', a.numero)
+                FROM partidos p
+                JOIN rivales r ON p.rival_id = r.id
+                JOIN ediciones e ON p.edicion_id = e.id
+                JOIN campeonatos c ON e.campeonato_id = c.id
+                JOIN anios a ON e.anio_id = a.id
+                WHERE p.fecha_hora > DATE_SUB(NOW(), INTERVAL 3 HOUR)
+            """
+            cursor.execute(query)
+            return cursor.fetchall()
+        except Exception as e:
+            print(f"Error obteniendo agenda de partidos: {e}")
+            return []
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def obtener_usuarios_sin_pronostico_por_partido(self, partido_id):
+        """Devuelve id_telegram y username de quienes NO pronosticaron este partido específico."""
+        conexion = None
+        cursor = None
+        try:
+            conexion = self.abrir()
+            cursor = conexion.cursor()
+            query = """
+                SELECT id_telegram, username
+                FROM usuarios
+                WHERE id_telegram IS NOT NULL
+                  AND id NOT IN (
+                      SELECT usuario_id FROM pronosticos WHERE partido_id = %s
+                  );
+            """
+            cursor.execute(query, (partido_id,))
+            return cursor.fetchall()
+        except Exception as e:
+            print(f"Error obteniendo usuarios colgados: {e}")
+            return []
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+
+    def obtener_usuarios_con_pronostico_por_partido(self, partido_id):
+        """Devuelve id_telegram y username de quienes SÍ pronosticaron este partido específico."""
+        conexion = None
+        cursor = None
+        try:
+            conexion = self.abrir()
+            cursor = conexion.cursor()
+            query = """
+                SELECT DISTINCT u.id_telegram, u.username
+                FROM usuarios u
+                JOIN pronosticos pr ON u.id = pr.usuario_id
+                WHERE u.id_telegram IS NOT NULL
+                  AND pr.partido_id = %s;
+            """
+            cursor.execute(query, (partido_id,))
+            return cursor.fetchall()
+        except Exception as e:
+            print(f"Error obteniendo usuarios cumplidores: {e}")
+            return []
+        finally:
+            if cursor: cursor.close()
+            if conexion: conexion.close()
+
     def obtener_datos_evolucion_puestos(self, edicion_id, usuarios_seleccionados):
         """
         Calcula la evolución del ranking aplicando los NUEVOS CRITERIOS.
-        Corrección: Se elimina el filtro defectuoso de NOW().
         """
         conexion = None
         cursor = None
@@ -622,8 +694,7 @@ class BaseDeDatos:
             cursor.execute("SELECT COUNT(*) FROM usuarios")
             total_usuarios = cursor.fetchone()[0]
 
-            # 2. Obtener partidos TERMINADOS ordenados por fecha
-            # FILTRO CORREGIDO: Eliminamos "AND fecha_hora < NOW()"
+            # 2. Obtener partidos TERMINADOS ordenados por fecha"
             sql_partidos = """
                 SELECT id 
                 FROM partidos 
@@ -745,7 +816,6 @@ class BaseDeDatos:
     def obtener_datos_evolucion_puntos(self, edicion_id, usuarios_seleccionados):
         """
         Obtiene el historial de puntos acumulados partido a partido para graficar.
-        Corrección: Se elimina el filtro defectuoso de NOW() para mostrar todos los partidos finalizados.
         """
         if not usuarios_seleccionados:
             return 0, 0, {}
@@ -757,8 +827,7 @@ class BaseDeDatos:
         cursor = conexion.cursor()
         
         try:
-            # 1. Obtener la lista de partidos finalizados de esta edición
-            # FILTRO CORREGIDO: Eliminamos "AND fecha_hora < NOW()"
+            # 1. Obtener la lista de partidos finalizados de esta edición"
             sql_partidos = """
                 SELECT id FROM partidos 
                 WHERE goles_independiente IS NOT NULL 
@@ -779,7 +848,6 @@ class BaseDeDatos:
             placeholders = ', '.join(['%s'] * len(usuarios_seleccionados))
             params_puntos = [edicion_id] + usuarios_seleccionados
             
-            # FILTRO CORREGIDO: Eliminamos "AND p.fecha_hora < NOW()"
             sql_puntos = f"""
                 SELECT 
                     pr.partido_id,
@@ -2219,7 +2287,6 @@ class BaseDeDatos:
     def obtener_ranking(self, edicion_id=None, anio=None):
         """
         Ranking Definitivo:
-        Corrección: Eliminado el filtro fecha_hora < NOW()
         """
         conexion = self.abrir()
         if not conexion:
@@ -2295,7 +2362,6 @@ class BaseDeDatos:
             
             JOIN partidos p ON pr.partido_id = p.id
             
-            -- FILTRO CORREGIDO: Eliminamos AND p.fecha_hora < NOW()
             WHERE p.goles_independiente IS NOT NULL 
               AND p.goles_rival IS NOT NULL
             {filtro_sql}

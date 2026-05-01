@@ -1,7 +1,9 @@
 import os
 import random
 import datetime
+import sys
 from datetime import timedelta
+import threading
 import pytz
 import smtplib
 from email.message import EmailMessage
@@ -49,8 +51,10 @@ class RobotTelegram:
         esperando_crear_partido_goles,
         esperando_fecha_partido_a_editar, esperando_editar_partido_rival,
         esperando_editar_partido_edicion, esperando_editar_partido_condicion,
-        esperando_editar_partido_fecha_final
-    ) = range(1, 65)
+        esperando_editar_partido_fecha_final,
+        esperando_accion_tabla_posiciones,
+        esperando_archivo_a_leer
+    ) = range(1, 67)
 
     def __init__(self):
         """Inicializa las configuraciones, la base de datos y la app de Telegram."""
@@ -201,6 +205,7 @@ class RobotTelegram:
             
         botones = [
             ["1_ Partidos", "2_ Equipos"],
+            ["3_ Leer archivos"], # <--- NUEVO BOTÓN
             ["🔙 Volver al menú principal"]
         ]
         
@@ -208,7 +213,8 @@ class RobotTelegram:
             "⚙️ *Panel de Administración*\n\n"
             "Bienvenido al panel de control. Elegí el área que querés gestionar:\n\n"
             "⚽ *1_ Partidos:* Carga manual de resultados finales y listado de encuentros por torneo.\n"
-            "🛡️ *2_ Equipos:* Gestión de los clubes rivales (altas, bajas y modificaciones) en la base de datos."
+            "🛡️ *2_ Equipos:* Gestión de los clubes rivales (altas, bajas y modificaciones) en la base de datos.\n"
+            "📂 *3_ Leer archivos:* Consulta y limpieza de los archivos de registro (logs) generados por el bot." # <--- NUEVO TEXTO
         )
         
         await update.message.reply_text(
@@ -824,7 +830,11 @@ class RobotTelegram:
                 # 1. Posiciones
                 self.esperando_tipo_tabla: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.imprimir_tabla, self.esperando_tipo_tabla, self.esperando_edicion_tabla, 'dicc_posiciones'))],
                 self.esperando_edicion_tabla: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.imprimir_tabla, self.esperando_edicion_tabla, 'dicc_posiciones'))],
-                
+                self.esperando_accion_tabla_posiciones: [
+                    MessageHandler(filters.Regex("^1_ Explicar las reglas$"), self.procesar_accion_tabla_posiciones),
+                    MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
+                ],
+
                 # 2. Consultar pronósticos (Acá el puente de imprimir es preguntar_usuario)
                 self.esperando_tipo_pronosticos: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_tipo(self.preguntar_usuario_pronosticos, self.esperando_tipo_pronosticos, self.esperando_edicion_pronosticos, 'dicc_pronosticos'))],
                 self.esperando_edicion_pronosticos: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._crear_procesar_edicion(self.preguntar_usuario_pronosticos, self.esperando_edicion_pronosticos, 'dicc_pronosticos'))],
@@ -940,6 +950,7 @@ class RobotTelegram:
                 self.esperando_menu_administracion: [
                     MessageHandler(filters.Regex("^1_ Partidos$"), self.iniciar_admin_partidos),
                     MessageHandler(filters.Regex("^2_ Equipos$"), self.iniciar_admin_equipos),
+                    MessageHandler(filters.Regex("^3_ Leer archivos$"), self.iniciar_admin_archivos),
                     MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
                 ],
                 
@@ -1036,6 +1047,12 @@ class RobotTelegram:
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_confirmacion_eliminar_equipo)
                 ],
 
+                self.esperando_archivo_a_leer: [
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_administracion),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_archivo_a_leer)
+                ],
+
                 # --- RUTAS DE EDICIÓN ---
                 self.esperando_fecha_partido_a_editar: [
                     MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
@@ -1070,19 +1087,134 @@ class RobotTelegram:
         self.app.add_handler(conv_handler)
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.mostrar_menu))
 
+    def _generar_texto_tabla_posiciones(self, edicion_id, titulo):
+        """Extrae la lógica de dibujo de la tabla para que el bot pueda enviarla automáticamente."""
+        ranking = self.db.obtener_ranking(edicion_id=edicion_id)
+        usuarios_db = self.db.obtener_usuarios_con_id()
+        todos_los_usuarios = [u[1] for u in usuarios_db]
+        usuarios_con_puntos = [row[0] for row in ranking]
+        usuarios_sin_pronosticos = [u for u in todos_los_usuarios if u not in usuarios_con_puntos]
+        
+        if not ranking and not usuarios_sin_pronosticos:
+            return "📉 Todavía no hay usuarios registrados en el sistema."
+            
+        mensaje = f"🏆 *Tabla de Posiciones: {titulo}* 🏆\n\n"
+        
+        if ranking:
+            for i, row in enumerate(ranking):
+                username = row[0]
+                puntos = row[1]
+                pj = row[5]
+                ant_str = self._formatear_anticipacion(row[6])
+                error_prom = round(float(row[7]), 2) if row[7] is not None else 0.0
+                efectividad = row[8]
+                
+                if i == 0: medalla = "🥇"
+                elif i == 1: medalla = "🥈"
+                elif i == 2: medalla = "🥉"
+                else: medalla = f"*{i+1}°*"
+                    
+                mensaje += f"{medalla} *{username}* - {puntos} pts\n"
+                mensaje += f"└ _PJ: {pj} | Err: {error_prom} | Ant: {ant_str} | Efec: {efectividad}%_\n\n"
+        else:
+            mensaje += "_Aún no hay puntos cargados en esta categoría._\n\n"
+
+        if usuarios_sin_pronosticos:
+            lista_nombres = ", ".join(usuarios_sin_pronosticos)
+            mensaje += f"🚫 *Últimos (Sin pronósticos):*\n_{lista_nombres}_"
+            
+        return mensaje
+
+    async def imprimir_tabla(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edicion_id, titulo):
+        """Se activa cuando el usuario toca manualmente 'Ver posiciones'."""
+        threading.Thread(
+            target=self._auditar_consulta_estadistica, 
+            args=(update, f"Posiciones ({titulo})"), 
+            daemon=True
+        ).start()
+
+        mensaje = self._generar_texto_tabla_posiciones(edicion_id, titulo)
+        
+        # Agregamos el botón de explicar reglas junto al de volver
+        botones_tabla = [
+            ["1_ Explicar las reglas"],
+            ["🔙 Volver al menú principal"]
+        ]
+        teclado = ReplyKeyboardMarkup(botones_tabla, resize_keyboard=True)
+        
+        await update.message.reply_text(mensaje, parse_mode="Markdown", reply_markup=teclado)
+        
+        # Mantenemos la conversación viva en el nuevo estado
+        return self.esperando_accion_tabla_posiciones
+
+    async def procesar_accion_tabla_posiciones(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Muestra el detalle y los fundamentos de cómo se define el ranking."""
+        mensaje_reglas = (
+            "⚖️ *REGLAMENTO Y CRITERIOS DE DESEMPATE*\n\n"
+            "Para garantizar que el ranking sea justo, las posiciones se definen siguiendo este orden estricto:\n\n"
+            "*1º El que más puntos saca:*\n"
+            "Es la meta suprema y el objetivo principal del juego. Quien más puntos acumula acertando resultados lógicamente merece estar en la cima.\n\n"
+            "*2º El que más partidos pronosticó:*\n"
+            "Ante igualdad de puntos, priorizamos a los jugadores más activos. Queremos valorar a quienes les gusta jugar a esto y participan constantemente del programa por sobre los que juegan de forma esporádica.\n\n"
+            "*3º El mejor predictor:*\n"
+            "Si la paridad persiste, sos un mejor jugador si cometés menos errores absolutos en tus predicciones. Un buen predictor demuestra su capacidad acercándose siempre a la cantidad de goles exacta del encuentro.\n\n"
+            "*4º Mayor anticipación promedio:*\n"
+            "Una vez valorado todo lo restante, se premia al jugador más decidido. Alguien que pronostica con mayor anticipación demuestra que es firme y que sabe mirar mejor los partidos, porque mucho antes del pitazo inicial ya sabe cómo saldrá el partido."
+        )
+        
+        botones_volver = [["🔙 Volver al menú principal"]]
+        
+        await update.message.reply_text(
+            mensaje_reglas, 
+            parse_mode="Markdown", 
+            reply_markup=ReplyKeyboardMarkup(botones_volver, resize_keyboard=True)
+        )
+        
+        # Nos quedamos en este estado esperando que decida volver al menú
+        return self.esperando_accion_tabla_posiciones
+
+    async def _disparar_recordatorio_cumplidores(self, context: ContextTypes.DEFAULT_TYPE):
+        """Envía un recordatorio 24 horas antes del partido a los usuarios que ya pronosticaron."""
+        datos = context.job.data
+        partido_id = datos['partido_id']
+        rival = datos['rival']
+        fecha_str = datos['fecha'].strftime('%d/%m a las %H:%M')
+        
+        # Obtenemos quiénes SÍ pronosticaron este partido
+        cumplidores = self.db.obtener_usuarios_con_pronostico_por_partido(partido_id)
+        if not cumplidores: return
+        
+        # Botón único para limpiar la pantalla y dejar solo el regreso al menú
+        botones = [["🔙 Volver al menú principal"]]
+        teclado = ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        
+        # Mensaje simplificado y enfocado en la previa
+        mensaje = (
+            f"⏳ *¡FALTAN 24 HORAS!* ⏳\n\n"
+            f"Mañana juega el Rojo contra *{rival}* ({fecha_str}).\n\n"
+            f"Tu pronóstico ya se encuentra registrado y asegurado. ¡Éxitos! 👹"
+        )
+        
+        for tg_id, username in cumplidores:
+            try:
+                await context.bot.send_message(chat_id=tg_id, text=mensaje, parse_mode="Markdown", reply_markup=teclado)
+                self._registrar_log(f"Aviso enviado a {username} (Faltan 24 hs - Partido: {rival})")
+            except Exception as e:
+                self._registrar_log(f"FALLO al avisar a {username} (Faltan 24 hs): {e}", archivo="logs_errores_bot.txt")
 
     def _programar_cronometros_partidos(self):
         """Busca partidos futuros y crea alarmas con nombre para poder resetearlas."""
-        partidos = self.db.obtener_partidos_futuros_crudo()
+        partidos = self.db.obtener_agenda_partidos_futuros()
         if not partidos: return
         
         zona_horaria = pytz.timezone('America/Argentina/Buenos_Aires')
         ahora = datetime.datetime.now(zona_horaria)
         
-        for p_id, rival, fecha in partidos:
+        for p_id, rival, fecha, edicion_id, nombre_torneo in partidos:
             fecha_local = zona_horaria.localize(fecha)
-            horas_aviso = [96, 48, 24, 1]
             
+            # 1. Alarmas de insistencia para los que NO pronosticaron
+            horas_aviso = [96, 48, 24, 1]
             for horas in horas_aviso:
                 fecha_alarma = fecha_local - timedelta(hours=horas)
                 if fecha_alarma > ahora:
@@ -1090,9 +1222,30 @@ class RobotTelegram:
                         self._disparar_recordatorio, 
                         when=fecha_alarma, 
                         data={'partido_id': p_id, 'rival': rival, 'fecha': fecha_local, 'horas': horas},
-                        name="recordatorio_partido" # 🌟 NOMBRE CLAVE PARA BORRARLAS
+                        name="recordatorio_partido"
                     )
-        print("⏰ Cronómetros configurados.")
+            
+            # 2. ALARMA DE TABLA (1 HORA ANTES) para los que SÍ pronosticaron
+            fecha_alarma_posiciones = fecha_local - timedelta(hours=1)
+            if fecha_alarma_posiciones > ahora:
+                self.app.job_queue.run_once(
+                    self._disparar_alerta_posiciones, 
+                    when=fecha_alarma_posiciones, 
+                    data={'partido_id': p_id, 'rival': rival, 'edicion_id': edicion_id, 'nombre_torneo': nombre_torneo},
+                    name="recordatorio_partido" 
+                )
+
+            # 🌟 3. NUEVA ALARMA: RECORDATORIO 24 HORAS PARA LOS QUE YA PRONOSTICARON
+            fecha_alarma_24h = fecha_local - timedelta(hours=24)
+            if fecha_alarma_24h > ahora:
+                self.app.job_queue.run_once(
+                    self._disparar_recordatorio_cumplidores, 
+                    when=fecha_alarma_24h, 
+                    data={'partido_id': p_id, 'rival': rival, 'fecha': fecha_local},
+                    name="recordatorio_partido" 
+                )
+                
+        print("⏰ Cronómetros de recordatorios y posiciones configurados.")
 
     async def _disparar_recordatorio(self, context: ContextTypes.DEFAULT_TYPE):
         """Se ejecuta cuando un cronómetro llega a 0."""
@@ -1124,8 +1277,34 @@ class RobotTelegram:
             )
             try:
                 await context.bot.send_message(chat_id=tg_id, text=mensaje, parse_mode="Markdown", reply_markup=teclado)
+                self._registrar_log(f"Aviso enviado a {username} (Faltan {horas_faltantes}hs - Partido: {rival})")
             except Exception as e:
-                print(f"No se pudo avisar a {username}: {e}")
+                self._registrar_log(f"FALLO al avisar a {username} (Faltan {horas_faltantes}hs): {e}", archivo="logs_errores_bot.txt")
+
+    async def _disparar_alerta_posiciones(self, context: ContextTypes.DEFAULT_TYPE):
+        """Envía la tabla de posiciones 1 hora antes del partido a los usuarios que ya pronosticaron."""
+        datos = context.job.data
+        partido_id = datos['partido_id']
+        rival = datos['rival']
+        edicion_id = datos['edicion_id']
+        nombre_torneo = datos['nombre_torneo']
+        
+        # Obtenemos quiénes ya cumplieron con su pronóstico
+        cumplidores = self.db.obtener_usuarios_con_pronostico_por_partido(partido_id)
+        if not cumplidores: return
+        
+        # Armamos el mensaje invocando a la función generadora de la tabla
+        mensaje_intro = f"📊 Informamos la tabla de posiciones a falta de 1 hora para el partido contra *{rival}*:\n\n"
+        tabla_texto = self._generar_texto_tabla_posiciones(edicion_id, nombre_torneo)
+        mensaje_final = mensaje_intro + tabla_texto
+        
+        # Se lo mandamos por privado a cada usuario cumplidor
+        for tg_id, username in cumplidores:
+            try:
+                await context.bot.send_message(chat_id=tg_id, text=mensaje_final, parse_mode="Markdown")
+                self._registrar_log(f"Tabla de posiciones enviada a {username} (Falta 1h - Partido: {rival})")
+            except Exception as e:
+                self._registrar_log(f"FALLO al enviar tabla de posiciones a {username} (Falta 1h - Partido: {rival}): {e}", archivo="logs_errores_bot.txt")
 
     # --- MÉTODOS DE APOYO (HELPERS) ---
 
@@ -1270,6 +1449,11 @@ class RobotTelegram:
 
     async def iniciar_menu_perfil(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Submenú para los gráficos y porcentajes con explicación detallada."""
+        threading.Thread(
+            target=self._auditar_consulta_estadistica, 
+            args=(update, "Menú Perfil de la Comunidad"), 
+            daemon=True
+        ).start()
         # Sumamos el botón 3 en una nueva fila
         botones = [
             ["1_ Estilo de pronóstico", "2_ Tendencia de pronóstico"],
@@ -1731,7 +1915,7 @@ class RobotTelegram:
         partido_id = context.user_data.get('partido_id_elegido')
         username = context.user_data.get('username_pronostico')
         
-        # 🌟 CAMBIO: Recuperamos la info del partido para usar el nombre real
+        # Recuperamos la info del partido para usar el nombre real
         info_partido = context.user_data.get('info_partido_elegido', {})
         rival = info_partido.get('rival', 'Rival')
         condicion = info_partido.get('condicion', 1)
@@ -1758,7 +1942,29 @@ class RobotTelegram:
             # pero self.db.obtener_partidos siempre leerá el de la fecha_actual más grande.
             self.db.insertar_pronostico(username, partido_id, goles_cai, goles_rival, fecha_actual)
             
-            # 🌟 CAMBIO: Armamos el texto final respetando quién es local y quién visitante
+            # --- AVISAR AL ADMINISTRADOR SI NO FUE ÉL MISMO ---
+            if username != "Gabriel":
+                admin_id = self.db.obtener_id_telegram_por_username("Gabriel")
+                if admin_id:
+                    texto_alerta = (
+                        f"🔔 *Nuevo Pronóstico*\n\n"
+                        f"👤 *Usuario:* {username} (vía Telegram)\n"
+                        f"⚽ *Partido:* vs {rival}\n"
+                        f"👉 *Resultado:* {goles_cai} - {goles_rival}"
+                    )
+                    try:
+                        # Mandar mensaje sin modificar el teclado (reply_markup) de Gabriel
+                        await context.bot.send_message(
+                            chat_id=admin_id, 
+                            text=texto_alerta, 
+                            parse_mode="Markdown",
+                            disable_notification=True
+                        )
+                    except Exception as e:
+                        print(f"No se pudo notificar al admin: {e}")
+            # ---------------------------------------------------------
+
+            # Armamos el texto final respetando quién es local y quién visitante
             if condicion == -1:
                 resultado_str = f"{rival} {goles_rival} - {goles_cai} Independiente 🔴"
             else:
@@ -1804,65 +2010,40 @@ class RobotTelegram:
         else:
             return f"{horas:02d}:{minutos:02d}:{segs:02d}"
 
-    async def imprimir_tabla(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edicion_id, titulo):
-        """Función de apoyo: Dibuja la tabla en formato texto incluyendo a los que no jugaron."""
-        # 1. Obtenemos el ranking de los que tienen puntos
-        ranking = self.db.obtener_ranking(edicion_id=edicion_id)
-        
-        # 2. Obtenemos la lista completa de todos los usuarios del sistema
-        usuarios_db = self.db.obtener_usuarios_con_id()
-        todos_los_usuarios = [u[1] for u in usuarios_db]
-        
-        # 3. Identificamos quiénes sí tienen puntos en esta tabla
-        usuarios_con_puntos = [row[0] for row in ranking]
-        
-        # 4. Filtramos para encontrar a los que no tienen ningún pronóstico en este contexto
-        usuarios_sin_pronosticos = [u for u in todos_los_usuarios if u not in usuarios_con_puntos]
-        
-        if not ranking and not usuarios_sin_pronosticos:
-            await update.message.reply_text("📉 Todavía no hay usuarios registrados en el sistema.")
-            # 🌟 CAMBIO: Agregado self.
-            await self.mostrar_menu(update, context)
-            return ConversationHandler.END
+    def _registrar_log(self, mensaje, archivo="logs_bot.txt"):
+        """Escribe un registro en un archivo de texto con la fecha y hora actuales."""
+        try:
+            # Obtener la hora de Argentina para el log
+            zona_horaria = pytz.timezone('America/Argentina/Buenos_Aires')
+            ahora = datetime.datetime.now(zona_horaria)
+            marca_tiempo = ahora.strftime("%Y-%m-%d %H:%M:%S")
             
-        mensaje = f"🏆 *Tabla de Posiciones: {titulo}* 🏆\n\n"
-        
-        # Dibujamos la tabla de los que puntuaron
-        if ranking:
-            for i, row in enumerate(ranking):
-                username = row[0]
-                puntos = row[1]
-                pj = row[5]
+            # Construir la línea de log
+            linea_log = f"[{marca_tiempo}] : {mensaje}\n"
+            
+            # Obtener la ruta correcta dependiendo de si es un ejecutable o script
+            if getattr(sys, 'frozen', False):
+                carpeta = sys._MEIPASS
+            else:
+                carpeta = os.path.dirname(os.path.abspath(__file__))
                 
-                # 🌟 CAMBIO: Agregado self. y el guion bajo
-                ant_str = self._formatear_anticipacion(row[6])
-                
-                # Cast seguro para el error promedio
-                error_prom = round(float(row[7]), 2) if row[7] is not None else 0.0
-                efectividad = row[8]
-                
-                if i == 0: medalla = "🥇"
-                elif i == 1: medalla = "🥈"
-                elif i == 2: medalla = "🥉"
-                else: medalla = f"*{i+1}°*"
-                    
-                mensaje += f"{medalla} *{username}* - {puntos} pts\n"
-                mensaje += f"└ _PJ: {pj} | Err: {error_prom} | Ant: {ant_str} | Efec: {efectividad}%_\n\n"
-        else:
-            mensaje += "_Aún no hay puntos cargados en esta categoría._\n\n"
+            ruta_archivo = os.path.join(carpeta, archivo)
+            
+            # Escribir en el archivo en modo 'append' (añadir)
+            with open(ruta_archivo, "a", encoding="utf-8") as f:
+                f.write(linea_log)
+        except Exception as e:
+            # Fallback seguro en caso de que no pueda escribir en el archivo
+            print(f"Error crítico al intentar guardar el log: {e}")
 
-        # Mostrar a los que no pronosticaron nada
-        if usuarios_sin_pronosticos:
-            # Los unimos con comas para que no ocupe tanto espacio vertical
-            lista_nombres = ", ".join(usuarios_sin_pronosticos)
-            mensaje += f"🚫 *Últimos (Sin pronósticos):*\n_{lista_nombres}_"
-            
-        # Enviamos el mensaje final
-        await update.message.reply_text(mensaje, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+    def _auditar_consulta_estadistica(self, update: Update, nombre_estadistica):
+        """Registra en el log cuando un usuario (no admin) consulta una estadística."""
+        id_telegram = update.effective_user.id
+        username = self.db.obtener_usuario_por_telegram(id_telegram)
         
-        # 🌟 CAMBIO: Agregado self.
-        await self.mostrar_menu(update, context)
-        return ConversationHandler.END
+        if username and username != "Gabriel":
+            mensaje = f"👁️ CONSULTA: El usuario '{username}' revisó la estadística de '{nombre_estadistica}'."
+            self._registrar_log(mensaje)
 
     # ==========================================
     # FLUJO 4: CONSULTAR PRONÓSTICOS
@@ -2000,15 +2181,20 @@ class RobotTelegram:
     # ==========================================
     async def imprimir_tabla_opt_pes(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edicion_id, titulo):
         """Construye y envía la tabla con las lógicas del programa de escritorio."""
+        threading.Thread(
+            target=self._auditar_consulta_estadistica, 
+            args=(update, f"Optimismo/Pesimismo ({titulo})"), 
+            daemon=True
+        ).start()
         datos = self.db.obtener_indice_optimismo_pesimismo(edicion_id=edicion_id)
         
         if not datos:
             await update.message.reply_text("📉 Todavía no hay datos de optimismo/pesimismo para esta selección.")
-            # 🌟 CAMBIO: Agregado self.
+            # Agregado self.
             await self.mostrar_menu(update, context)
             return ConversationHandler.END
             
-        # 🌟 CAMBIO: Se agrega el texto explicativo debajo del título
+        # Se agrega el texto explicativo debajo del título
         mensaje = f"🧠 *Optimismo/Pesimismo: {titulo}* 🧠\n"
         mensaje += "_Mide tu tendencia a pronosticar resultados a favor (Optimista) o en contra (Pesimista) del Rojo._\n\n"
         
@@ -2103,18 +2289,22 @@ class RobotTelegram:
     # FLUJO 6: MAYORES ERRORES
     # ==========================================
     async def imprimir_tabla_mayores_errores(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edicion_id, titulo):
+        threading.Thread(
+            target=self._auditar_consulta_estadistica, 
+            args=(update, f"Mayores Errores ({titulo})"), 
+            daemon=True
+        ).start()
         datos = self.db.obtener_ranking_mayores_errores(edicion_id=edicion_id)
-        
         if not datos:
             await update.message.reply_text("📉 Todavía no hay datos de errores para esta selección.")
-            # 🌟 CAMBIO: Agregado self.
+            # Agregado self.
             await self.mostrar_menu(update, context)
             return ConversationHandler.END
             
         mensajes = []
         mensaje_actual = f"📉 *Mayores Errores: {titulo}* 📉\n"
         
-        # 🌟 CAMBIO: Usamos self.limite_errores en vez de la variable global suelta
+        # Usamos self.limite_errores en vez de la variable global suelta
         mensaje_actual += f"_Los pronósticos más alejados de la realidad (Top {self.limite_errores})._\n\n"
         
         for i, row in enumerate(datos, start=1):
@@ -2167,12 +2357,18 @@ class RobotTelegram:
     # ==========================================
     async def imprimir_tabla_falso_profeta(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edicion_id, titulo):
         """Construye y envía el ranking invirtiendo el % de acierto al % de falso profeta."""
-        # 🌟 CAMBIO: Acceso a la base de datos vía self.db
+        threading.Thread(
+            target=self._auditar_consulta_estadistica, 
+            args=(update, f"Falso Profeta ({titulo})"), 
+            daemon=True
+        ).start()
+
+        # Acceso a la base de datos vía self.db
         datos = self.db.obtener_ranking_falso_profeta(edicion_id=edicion_id)
         
         if not datos:
             await update.message.reply_text("📉 Todavía no hay suficientes datos para calcular falsos profetas en esta selección.")
-            # 🌟 CAMBIO: Uso de self.
+            # Uso de self.
             await self.mostrar_menu(update, context)
             return ConversationHandler.END
             
@@ -2233,6 +2429,11 @@ class RobotTelegram:
     # ==========================================
     async def imprimir_tabla_estilo_decision(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edicion_id, titulo):
         """Construye y envía el ranking de estilos de decisión."""
+        threading.Thread(
+            target=self._auditar_consulta_estadistica, 
+            args=(update, f"Estilo de Decisión ({titulo})"), 
+            daemon=True
+        ).start()
         # Obtenemos el ranking base que ya trae el promedio de anticipación (índice 6)
         datos_ranking = self.db.obtener_ranking(edicion_id=edicion_id, anio=None)
         
@@ -2343,6 +2544,12 @@ class RobotTelegram:
     # ==========================================
     async def imprimir_tabla_mufa(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edicion_id, titulo):
         """Construye y envía el ranking Mufa."""
+        threading.Thread(
+            target=self._auditar_consulta_estadistica, 
+            args=(update, f"Mufa ({titulo})"), 
+            daemon=True
+        ).start()
+
         datos = self.db.obtener_ranking_mufa(edicion_id=edicion_id, anio=None)
         
         if not datos:
@@ -2403,6 +2610,12 @@ class RobotTelegram:
     # ==========================================
     async def imprimir_tabla_mejor_predictor(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edicion_id, titulo):
         """Construye y envía el ranking de Mejor Predictor basado en error absoluto."""
+        threading.Thread(
+            target=self._auditar_consulta_estadistica, 
+            args=(update, f"Mejor Predictor ({titulo})"), 
+            daemon=True
+        ).start()
+
         datos = self.db.obtener_ranking_mejor_predictor(edicion_id=edicion_id, anio=None)
         
         if not datos:
@@ -2494,6 +2707,11 @@ class RobotTelegram:
     # ==========================================
     async def imprimir_tabla_racha_record(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edicion_id, titulo):
         """Construye y envía el ranking de Racha Récord."""
+        threading.Thread(
+            target=self._auditar_consulta_estadistica, 
+            args=(update, f"Racha Récord ({titulo})"), 
+            daemon=True
+        ).start()
         datos = self.db.obtener_racha_record(edicion_id=edicion_id, anio=None)
         
         if not datos:
@@ -2555,6 +2773,11 @@ class RobotTelegram:
     # ==========================================
     async def imprimir_tabla_racha_actual(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edicion_id, titulo):
         """Construye y envía el ranking de Racha Actual."""
+        threading.Thread(
+            target=self._auditar_consulta_estadistica, 
+            args=(update, f"Racha Actual ({titulo})"), 
+            daemon=True
+        ).start()
         datos = self.db.obtener_racha_actual(edicion_id=edicion_id, anio=None)
         
         if not datos:
@@ -2616,6 +2839,11 @@ class RobotTelegram:
     # ==========================================
     async def imprimir_tabla_cambios(self, update: Update, context: ContextTypes.DEFAULT_TYPE, edicion_id, titulo):
         """Construye y envía el ranking de Estabilidad (Cambios de pronóstico)."""
+        threading.Thread(
+            target=self._auditar_consulta_estadistica, 
+            args=(update, f"Cambio de Pronósticos ({titulo})"), 
+            daemon=True
+        ).start()
         datos = self.db.obtener_ranking_estabilidad(edicion_id=edicion_id, anio=None)
         
         if not datos:
@@ -2955,6 +3183,89 @@ class RobotTelegram:
         self._programar_cronometros_partidos()
         
         await update.message.reply_text("✅ Agenda de cronómetros actualizada correctamente.")
+    
+    async def iniciar_admin_archivos(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Busca y muestra los archivos .txt disponibles para leer."""
+        # Detectamos la ruta (Script o EXE)
+        if getattr(sys, 'frozen', False):
+            carpeta = sys._MEIPASS
+        else:
+            carpeta = os.path.dirname(os.path.abspath(__file__))
+            
+        # Filtramos solo los archivos .txt en la carpeta principal
+        archivos_txt = [f for f in os.listdir(carpeta) if f.endswith('.txt')]
+        
+        if not archivos_txt:
+            await update.message.reply_text("📂 No hay archivos de texto (.txt) disponibles para leer en este momento.")
+            return await self.iniciar_administracion(update, context)
+            
+        botones = [[f] for f in archivos_txt]
+        botones.append(["🔙 Atrás", "🔙 Volver al menú principal"])
+        
+        # Guardamos la carpeta en la memoria para seguridad de la lectura
+        context.user_data['carpeta_archivos'] = carpeta
+        
+        await update.message.reply_text(
+            "📂 *Lectura de Archivos*\n\n"
+            "⚠️ *ATENCIÓN:* Una vez leído, el archivo será **ELIMINADO AUTOMÁTICAMENTE** del servidor.\n\n"
+            "Seleccioná el archivo que querés revisar:",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
+        return self.esperando_archivo_a_leer
+
+    async def procesar_archivo_a_leer(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Lee el archivo, envía el contenido (paginado si es largo) y lo destruye."""
+        nombre_archivo = update.message.text.strip()
+        carpeta = context.user_data.get('carpeta_archivos')
+        
+        if not carpeta or not nombre_archivo.endswith('.txt'):
+            await update.message.reply_text("❌ Archivo inválido. Usa los botones para seleccionar un archivo.")
+            return self.esperando_archivo_a_leer
+            
+        ruta_archivo = os.path.join(carpeta, nombre_archivo)
+        
+        if not os.path.exists(ruta_archivo):
+            await update.message.reply_text("❌ El archivo ya no existe (probablemente ya fue leído y eliminado).")
+            return await self.iniciar_admin_archivos(update, context)
+            
+        try:
+            with open(ruta_archivo, 'r', encoding='utf-8') as f:
+                contenido = f.read()
+                
+            if not contenido.strip():
+                await update.message.reply_text(f"📄 El archivo *{nombre_archivo}* se encuentra completamente **vacío**.", parse_mode="Markdown")
+            else:
+                # Si el archivo tiene texto, lo fraccionamos para no chocar con el límite de Telegram
+                mensajes = []
+                bloque_actual = ""
+                
+                # Leemos línea por línea para evitar cortar frases a la mitad
+                for linea in contenido.splitlines(True):
+                    if len(bloque_actual) + len(linea) > 3800:
+                        mensajes.append(bloque_actual)
+                        bloque_actual = linea
+                    else:
+                        bloque_actual += linea
+                        
+                if bloque_actual:
+                    mensajes.append(bloque_actual)
+                    
+                await update.message.reply_text(f"📄 *Contenido de {nombre_archivo}:*", parse_mode="Markdown")
+                
+                # Enviamos el contenido dentro de bloques de código (monospaciado) para mejor lectura
+                for m in mensajes:
+                    await update.message.reply_text(f"```\n{m}\n```", parse_mode="Markdown")
+            
+            # Destrucción final del archivo
+            os.remove(ruta_archivo)
+            await update.message.reply_text(f"🗑️ El archivo *{nombre_archivo}* fue leído y **eliminado exitosamente** del sistema.", parse_mode="Markdown")
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error interno al intentar leer o borrar el archivo: {e}")
+            
+        # Volvemos a mostrar la lista de archivos restantes (o regresa al panel si no queda ninguno)
+        return await self.iniciar_admin_archivos(update, context)
 
     def run(self):
         """Lanza el bot."""
