@@ -820,7 +820,7 @@ class SistemaIndependiente:
         # --- CONTROLES FORMULARIO PRONÓSTICOS ---
         self.input_pred_cai = ft.TextField(
             label="Goles CAI", 
-            width=80, 
+            width=110, 
             text_align=ft.TextAlign.CENTER, 
             keyboard_type=ft.KeyboardType.NUMBER, 
             max_length=2, 
@@ -4928,17 +4928,16 @@ class SistemaIndependiente:
         btn_accion.disabled = True
         btn_accion.update()
 
-        # 2. LIMPIAR ESTADOS VISUALES PREVIOS (por si había un error anterior)
-        self.txt_fecha_admin.error_text = None
-        self.txt_fecha_admin.border_color = "white24"
-        self.txt_gc_admin.error_text = None
-        self.txt_gc_admin.border_color = "white24"
-        self.txt_gr_admin.error_text = None
-        self.txt_gr_admin.border_color = "white24"
+        # 2. LIMPIAR ESTADOS VISUALES PREVIOS
+        controles_a_validar = [
+            self.dd_edicion, self.dd_rival_admin, self.dd_cond_admin, 
+            self.txt_fecha_admin, self.txt_gc_admin, self.txt_gr_admin
+        ]
         
-        self.txt_fecha_admin.update()
-        self.txt_gc_admin.update()
-        self.txt_gr_admin.update()
+        for control in controles_a_validar:
+            control.error_text = None
+            control.border_color = "white24"
+            control.update()
 
         torneo_id = self.dd_edicion.value
         rival_id = self.dd_rival_admin.value
@@ -4947,54 +4946,113 @@ class SistemaIndependiente:
         gc = self.txt_gc_admin.value.strip()
         gr = self.txt_gr_admin.value.strip()
 
-        # --- VALIDACIÓN DE GOLES VACÍOS ---
-        hay_error_goles = False
-        
-        if not gc:
-            self.txt_gc_admin.error_text = "Obligatorio"
-            self.txt_gc_admin.border_color = "red"
-            self.txt_gc_admin.update()
-            hay_error_goles = True
-            
-        if not gr:
-            self.txt_gr_admin.error_text = "Obligatorio"
-            self.txt_gr_admin.border_color = "red"
-            self.txt_gr_admin.update()
-            hay_error_goles = True
+        hay_error = False
 
-        if hay_error_goles:
+        # --- VALIDACIÓN DE CAMPOS OBLIGATORIOS BÁSICOS ---
+        if not torneo_id or torneo_id == "0":
+            self.dd_edicion.error_text = "Obligatorio"
+            self.dd_edicion.border_color = "red"
+            hay_error = True
+            
+        if not rival_id:
+            self.dd_rival_admin.error_text = "Obligatorio"
+            self.dd_rival_admin.border_color = "red"
+            hay_error = True
+            
+        if not condicion:
+            self.dd_cond_admin.error_text = "Obligatorio"
+            self.dd_cond_admin.border_color = "red"
+            hay_error = True
+            
+        if not fecha_str:
+            self.txt_fecha_admin.error_text = "Obligatorio"
+            self.txt_fecha_admin.border_color = "red"
+            hay_error = True
+
+        # --- VALIDACIÓN DE FECHA Y GOLES ---
+        fecha_obj = None
+        fecha_sql = None
+        gc_val = None
+        gr_val = None
+        
+        if fecha_str:
+            try:
+                fecha_str_limpia = fecha_str.replace("/", "-")
+                fecha_obj = datetime.strptime(fecha_str_limpia, "%H:%M %d-%m-%Y")
+                fecha_sql = fecha_obj.strftime("%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                self.txt_fecha_admin.error_text = "Formato inválido (HH:MM DD-MM-AAAA)"
+                self.txt_fecha_admin.border_color = "red"
+                hay_error = True
+
+        if fecha_obj:
+            hora_actual = self.obtener_hora_argentina()
+            es_pasado = fecha_obj <= hora_actual
+            
+            # Si el partido es en el pasado, los goles son OBLIGATORIOS
+            if es_pasado:
+                if not gc:
+                    self.txt_gc_admin.error_text = "Obligatorio"
+                    self.txt_gc_admin.border_color = "red"
+                    hay_error = True
+                else:
+                    gc_val = int(gc)
+                    
+                if not gr:
+                    self.txt_gr_admin.error_text = "Obligatorio"
+                    self.txt_gr_admin.border_color = "red"
+                    hay_error = True
+                else:
+                    gr_val = int(gr)
+            else:
+                # Si el partido es en el futuro, NO PUEDE tener goles
+                if gc or gr:
+                    if gc:
+                        self.txt_gc_admin.error_text = "Aún no jugado"
+                        self.txt_gc_admin.border_color = "red"
+                    if gr:
+                        self.txt_gr_admin.error_text = "Aún no jugado"
+                        self.txt_gr_admin.border_color = "red"
+                    hay_error = True
+
+            # --- VALIDACIÓN: NO PUEDE HABER 2 PARTIDOS EL MISMO DÍA ---
+            if hasattr(self, 'cache_partidos_admin_data'):
+                for p in self.cache_partidos_admin_data:
+                    # Ignorar el partido que estamos editando actualmente
+                    if self.partido_admin_editando_id and p[0] == self.partido_admin_editando_id:
+                        continue
+                        
+                    if p[7]:
+                        fecha_db = str(p[7])
+                        f_obj_c = None
+                        try:
+                            f_obj_c = datetime.strptime(fecha_db, "%Y-%m-%d %H:%M:%S")
+                        except:
+                            try:
+                                f_obj_c = datetime.strptime(fecha_db, "%Y-%m-%d %H:%M")
+                            except:
+                                try:
+                                    f_limpia = fecha_db.replace("/", "-")
+                                    f_obj_c = datetime.strptime(f_limpia, "%d-%m-%Y %H:%M")
+                                except:
+                                    pass
+                        
+                        if f_obj_c and f_obj_c.date() == fecha_obj.date():
+                            self.txt_fecha_admin.error_text = "Ya hay partido este día"
+                            self.txt_fecha_admin.border_color = "red"
+                            hay_error = True
+                            break
+
+        # --- RETORNAR SI HUBO CUALQUIER ERROR VISUAL ---
+        if hay_error:
+            for control in controles_a_validar:
+                control.update()
             btn_accion.text = texto_original
             btn_accion.disabled = False
             btn_accion.update()
             return
-        # ----------------------------------
 
-        if not torneo_id or not rival_id or not condicion or not fecha_str:
-            GestorMensajes.mostrar(self.page, "Error", "Torneo, Rival, Condición y Fecha son obligatorios.", "error")
-            return
-
-        # --- TRADUCTOR INTELIGENTE DE FECHAS ---
-        try:
-            fecha_str_limpia = fecha_str.replace("/", "-")
-            fecha_obj = datetime.strptime(fecha_str_limpia, "%H:%M %d-%m-%Y")
-            fecha_sql = fecha_obj.strftime("%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            GestorMensajes.mostrar(self.page, "Error", "La fecha debe tener el formato exacto: HH:MM DD-MM-AAAA\nEjemplo: 20:30 24-03-2026", "error")
-            return
-        # -----------------------------------------------
-
-        gc_val = int(gc) if gc else None
-        gr_val = int(gr) if gr else None
-
-        # --- ESCUDO ANTI-VIAJES EN EL TIEMPO ---
-        if gc_val is not None or gr_val is not None:
-            hora_actual = self.obtener_hora_argentina()
-            if fecha_obj > hora_actual:
-                GestorMensajes.mostrar(self.page, "Operación denegada", "No puedes cargar el resultado de un partido que aún no se ha jugado.", "error")
-                return
-        # ----------------------------------------------
-
-        # --- ESCUDO ANTI-INCONSISTENCIA CRONOLÓGICA ---
+        # --- ESCUDO ANTI-INCONSISTENCIA CRONOLÓGICA (ÚLTIMO PRONÓSTICO) ---
         if self.partido_admin_editando_id:
             try:
                 bd_val = BaseDeDatos()
@@ -5002,18 +5060,13 @@ class SistemaIndependiente:
                 if ultima_pred and fecha_obj < ultima_pred:
                     fecha_formateada = ultima_pred.strftime('%H:%M %d-%m-%Y')
                     
-                    # --- NUEVO COMPORTAMIENTO VISUAL SOLICITADO ---
-                    # Marcamos en rojo y escribimos debajo del cuadro de texto
                     self.txt_fecha_admin.error_text = f"La fecha no puede ser anterior al\núltimo pronóstico ({fecha_formateada})."
                     self.txt_fecha_admin.border_color = "red"
                     self.txt_fecha_admin.update()
                     
-                    # Restauramos el botón a su texto original ("Actualizar") y lo habilitamos
                     btn_accion.text = texto_original
                     btn_accion.disabled = False
                     btn_accion.update()
-                    
-                    # El return aborta el guardado y evita que el formulario se cierre
                     return 
             except Exception as ex:
                 btn_accion.text = texto_original
@@ -5021,7 +5074,6 @@ class SistemaIndependiente:
                 btn_accion.update()
                 GestorMensajes.mostrar(self.page, "Error", f"Error validando pronósticos: {ex}", "error")
                 return
-        # ----------------------------------------------
 
         # --- DETECCIÓN ESTRICTA DE CAMBIOS ---
         es_nuevo = self.partido_admin_editando_id is None
@@ -5038,15 +5090,12 @@ class SistemaIndependiente:
                     
             # 2. Chequeo de Rival
             if not activar_cambios and hasattr(self, 'rival_original_editar') and self.rival_original_editar:
-                # Comparamos el ID del rival que el usuario seleccionó ahora con el que estaba antes
                 if str(rival_id) != str(self.rival_original_editar):
                     activar_cambios = True
         # ----------------------------------------------
 
         # --- CIERRE INSTANTÁNEO ---
         self._limpiar_memoria_dialogo(self.dlg_admin_partido)
-        
-        # 1. Mostrar la animación de carga
         VentanaCarga.mostrar(self.page, "Guardando y recalculando...")
 
         def _tarea():
@@ -5061,17 +5110,13 @@ class SistemaIndependiente:
 
                 self._recargar_datos(actualizar_partidos=True, actualizar_pronosticos=True, actualizar_ranking=True, actualizar_admin=True)
 
-                # --- NOTIFICAR A TELEGRAM ---
-                # 🌟 Ahora evalúa las tres posibilidades: nuevo, fecha cambiada o rival cambiado
                 if es_nuevo or activar_cambios:
                     self._notificar_robot_actualizacion()
 
-                # 2. ÉXITO: Cerramos animación y mostramos mensaje de confirmación
                 VentanaCarga.cerrar(self.page)
                 GestorMensajes.mostrar(self.page, "Éxito", mensaje_exito, "exito")
 
             except Exception as ex:
-                # 3. ERROR: Cerramos animación y mostramos el error técnico
                 VentanaCarga.cerrar(self.page)
                 GestorMensajes.mostrar(self.page, "Error de BD", f"Error crítico: {ex}", "error")
 
