@@ -6,11 +6,6 @@ class GestorMensajes:
 
     @staticmethod
     def mostrar(page: ft.Page, titulo: str, mensaje: str, tipo: str = "info"):
-        """
-        Tipos: 'info', 'error', 'exito'
-        """
-        
-        # --- 1. Definición de Iconos y Colores (Igual que antes) ---
         if tipo == "error":
             icono = "error_outline"
             color_icono = Estilos.COLOR_ROJO_CAI
@@ -24,14 +19,16 @@ class GestorMensajes:
             color_icono = Estilos.COLOR_BLANCO
             titulo_color = Estilos.COLOR_BLANCO
 
-        # Declaramos la variable 'dialogo' antes
         dialogo = None
 
+        # --- LÓGICA DE CIERRE EN CAPAS ---
         def cerrar_dialogo(e):
             if dialogo:
-                page.close(dialogo)
+                dialogo.open = False
+                page.update()
+                if dialogo in page.overlay:
+                    page.overlay.remove(dialogo)
 
-        # --- 2. Crear el Botón (Lo definimos antes para usarlo en el contenido) ---
         boton = ft.ElevatedButton(
             text="Aceptar",
             style=ft.ButtonStyle(
@@ -41,11 +38,9 @@ class GestorMensajes:
             on_click=cerrar_dialogo
         )
 
-        # --- 3. Creamos el contenido del diálogo (Estructura modificada) ---
         contenido = ft.Column(
-            tight=True, # Se ajusta al contenido
+            tight=True,
             controls=[
-                # Fila del Título e Icono
                 ft.Row(
                     controls=[
                         ft.Icon(icono, color=color_icono, size=40),
@@ -55,41 +50,30 @@ class GestorMensajes:
                     vertical_alignment=ft.CrossAxisAlignment.CENTER
                 ),
                 ft.Divider(color="grey"),
-                # Texto del mensaje
                 ft.Text(mensaje, size=16, color=Estilos.COLOR_BLANCO),
-                
-                # Espaciador vertical
                 ft.Container(height=20),
-                
-                # --- CAMBIO CLAVE: El botón ahora es parte del contenido ---
-                # Lo metemos en una Row para alinearlo a la derecha
                 ft.Row(
                     controls=[boton],
-                    alignment=ft.MainAxisAlignment.END # Alineado a la derecha
+                    alignment=ft.MainAxisAlignment.END
                 )
             ]
         )
 
-
-        # --- 4. Crear el diálogo ---
         dialogo = ft.AlertDialog(
             modal=True,
             title_padding=0,
-            content_padding=0, # Quitamos padding externo del contenido
-            
-            # El contenido principal es nuestro contenedor oscuro
+            content_padding=0,
             content=ft.Container(
                 content=contenido,
-                width=450, # Aumentamos un poco el ancho (antes 400)
-                bgcolor="#2d2d2d", # Color de fondo del recuadro
+                width=450,
+                bgcolor="#2d2d2d",
                 border_radius=15,
-                padding=25 # Padding interno del recuadro
+                padding=25
             ),
-            
-            # --- CAMBIO CLAVE: Eliminamos 'actions' y 'actions_alignment' ---
-            # actions=[boton],  <-- ESTO SE ELIMINÓ
-            
-            bgcolor="transparent", # El fondo del diálogo nativo es transparente
+            bgcolor="transparent",
         )
 
-        page.open(dialogo)
+        # --- APILAR FORZOSAMENTE SOBRE EL FORMULARIO ---
+        page.overlay.append(dialogo)
+        dialogo.open = True
+        page.update()

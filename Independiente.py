@@ -818,8 +818,19 @@ class SistemaIndependiente:
         )
 
         # --- CONTROLES FORMULARIO PRONÓSTICOS ---
-        self.input_pred_cai = ft.TextField(label="Goles CAI", width=80, text_align=ft.TextAlign.CENTER, keyboard_type=ft.KeyboardType.NUMBER, max_length=2, bgcolor="#2D2D2D", border_color="white24", color="white", on_change=self._validar_solo_numeros)
-        self.input_pred_rival = ft.TextField(label="Goles Rival", width=110, text_align=ft.TextAlign.CENTER, keyboard_type=ft.KeyboardType.NUMBER, max_length=2, bgcolor="#2D2D2D", border_color="white24", color="white", on_change=self._validar_solo_numeros)
+        self.input_pred_cai = ft.TextField(
+            label="Goles CAI", 
+            width=80, 
+            text_align=ft.TextAlign.CENTER, 
+            keyboard_type=ft.KeyboardType.NUMBER, 
+            max_length=2, 
+            bgcolor="#2D2D2D", 
+            border_color="white24", 
+            color="white",
+            input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*$"),
+            on_change=self._validar_solo_numeros
+        )
+        self.input_pred_rival = ft.TextField(label="Goles Rival", width=110, text_align=ft.TextAlign.CENTER, keyboard_type=ft.KeyboardType.NUMBER, max_length=2, bgcolor="#2D2D2D", border_color="white24", color="white", input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*$"), on_change=self._validar_solo_numeros)
         self.btn_pronosticar = ft.ElevatedButton("Pronosticar", icon=ft.Icons.SPORTS_SOCCER, bgcolor="green", color="white", on_click=self._guardar_pronostico)
 
         # --- TÍTULOS ---
@@ -2365,16 +2376,19 @@ class SistemaIndependiente:
 
     def _validar_solo_numeros(self, e):
         """
-        Valida que el input solo contenga números.
-        Permite borrar el contenido sin bloquearse.
+        El bloqueo de letras y límite de longitud se hace nativamente en la UI.
+        Aquí solo mostramos una alerta visual si ingresan un 0 a la izquierda.
         """
-        if e.control.value:
-            # Filtramos solo dígitos
-            valor_limpio = "".join(filter(str.isdigit, e.control.value))
-            # Si hubo cambios (había letras o símbolos), actualizamos
-            if valor_limpio != e.control.value:
-                e.control.value = valor_limpio
-                e.control.update()
+        val = e.control.value
+        
+        if not val:
+            e.control.error_text = None
+        elif len(val) > 1 and val.startswith("0"):
+            e.control.error_text = "Sin 0 a la izq."
+        else:
+            e.control.error_text = None
+            
+        e.control.update()
 
     def _abrir_selector_usuario_pronosticos(self, e):
         self.lv_usuarios = ft.ListView(expand=True, spacing=5, height=300)
@@ -4678,7 +4692,7 @@ class SistemaIndependiente:
     def _abrir_modal_partido_admin(self, e, partido_id=None, edicion_id=None):
         """Abre el formulario de partidos con carga asíncrona para evitar congelamientos."""
         
-        # 🚀 LA SOLUCIÓN: Guardamos el ID en la memoria de la clase
+        # 🚀 Guardamos el ID en la memoria de la clase
         self.partido_admin_editando_id = partido_id
         self.fecha_dt_original = None
         self.rival_original_editar = None
@@ -4734,8 +4748,10 @@ class SistemaIndependiente:
                 
                 texto_mas_largo = max(len_max_edicion, len_max_rival)
                 
-                ancho_ideal = texto_mas_largo * 9
-                
+                # Forzamos un ancho mínimo de 280px para garantizar 
+                # que los 3 botones (incluido "Controlando...") entren en una sola línea.
+                ancho_ideal = max(texto_mas_largo * 9, 280)
+
                 # La medida maestra: será el ancho ideal, pero si supera la pantalla, se frena.
                 medida_maestra = min(ancho_ideal, ancho_max_permitido)
 
@@ -4776,10 +4792,24 @@ class SistemaIndependiente:
                 )
                 
                 self.txt_gc_admin = ft.TextField(
-                    label="Goles CAI", width=ancho_goles, bgcolor="#2D2D2D", border_color="white24", keyboard_type=ft.KeyboardType.NUMBER
+                    label="Goles CAI", 
+                    width=ancho_goles, 
+                    bgcolor="#2D2D2D", 
+                    border_color="white24", 
+                    keyboard_type=ft.KeyboardType.NUMBER,
+                    input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*$"),
+                    max_length=2,
+                    on_change=self._validar_solo_numeros
                 )
                 self.txt_gr_admin = ft.TextField(
-                    label="Goles Rival", width=ancho_goles, bgcolor="#2D2D2D", border_color="white24", keyboard_type=ft.KeyboardType.NUMBER
+                    label="Goles Rival", 
+                    width=ancho_goles, 
+                    bgcolor="#2D2D2D", 
+                    border_color="white24", 
+                    keyboard_type=ft.KeyboardType.NUMBER,
+                    input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*$"),
+                    max_length=2,
+                    on_change=self._validar_solo_numeros
                 )
 
                 # 6. Inteligencia: Si estamos editando, autocompletar todo leyendo de la caché
@@ -4838,12 +4868,11 @@ class SistemaIndependiente:
                 if partido_id: botones_accion.append(btn_eliminar)
                 botones_accion.append(btn_guardar)
 
+                # Fila al 100% del ancho y distribución uniforme
                 fila_botones = ft.Row(
                     controls=botones_accion,
-                    wrap=True,           
-                    spacing=10,          
-                    run_spacing=10,      
-                    alignment=ft.MainAxisAlignment.END 
+                    width=medida_maestra, # Obliga a la fila a estirarse de punta a punta
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN # Espaciado por igual sin vacíos en los extremos
                 )
 
                 # 🚀 3. EL CONTENEDOR TOMA LA MEDIDA MAESTRA EXACTA
@@ -4891,12 +4920,54 @@ class SistemaIndependiente:
 
     def _guardar_partido_admin(self, e):
         """Valida y guarda los datos (crear o actualizar)."""
+        # 1. ATRApar EL BOTÓN Y CAMBIAR ESTADO A "CONTROLANDO..."
+        btn_accion = e.control
+        texto_original = btn_accion.text
+        
+        btn_accion.text = "Controlando..."
+        btn_accion.disabled = True
+        btn_accion.update()
+
+        # 2. LIMPIAR ESTADOS VISUALES PREVIOS (por si había un error anterior)
+        self.txt_fecha_admin.error_text = None
+        self.txt_fecha_admin.border_color = "white24"
+        self.txt_gc_admin.error_text = None
+        self.txt_gc_admin.border_color = "white24"
+        self.txt_gr_admin.error_text = None
+        self.txt_gr_admin.border_color = "white24"
+        
+        self.txt_fecha_admin.update()
+        self.txt_gc_admin.update()
+        self.txt_gr_admin.update()
+
         torneo_id = self.dd_edicion.value
         rival_id = self.dd_rival_admin.value
         condicion = self.dd_cond_admin.value
         fecha_str = self.txt_fecha_admin.value.strip()
         gc = self.txt_gc_admin.value.strip()
         gr = self.txt_gr_admin.value.strip()
+
+        # --- VALIDACIÓN DE GOLES VACÍOS ---
+        hay_error_goles = False
+        
+        if not gc:
+            self.txt_gc_admin.error_text = "Obligatorio"
+            self.txt_gc_admin.border_color = "red"
+            self.txt_gc_admin.update()
+            hay_error_goles = True
+            
+        if not gr:
+            self.txt_gr_admin.error_text = "Obligatorio"
+            self.txt_gr_admin.border_color = "red"
+            self.txt_gr_admin.update()
+            hay_error_goles = True
+
+        if hay_error_goles:
+            btn_accion.text = texto_original
+            btn_accion.disabled = False
+            btn_accion.update()
+            return
+        # ----------------------------------
 
         if not torneo_id or not rival_id or not condicion or not fecha_str:
             GestorMensajes.mostrar(self.page, "Error", "Torneo, Rival, Condición y Fecha son obligatorios.", "error")
@@ -4923,6 +4994,35 @@ class SistemaIndependiente:
                 return
         # ----------------------------------------------
 
+        # --- ESCUDO ANTI-INCONSISTENCIA CRONOLÓGICA ---
+        if self.partido_admin_editando_id:
+            try:
+                bd_val = BaseDeDatos()
+                ultima_pred = bd_val.obtener_ultima_fecha_pronostico(self.partido_admin_editando_id)
+                if ultima_pred and fecha_obj < ultima_pred:
+                    fecha_formateada = ultima_pred.strftime('%H:%M %d-%m-%Y')
+                    
+                    # --- NUEVO COMPORTAMIENTO VISUAL SOLICITADO ---
+                    # Marcamos en rojo y escribimos debajo del cuadro de texto
+                    self.txt_fecha_admin.error_text = f"La fecha no puede ser anterior al\núltimo pronóstico ({fecha_formateada})."
+                    self.txt_fecha_admin.border_color = "red"
+                    self.txt_fecha_admin.update()
+                    
+                    # Restauramos el botón a su texto original ("Actualizar") y lo habilitamos
+                    btn_accion.text = texto_original
+                    btn_accion.disabled = False
+                    btn_accion.update()
+                    
+                    # El return aborta el guardado y evita que el formulario se cierre
+                    return 
+            except Exception as ex:
+                btn_accion.text = texto_original
+                btn_accion.disabled = False
+                btn_accion.update()
+                GestorMensajes.mostrar(self.page, "Error", f"Error validando pronósticos: {ex}", "error")
+                return
+        # ----------------------------------------------
+
         # --- DETECCIÓN ESTRICTA DE CAMBIOS ---
         es_nuevo = self.partido_admin_editando_id is None
         activar_cambios = False
@@ -4936,7 +5036,7 @@ class SistemaIndependiente:
                 except ValueError:
                     activar_cambios = True
                     
-            # 2. Chequeo de Rival (🌟 NUEVA LÓGICA)
+            # 2. Chequeo de Rival
             if not activar_cambios and hasattr(self, 'rival_original_editar') and self.rival_original_editar:
                 # Comparamos el ID del rival que el usuario seleccionó ahora con el que estaba antes
                 if str(rival_id) != str(self.rival_original_editar):
@@ -4945,15 +5045,19 @@ class SistemaIndependiente:
 
         # --- CIERRE INSTANTÁNEO ---
         self._limpiar_memoria_dialogo(self.dlg_admin_partido)
-        GestorMensajes.mostrar(self.page, "Procesando", "Guardando y recalculando posiciones...", "info")
+        
+        # 1. Mostrar la animación de carga
+        VentanaCarga.mostrar(self.page, "Guardando y recalculando...")
 
         def _tarea():
             try:
                 bd = BaseDeDatos()
                 if self.partido_admin_editando_id:
                     bd.actualizar_partido_manual(self.partido_admin_editando_id, torneo_id, rival_id, condicion, fecha_sql, gc_val, gr_val)
+                    mensaje_exito = "Partido actualizado correctamente."
                 else:
                     bd.insertar_partido_manual(torneo_id, rival_id, condicion, fecha_sql, gc_val, gr_val)
+                    mensaje_exito = "Partido creado correctamente."
 
                 self._recargar_datos(actualizar_partidos=True, actualizar_pronosticos=True, actualizar_ranking=True, actualizar_admin=True)
 
@@ -4962,7 +5066,13 @@ class SistemaIndependiente:
                 if es_nuevo or activar_cambios:
                     self._notificar_robot_actualizacion()
 
+                # 2. ÉXITO: Cerramos animación y mostramos mensaje de confirmación
+                VentanaCarga.cerrar(self.page)
+                GestorMensajes.mostrar(self.page, "Éxito", mensaje_exito, "exito")
+
             except Exception as ex:
+                # 3. ERROR: Cerramos animación y mostramos el error técnico
+                VentanaCarga.cerrar(self.page)
                 GestorMensajes.mostrar(self.page, "Error de BD", f"Error crítico: {ex}", "error")
 
         import threading

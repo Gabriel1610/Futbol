@@ -10,7 +10,6 @@ class VentanaCarga:
 
     @staticmethod
     def mostrar(page: ft.Page, mensaje: str):
-        # Contenido: Spinner Rojo + Texto Blanco
         contenido = ft.Row(
             controls=[
                 ft.ProgressRing(color=Estilos.COLOR_ROJO_CAI, width=30, height=30),
@@ -21,25 +20,28 @@ class VentanaCarga:
             spacing=20
         )
 
-        # Configuramos el diálogo
         VentanaCarga.dialogo = ft.AlertDialog(
-            modal=True, # Bloquea el fondo (no se puede cerrar haciendo clic afuera)
+            modal=True,
             content=ft.Container(
                 content=contenido,
                 width=300,
-                bgcolor="#2d2d2d", # Fondo gris oscuro estilo Material
+                bgcolor="#2d2d2d",
                 padding=20,
                 border_radius=10
             ),
-            bgcolor="transparent", # Hacemos transparente el contenedor nativo
+            bgcolor="transparent",
         )
 
-        page.open(VentanaCarga.dialogo)
+        # --- APILAR FORZOSAMENTE SOBRE EL FORMULARIO ---
+        page.overlay.append(VentanaCarga.dialogo)
+        VentanaCarga.dialogo.open = True
         page.update()
 
     @staticmethod
     def cerrar(page: ft.Page):
         if VentanaCarga.dialogo:
-            page.close(VentanaCarga.dialogo)
-            VentanaCarga.dialogo = None
+            VentanaCarga.dialogo.open = False
             page.update()
+            if VentanaCarga.dialogo in page.overlay:
+                page.overlay.remove(VentanaCarga.dialogo)
+            VentanaCarga.dialogo = None
