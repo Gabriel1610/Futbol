@@ -2043,7 +2043,7 @@ class RobotTelegram:
         
         if username and username != "Gabriel":
             mensaje = f"👁️ CONSULTA: El usuario '{username}' revisó la estadística de '{nombre_estadistica}'."
-            self._registrar_log(mensaje)
+            self._registrar_log(mensaje, archivo="logs_estadisticas_bot.txt")
 
     # ==========================================
     # FLUJO 4: CONSULTAR PRONÓSTICOS
@@ -3185,18 +3185,21 @@ class RobotTelegram:
         await update.message.reply_text("✅ Agenda de cronómetros actualizada correctamente.")
     
     async def iniciar_admin_archivos(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Busca y muestra los archivos .txt disponibles para leer."""
+        """Busca y muestra exclusivamente los archivos de log disponibles para leer."""
         # Detectamos la ruta (Script o EXE)
         if getattr(sys, 'frozen', False):
             carpeta = sys._MEIPASS
         else:
             carpeta = os.path.dirname(os.path.abspath(__file__))
             
-        # Filtramos solo los archivos .txt en la carpeta principal
-        archivos_txt = [f for f in os.listdir(carpeta) if f.endswith('.txt')]
+        # 🌟 CAMBIO: Definimos estrictamente los 3 archivos permitidos
+        archivos_permitidos = ["logs_bot.txt", "logs_errores_bot.txt", "logs_estadisticas_bot.txt"]
+        
+        # Filtramos para mostrar solo los que realmente se han creado (existen en la carpeta)
+        archivos_txt = [f for f in archivos_permitidos if os.path.exists(os.path.join(carpeta, f))]
         
         if not archivos_txt:
-            await update.message.reply_text("📂 No hay archivos de texto (.txt) disponibles para leer en este momento.")
+            await update.message.reply_text("📂 No hay archivos de registro (logs) generados en este momento para leer.")
             return await self.iniciar_administracion(update, context)
             
         botones = [[f] for f in archivos_txt]
@@ -3206,7 +3209,7 @@ class RobotTelegram:
         context.user_data['carpeta_archivos'] = carpeta
         
         await update.message.reply_text(
-            "📂 *Lectura de Archivos*\n\n"
+            "📂 *Lectura de Archivos de Log*\n\n"
             "⚠️ *ATENCIÓN:* Una vez leído, el archivo será **ELIMINADO AUTOMÁTICAMENTE** del servidor.\n\n"
             "Seleccioná el archivo que querés revisar:",
             parse_mode="Markdown",
