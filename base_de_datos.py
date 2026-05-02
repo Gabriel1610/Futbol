@@ -635,7 +635,7 @@ class BaseDeDatos:
 
     def obtener_todos_usuarios_telegram(self):
         """Devuelve una lista de tuplas (id_telegram, username) de todos los usuarios vinculados."""
-        conexion = self._conectar()
+        conexion = self._abrir()
         if not conexion:
             return []
         try:
@@ -651,7 +651,7 @@ class BaseDeDatos:
             if conexion.is_connected():
                 cursor.close()
                 conexion.close()
-                
+
     def obtener_usuarios_sin_pronostico_por_partido(self, partido_id):
         """Devuelve id_telegram y username de quienes NO pronosticaron este partido específico."""
         conexion = None
