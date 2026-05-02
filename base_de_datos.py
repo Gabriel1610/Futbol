@@ -635,7 +635,7 @@ class BaseDeDatos:
 
     def obtener_todos_usuarios_telegram(self):
         """Devuelve una lista de tuplas (id_telegram, username) de todos los usuarios vinculados."""
-        conexion = self._abrir()
+        conexion = self.abrir()
         if not conexion:
             return []
         try:
