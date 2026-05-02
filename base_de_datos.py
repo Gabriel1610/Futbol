@@ -633,6 +633,25 @@ class BaseDeDatos:
             if cursor: cursor.close()
             if conexion: conexion.close()
 
+    def obtener_todos_usuarios_telegram(self):
+        """Devuelve una lista de tuplas (id_telegram, username) de todos los usuarios vinculados."""
+        conexion = self._conectar()
+        if not conexion:
+            return []
+        try:
+            cursor = conexion.cursor()
+            # Obtenemos solo los que tienen el id_telegram cargado (que no es nulo)
+            cursor.execute("SELECT id_telegram, username FROM usuarios WHERE id_telegram IS NOT NULL")
+            resultados = cursor.fetchall()
+            return resultados
+        except Exception as e:
+            print(f"Error al obtener todos los usuarios de Telegram: {e}")
+            return []
+        finally:
+            if conexion.is_connected():
+                cursor.close()
+                conexion.close()
+                
     def obtener_usuarios_sin_pronostico_por_partido(self, partido_id):
         """Devuelve id_telegram y username de quienes NO pronosticaron este partido específico."""
         conexion = None

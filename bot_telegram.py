@@ -53,8 +53,9 @@ class RobotTelegram:
         esperando_editar_partido_edicion, esperando_editar_partido_condicion,
         esperando_editar_partido_fecha_final,
         esperando_accion_tabla_posiciones,
-        esperando_archivo_a_leer
-    ) = range(1, 67)
+        esperando_archivo_a_leer,
+        esperando_edicion_difundir_tabla
+    ) = range(1, 68)
 
     def __init__(self):
         """Inicializa las configuraciones, la base de datos y la app de Telegram."""
@@ -205,7 +206,7 @@ class RobotTelegram:
             
         botones = [
             ["1_ Partidos", "2_ Equipos"],
-            ["3_ Leer archivos"], # <--- NUEVO BOTÓN
+            ["3_ Leer archivos", "4_ Enviar tabla"], # 🌟 NUEVO BOTÓN
             ["🔙 Volver al menú principal"]
         ]
         
@@ -213,8 +214,9 @@ class RobotTelegram:
             "⚙️ *Panel de Administración*\n\n"
             "Bienvenido al panel de control. Elegí el área que querés gestionar:\n\n"
             "⚽ *1_ Partidos:* Carga manual de resultados finales y listado de encuentros por torneo.\n"
-            "🛡️ *2_ Equipos:* Gestión de los clubes rivales (altas, bajas y modificaciones) en la base de datos.\n"
-            "📂 *3_ Leer archivos:* Consulta y limpieza de los archivos de registro (logs) generados por el bot." # <--- NUEVO TEXTO
+            "🛡️ *2_ Equipos:* Gestión de los clubes rivales (altas, bajas y modificaciones en BD).\n"
+            "📂 *3_ Leer archivos:* Consulta y limpieza de los archivos de registro (logs).\n"
+            "📢 *4_ Enviar tabla:* Difunde la tabla de posiciones a todos los usuarios registrados." # 🌟 NUEVO TEXTO
         )
         
         await update.message.reply_text(
@@ -951,7 +953,14 @@ class RobotTelegram:
                     MessageHandler(filters.Regex("^1_ Partidos$"), self.iniciar_admin_partidos),
                     MessageHandler(filters.Regex("^2_ Equipos$"), self.iniciar_admin_equipos),
                     MessageHandler(filters.Regex("^3_ Leer archivos$"), self.iniciar_admin_archivos),
+                    MessageHandler(filters.Regex("^4_ Enviar tabla$"), self.iniciar_difundir_tabla),
                     MessageHandler(filters.Regex("^🔙 Volver al menú principal$"), self.mostrar_menu)
+                ],
+
+                self.esperando_edicion_difundir_tabla: [
+                    MessageHandler(filters.Regex("(?i).*(menú principal).*"), self.mostrar_menu),
+                    MessageHandler(filters.Regex("(?i).*(Atrás|Cancelar).*"), self.iniciar_administracion),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.procesar_difundir_tabla)
                 ],
                 
                 self.esperando_menu_admin_partidos: [
@@ -3275,6 +3284,60 @@ class RobotTelegram:
             
         # Volvemos a mostrar la lista de archivos restantes (o regresa al panel si no queda ninguno)
         return await self.iniciar_admin_archivos(update, context)
+
+    async def iniciar_difundir_tabla(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 1 Difundir: Muestra los botones de los torneos para elegir qué tabla enviar."""
+        botones = self._generar_botones_ediciones(incluir_historico=True)
+        await update.message.reply_text(
+            "📢 *Enviar Tabla de Posiciones*\n\n"
+            "Seleccioná el torneo (o Histórico) que querés enviarle por mensaje privado a TODOS los usuarios:",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+        )
+        return self.esperando_edicion_difundir_tabla
+
+    async def procesar_difundir_tabla(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Paso 2 Difundir: Genera la tabla y hace el envío masivo."""
+        texto_edicion = update.message.text.strip()
+        
+        edicion_id_real = None
+        titulo = texto_edicion
+        
+        if texto_edicion != "Histórico":
+            ediciones = self.db.obtener_ediciones()
+            for ed in ediciones:
+                if f"{ed[1]} {ed[2]}" == texto_edicion:
+                    edicion_id_real = ed[0]
+                    break
+            
+            if not edicion_id_real:
+                await update.message.reply_text("❌ Torneo no válido. Elegí usando los botones.")
+                return self.esperando_edicion_difundir_tabla
+        else:
+            titulo = "Histórica"
+            
+        await update.message.reply_text("⏳ Generando tabla y enviando mensajes. Por favor, esperá...")
+            
+        # Generamos la tabla usando la función que ya tenías
+        tabla_texto = self._generar_texto_tabla_posiciones(edicion_id_real, titulo)
+        mensaje_final = "📢 *Nueva tabla de posiciones*\n\n" + tabla_texto
+        
+        # Obtenemos TODOS los usuarios con Telegram registrado de la base de datos
+        usuarios = self.db.obtener_todos_usuarios_telegram() 
+        
+        enviados = 0
+        for tg_id, username in usuarios:
+            try:
+                await context.bot.send_message(chat_id=tg_id, text=mensaje_final, parse_mode="Markdown")
+                enviados += 1
+            except Exception as e:
+                # Si algún usuario bloqueó al bot, lo registramos en el log
+                self._registrar_log(f"FALLO al enviar tabla manual a {username}: {e}", archivo="logs_errores_bot.txt")
+                
+        await update.message.reply_text(f"✅ ¡Difusión completada!\n\nLa tabla fue enviada exitosamente a {enviados} usuarios.")
+        self._registrar_log(f"ADMIN: Tabla '{titulo}' difundida manualmente a {enviados} usuarios.")
+        
+        return await self.iniciar_administracion(update, context)
 
     def run(self):
         """Lanza el bot."""
