@@ -1223,7 +1223,8 @@ class RobotTelegram:
                         self._disparar_recordatorio, 
                         when=fecha_alarma, 
                         data={'partido_id': p_id, 'rival': rival, 'fecha': fecha_local, 'horas': horas},
-                        name="recordatorio_partido"
+                        name="recordatorio_partido",
+                        job_kwargs={'misfire_grace_time': 120}
                     )
             
             # 2. ALARMA DE TABLA (1 HORA ANTES) para los que SÍ pronosticaron
@@ -1233,7 +1234,8 @@ class RobotTelegram:
                     self._disparar_alerta_posiciones, 
                     when=fecha_alarma_posiciones, 
                     data={'partido_id': p_id, 'rival': rival, 'edicion_id': edicion_id, 'nombre_torneo': nombre_torneo},
-                    name="recordatorio_partido" 
+                    name="recordatorio_partido",
+                    job_kwargs={'misfire_grace_time': 120}
                 )
 
             # 🌟 3. NUEVA ALARMA: RECORDATORIO 24 HORAS PARA LOS QUE YA PRONOSTICARON
@@ -1243,7 +1245,8 @@ class RobotTelegram:
                     self._disparar_recordatorio_cumplidores, 
                     when=fecha_alarma_24h, 
                     data={'partido_id': p_id, 'rival': rival, 'fecha': fecha_local},
-                    name="recordatorio_partido" 
+                    name="recordatorio_partido",
+                    job_kwargs={'misfire_grace_time': 120}
                 )
                 
         print("\n\n⏰ Cronómetros de recordatorios y posiciones configurados a las " + ahora.strftime('%Y-%m-%d %H:%M:%S') + "\n\n")
