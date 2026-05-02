@@ -1246,7 +1246,7 @@ class RobotTelegram:
                     name="recordatorio_partido" 
                 )
                 
-        print("⏰ Cronómetros de recordatorios y posiciones configurados.")
+        print("\n\n⏰ Cronómetros de recordatorios y posiciones configurados a las " + ahora.strftime('%Y-%m-%d %H:%M:%S') + "\n\n")
 
     async def _disparar_recordatorio(self, context: ContextTypes.DEFAULT_TYPE):
         """Se ejecuta cuando un cronómetro llega a 0."""
