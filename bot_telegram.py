@@ -1197,8 +1197,9 @@ class RobotTelegram:
         
         for tg_id, username in cumplidores:
             try:
-                await context.bot.send_message(chat_id=tg_id, text=mensaje, parse_mode="Markdown", reply_markup=teclado)
-                self._registrar_log(f"Aviso enviado a {username} (Faltan 24 hs - Partido: {rival})")
+                if username == 'Gabriel':
+                    await context.bot.send_message(chat_id=tg_id, text=mensaje, parse_mode="Markdown", reply_markup=teclado)
+                    self._registrar_log(f"Aviso enviado a {username} (Faltan 24 hs - Partido: {rival})")
             except Exception as e:
                 self._registrar_log(f"FALLO al avisar a {username} (Faltan 24 hs): {e}", archivo="logs_errores_bot.txt")
 
@@ -1276,8 +1277,9 @@ class RobotTelegram:
                 f"👇 ¡Usá el botón de abajo para cargarlo rápido y sumar puntos!"
             )
             try:
-                await context.bot.send_message(chat_id=tg_id, text=mensaje, parse_mode="Markdown", reply_markup=teclado)
-                self._registrar_log(f"Aviso enviado a {username} (Faltan {horas_faltantes}hs - Partido: {rival})")
+                if username == 'Gabriel':
+                    await context.bot.send_message(chat_id=tg_id, text=mensaje, parse_mode="Markdown", reply_markup=teclado)
+                    self._registrar_log(f"Aviso enviado a {username} (Faltan {horas_faltantes}hs - Partido: {rival})")
             except Exception as e:
                 self._registrar_log(f"FALLO al avisar a {username} (Faltan {horas_faltantes}hs): {e}", archivo="logs_errores_bot.txt")
 
@@ -1301,8 +1303,9 @@ class RobotTelegram:
         # Se lo mandamos por privado a cada usuario cumplidor
         for tg_id, username in cumplidores:
             try:
-                await context.bot.send_message(chat_id=tg_id, text=mensaje_final, parse_mode="Markdown")
-                self._registrar_log(f"Tabla de posiciones enviada a {username} (Falta 1h - Partido: {rival})")
+                if username == 'Gabriel':
+                    await context.bot.send_message(chat_id=tg_id, text=mensaje_final, parse_mode="Markdown")
+                    self._registrar_log(f"Tabla de posiciones enviada a {username} (Falta 1h - Partido: {rival})")
             except Exception as e:
                 self._registrar_log(f"FALLO al enviar tabla de posiciones a {username} (Falta 1h - Partido: {rival}): {e}", archivo="logs_errores_bot.txt")
 
