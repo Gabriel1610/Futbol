@@ -13,8 +13,9 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, 
     filters, ContextTypes, ConversationHandler
 )
-
 from base_de_datos import BaseDeDatos
+
+SEGUNDOS_ANTES = 12 * 3600 # 12 horas antes del partido, en segundos
 
 class RobotTelegram:
     # --- ESTADOS DE CONVERSACIÓN (Atributos de Clase) ---
@@ -1233,7 +1234,7 @@ class RobotTelegram:
                         when=fecha_alarma, 
                         data={'partido_id': p_id, 'rival': rival, 'fecha': fecha_local, 'horas': horas},
                         name="recordatorio_partido",
-                        job_kwargs={'misfire_grace_time': 120}
+                        job_kwargs={'misfire_grace_time': SEGUNDOS_ANTES}
                     )
             
             # 2. ALARMA DE TABLA (1 HORA ANTES) para los que SÍ pronosticaron
@@ -1244,7 +1245,7 @@ class RobotTelegram:
                     when=fecha_alarma_posiciones, 
                     data={'partido_id': p_id, 'rival': rival, 'edicion_id': edicion_id, 'nombre_torneo': nombre_torneo},
                     name="recordatorio_partido",
-                    job_kwargs={'misfire_grace_time': 120}
+                    job_kwargs={'misfire_grace_time': SEGUNDOS_ANTES}
                 )
 
             # 🌟 3. NUEVA ALARMA: RECORDATORIO 24 HORAS PARA LOS QUE YA PRONOSTICARON
@@ -1255,7 +1256,7 @@ class RobotTelegram:
                     when=fecha_alarma_24h, 
                     data={'partido_id': p_id, 'rival': rival, 'fecha': fecha_local},
                     name="recordatorio_partido",
-                    job_kwargs={'misfire_grace_time': 120}
+                    job_kwargs={'misfire_grace_time': SEGUNDOS_ANTES}
                 )
                 
         print("\n\n⏰ Cronómetros de recordatorios y posiciones configurados a las " + ahora.strftime('%Y-%m-%d %H:%M:%S') + "\n\n")
@@ -1266,7 +1267,8 @@ class RobotTelegram:
         partido_id = datos['partido_id']
         rival = datos['rival']
         horas_faltantes = datos['horas']
-        fecha_str = datos['fecha'].strftime('%d/%m a las %H:%M')
+        fecha_partido = datos['fecha']
+        fecha_str = fecha_partido.strftime('%d/%m a las %H:%M')
         
         # Buscamos quiénes NO pronosticaron este partido en concreto
         colgados = self.db.obtener_usuarios_sin_pronostico_por_partido(partido_id)
@@ -1276,11 +1278,41 @@ class RobotTelegram:
         botones = [["1_ Cargar pronóstico"], ["🔙 Volver al menú"]]
         teclado = ReplyKeyboardMarkup(botones, resize_keyboard=True)
         
-        # Armamos el texto adaptativo según si falta 1 hora o varios días
+        # --- CÁLCULO DINÁMICO DEL TIEMPO FALTANTE ---
+        # Obtenemos la hora actual exacta (en zona horaria de Argentina)
+        ahora = datetime.datetime.now(pytz.timezone('America/Argentina/Buenos_Aires')).replace(tzinfo=None)
+        
+        # Le quitamos el tzinfo a la fecha del partido por seguridad para poder restarlas sin error
+        fecha_partido_limpia = fecha_partido.replace(tzinfo=None)
+        
+        # Calculamos la diferencia
+        diferencia = fecha_partido_limpia - ahora
+        segundos = max(0, diferencia.total_seconds()) # max(0) evita números negativos si la alarma se retrasó
+        
+        horas_exactas = int(segundos // 3600)
+        minutos_exactos = int((segundos % 3600) // 60)
+        
+        # Formateamos el texto ("X horas y Y minutos")
+        texto_tiempo = ""
+        if horas_exactas > 0:
+            texto_tiempo += f"{horas_exactas} hora{'s' if horas_exactas > 1 else ''}"
+            
+        if minutos_exactos > 0:
+            if texto_tiempo:
+                texto_tiempo += f" y {minutos_exactos} minuto{'s' if minutos_exactos > 1 else ''}"
+            else:
+                texto_tiempo += f"{minutos_exactos} minuto{'s' if minutos_exactos > 1 else ''}"
+                
+        # Por si se dispara en el milisegundo exacto final
+        if not texto_tiempo:
+            texto_tiempo = "menos de un minuto"
+        # ---------------------------------------------
+        
+        # Armamos el texto adaptativo usando el nuevo tiempo calculado
         if horas_faltantes == 1:
-            alerta = "🚨 *¡ÚLTIMA OPORTUNIDAD!* 🚨\nFalta solo *1 HORA*"
+            alerta = f"🚨 *¡ÚLTIMA OPORTUNIDAD!* 🚨\nFalta solo *{texto_tiempo}*"
         else:
-            alerta = f"⚠️ *RECORDATORIO* ⚠️\nFaltan solo *{horas_faltantes} horas*"
+            alerta = f"⚠️ *RECORDATORIO* ⚠️\nFaltan solo *{texto_tiempo}*"
             
         for tg_id, username in colgados:
             mensaje = (

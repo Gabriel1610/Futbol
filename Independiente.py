@@ -1845,9 +1845,8 @@ class SistemaIndependiente:
             ancho = self.page.width - 50 if self.page.width else 900
             alto = self.page.height - 50 if self.page.height else 600
             es_pc = (self.page.width >= 750) if self.page.width else True
-            
-            alto_grafico = 450 if es_pc else 525          
-            alto_requerido_base = 580 if es_pc else 600
+            alto_grafico = 600 if es_pc else 650          
+            alto_requerido_base = 730 if es_pc else 750
             ancho_punto = 60 if es_pc else 90
             ancho_grafico_dinamico = max((ancho - 100), cant_partidos * ancho_punto)
             necesita_scroll_h = (cant_partidos * ancho_punto) > (ancho - 100)
@@ -5015,7 +5014,7 @@ class SistemaIndependiente:
                 fecha_obj = datetime.strptime(fecha_str_limpia, "%H:%M %d-%m-%Y")
                 fecha_sql = fecha_obj.strftime("%Y-%m-%d %H:%M:%S")
             except ValueError:
-                self.txt_fecha_admin.error_text = "Formato inválido (HH:MM DD-MM-AAAA)"
+                self.txt_fecha_admin.error_text = "Formato inválido\n(HH:MM DD-MM-AAAA)"
                 self.txt_fecha_admin.border_color = "red"
                 hay_error = True
 
