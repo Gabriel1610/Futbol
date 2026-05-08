@@ -34,6 +34,15 @@ ANCHO_RIVALES_NOMBRE = 225
 ANCHO_TORNEOS_NOMBRE = 225
 ANCHO_PRONÓSTICO_USUARIO = 65
 
+import os
+
+# Intentar activar el Wake Lock automáticamente al arrancar el bot
+try:
+    os.system("termux-wake-lock")
+    print("✅ Wake Lock activado automáticamente.")
+except:
+    print("⚠️ No se pudo activar el Wake Lock (¿No estás en Termux?)")
+
 # --- CARGA MAESTRA DE VARIABLES DE ENTORNO ---
 if getattr(sys, 'frozen', False):
     carpeta_actual = sys._MEIPASS
