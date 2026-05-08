@@ -15,6 +15,13 @@ from telegram.ext import (
 )
 from base_de_datos import BaseDeDatos
 
+# Intentar activar el Wake Lock automáticamente al arrancar el bot
+try:
+    os.system("termux-wake-lock")
+    print("✅ Wake Lock activado automáticamente.")
+except:
+    print("⚠️ No se pudo activar el Wake Lock (¿No estás en Termux?)")
+
 SEGUNDOS_ANTES = 12 * 3600 # 12 horas antes del partido, en segundos
 
 class RobotTelegram:
