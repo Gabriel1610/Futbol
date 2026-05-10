@@ -4107,6 +4107,10 @@ class SistemaIndependiente:
                             self._limpiar_memoria_dialogo(self.dlg_admin_edicion) 
                             GestorMensajes.mostrar(self.page, "Éxito", msg_exito, "success")
                             self._cargar_ediciones_admin() 
+                            
+                            # NUEVO: Refrescar la tabla de copas en la UI
+                            self._recargar_datos(actualizar_copas=True, actualizar_ranking=True) 
+
                         except Exception as ex:
                             # ❌ ERROR: Cerramos solo la carga, el usuario puede reintentar en el modal abierto
                             self._limpiar_memoria_dialogo(dlg_guardando)
