@@ -397,8 +397,10 @@ class RobotTelegram:
                     f"fueron borrados permanentemente del Prode.",
                     parse_mode="Markdown"
                 )
-            except Exception as e:
-                await update.message.reply_text(f"❌ Error crítico al intentar eliminar: {e}")
+            except Exception as e: # 🌟 REEMPLAZAR ESTE BLOQUE
+                tipo_error = type(e).__name__
+                self._registrar_log(f"Error crítico al eliminar equipo {equipo['nombre']}: {tipo_error} | {e}", archivo="logs_errores_bot.txt")
+                await update.message.reply_text("❌ Error crítico al intentar eliminar. El fallo fue registrado en los logs.")
             
             context.user_data.pop('equipo_a_eliminar_forzado', None)
             context.user_data.pop('mapa_equipos', None)
@@ -523,7 +525,11 @@ class RobotTelegram:
             return await self.iniciar_admin_equipos(update, context)
             
         except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}\n\nIngresá otro nombre o tocá \"Atrás\".")
+            # 🌟 NUEVO: Captura de error para el log
+            tipo_error = type(e).__name__
+            self._registrar_log(f"Error BD al editar equipo '{equipo['nombre']}': {tipo_error} | {e}", archivo="logs_errores_bot.txt")
+            
+            await update.message.reply_text(f"❌ Error interno: {e}\n\nIngresá otro nombre o tocá \"Atrás\".")
             return self.esperando_nuevo_nombre_equipo
         
     async def iniciar_agregar_equipo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -562,6 +568,10 @@ class RobotTelegram:
             return await self.iniciar_admin_equipos(update, context)
             
         except Exception as e:
+            # 🌟 NUEVO: Captura de error para el log
+            tipo_error = type(e).__name__
+            self._registrar_log(f"Error BD al agregar equipo '{texto}': {tipo_error} | {e}", archivo="logs_errores_bot.txt")
+            
             # Si MySQL tira error por duplicado o vacío (capturado en base_de_datos.py)
             await update.message.reply_text(
                 f"❌ Error: {e}\n\n"
@@ -720,6 +730,12 @@ class RobotTelegram:
         except ValueError:
             await update.message.reply_text("❌ Formato de fecha inválido. Asegurate de usar el formato dd/mm/aaaa (ej: 25/04/2026).")
             return self.esperando_fecha_resultado
+            
+        except Exception as e: # 🌟 NUEVO: Protege la consulta a la base de datos
+            tipo_error = type(e).__name__
+            self._registrar_log(f"Error BD al buscar partido por fecha '{texto_fecha}': {tipo_error} | {e}", archivo="logs_errores_bot.txt")
+            await update.message.reply_text("❌ Ocurrió un error inesperado al consultar la base de datos. Intentá de nuevo o tocá \"Atrás\".")
+            return self.esperando_fecha_resultado
 
     async def procesar_goles_resultado(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Paso 3 Admin: Valida el resultado y actualiza la base de datos."""
@@ -782,7 +798,9 @@ class RobotTelegram:
             )
             return self.esperando_goles_resultado
         except Exception as e:
-            await update.message.reply_text(f"❌ Error en la base de datos: {e}\nIntentá de nuevo o tocá \"Atrás\".")
+            tipo_error = type(e).__name__
+            self._registrar_log(f"Error BD en procesar_goles_resultado: {tipo_error} | {e}", archivo="logs_errores_bot.txt")
+            await update.message.reply_text("❌ Ocurrió un error al guardar el resultado. Se ha registrado el fallo.\nIntentá de nuevo o tocá \"Atrás\".")
             return self.esperando_goles_resultado
 
     # --- MÉTODOS PRIVADOS DE CONFIGURACIÓN ---
@@ -1150,19 +1168,29 @@ class RobotTelegram:
             daemon=True
         ).start()
 
-        mensaje = self._generar_texto_tabla_posiciones(edicion_id, titulo)
-        
-        # Agregamos el botón de explicar reglas junto al de volver
-        botones_tabla = [
-            ["1_ Explicar las reglas"],
-            ["🔙 Volver al menú principal"]
-        ]
-        teclado = ReplyKeyboardMarkup(botones_tabla, resize_keyboard=True)
-        
-        await update.message.reply_text(mensaje, parse_mode="Markdown", reply_markup=teclado)
-        
-        # Mantenemos la conversación viva en el nuevo estado
-        return self.esperando_accion_tabla_posiciones
+        try: # 🌟 NUEVO BLOQUE TRY
+            mensaje = self._generar_texto_tabla_posiciones(edicion_id, titulo)
+            
+            # Agregamos el botón de explicar reglas junto al de volver
+            botones_tabla = [
+                ["1_ Explicar las reglas"],
+                ["🔙 Volver al menú principal"]
+            ]
+            teclado = ReplyKeyboardMarkup(botones_tabla, resize_keyboard=True)
+            
+            await update.message.reply_text(mensaje, parse_mode="Markdown", reply_markup=teclado)
+            
+            # Mantenemos la conversación viva en el nuevo estado
+            return self.esperando_accion_tabla_posiciones
+            
+        except Exception as e: # 🌟 NUEVO BLOQUE EXCEPT
+            tipo_error = type(e).__name__
+            self._registrar_log(f"Error crítico al generar Tabla de Posiciones ({titulo}): {tipo_error} | {e}", archivo="logs_errores_bot.txt")
+            await update.message.reply_text("❌ Ocurrió un error al consultar los puntos en la base de datos. Por favor, intentá nuevamente más tarde.", reply_markup=ReplyKeyboardRemove())
+            
+            # Lo devolvemos al inicio para que no quede trabado
+            await self.mostrar_menu(update, context)
+            return ConversationHandler.END
 
     async def procesar_accion_tabla_posiciones(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Muestra el detalle y los fundamentos de cómo se define el ranking."""
@@ -1229,44 +1257,50 @@ class RobotTelegram:
         ahora = datetime.datetime.now(zona_horaria)
         
         for p_id, rival, fecha, edicion_id, nombre_torneo in partidos:
-            fecha_local = zona_horaria.localize(fecha)
-            
-            # 1. Alarmas de insistencia para los que NO pronosticaron
-            horas_aviso = [96, 48, 24, 1]
-            for horas in horas_aviso:
-                fecha_alarma = fecha_local - timedelta(hours=horas)
-                if fecha_alarma > ahora:
+            try: # 🌟 NUEVO: Protegemos cada iteración de manera individual
+                fecha_local = zona_horaria.localize(fecha)
+                
+                # 1. Alarmas de insistencia para los que NO pronosticaron
+                horas_aviso = [96, 48, 24, 1]
+                for horas in horas_aviso:
+                    fecha_alarma = fecha_local - timedelta(hours=horas)
+                    if fecha_alarma > ahora:
+                        self.app.job_queue.run_once(
+                            self._disparar_recordatorio, 
+                            when=fecha_alarma, 
+                            data={'partido_id': p_id, 'rival': rival, 'fecha': fecha_local, 'horas': horas},
+                            name="recordatorio_partido",
+                            job_kwargs={'misfire_grace_time': SEGUNDOS_ANTES}
+                        )
+                
+                # 2. ALARMA DE TABLA (1 HORA ANTES)
+                fecha_alarma_posiciones = fecha_local - timedelta(hours=1)
+                if fecha_alarma_posiciones > ahora:
                     self.app.job_queue.run_once(
-                        self._disparar_recordatorio, 
-                        when=fecha_alarma, 
-                        data={'partido_id': p_id, 'rival': rival, 'fecha': fecha_local, 'horas': horas},
+                        self._disparar_alerta_posiciones, 
+                        when=fecha_alarma_posiciones, 
+                        data={'partido_id': p_id, 'rival': rival, 'edicion_id': edicion_id, 'nombre_torneo': nombre_torneo},
                         name="recordatorio_partido",
                         job_kwargs={'misfire_grace_time': SEGUNDOS_ANTES}
                     )
-            
-            # 2. ALARMA DE TABLA (1 HORA ANTES) para los que SÍ pronosticaron
-            fecha_alarma_posiciones = fecha_local - timedelta(hours=1)
-            if fecha_alarma_posiciones > ahora:
-                self.app.job_queue.run_once(
-                    self._disparar_alerta_posiciones, 
-                    when=fecha_alarma_posiciones, 
-                    data={'partido_id': p_id, 'rival': rival, 'edicion_id': edicion_id, 'nombre_torneo': nombre_torneo},
-                    name="recordatorio_partido",
-                    job_kwargs={'misfire_grace_time': SEGUNDOS_ANTES}
-                )
 
-            # 🌟 3. NUEVA ALARMA: RECORDATORIO 24 HORAS PARA LOS QUE YA PRONOSTICARON
-            fecha_alarma_24h = fecha_local - timedelta(hours=24)
-            if fecha_alarma_24h > ahora:
-                self.app.job_queue.run_once(
-                    self._disparar_recordatorio_cumplidores, 
-                    when=fecha_alarma_24h, 
-                    data={'partido_id': p_id, 'rival': rival, 'fecha': fecha_local},
-                    name="recordatorio_partido",
-                    job_kwargs={'misfire_grace_time': SEGUNDOS_ANTES}
-                )
+                # 3. NUEVA ALARMA: RECORDATORIO 24 HORAS
+                fecha_alarma_24h = fecha_local - timedelta(hours=24)
+                if fecha_alarma_24h > ahora:
+                    self.app.job_queue.run_once(
+                        self._disparar_recordatorio_cumplidores, 
+                        when=fecha_alarma_24h, 
+                        data={'partido_id': p_id, 'rival': rival, 'fecha': fecha_local},
+                        name="recordatorio_partido",
+                        job_kwargs={'misfire_grace_time': SEGUNDOS_ANTES}
+                    )
+            except Exception as e:
+                # 🌟 NUEVO: Si un partido falla, lo anotamos y seguimos con el próximo
+                tipo_error = type(e).__name__
+                self._registrar_log(f"Fallo al programar alarmas para partido {p_id} ({rival}). Tipo: {tipo_error} | Detalle: {e}", archivo="logs_errores_bot.txt")
+                continue # Pasa al siguiente partido del 'for'
                 
-        print("\n\n⏰ Cronómetros de recordatorios y posiciones configurados a las " + ahora.strftime('%Y-%m-%d %H:%M:%S') + "\n\n")
+        print("\n\n⏰ Cronómetros configurados a las " + ahora.strftime('%Y-%m-%d %H:%M:%S') + "\n\n")
 
     async def _disparar_recordatorio(self, context: ContextTypes.DEFAULT_TYPE):
         """Se ejecuta cuando un cronómetro llega a 0."""
@@ -1385,8 +1419,19 @@ class RobotTelegram:
                 smtp.login(self.email_emisor, self.email_pass)
                 smtp.send_message(msg)
             return True
+            
         except Exception as e:
-            print(f"Error enviando correo: {e}")
+            tipo_error = type(e).__name__
+            detalle_error = str(e)
+            
+            texto_log = f"Fallo al enviar correo a {destinatario}. Tipo de error: {tipo_error} | Detalles: {detalle_error}"
+            
+            # Lo mostramos en la consola por si estás mirando
+            print(f"❌ {texto_log}")
+            
+            # Lo guardamos en el archivo de texto para leerlo desde la tablet
+            self._registrar_log(texto_log, archivo="logs_errores_bot.txt")
+            
             return False
 
     # --- MANEJADORES (HANDLERS) ---
@@ -1614,7 +1659,12 @@ class RobotTelegram:
                 f"Ya podés empezar a cargar tus pronósticos.",
                 parse_mode="Markdown"
             )
-        except Exception as e:
+        except Exception as e: # 🌟 REEMPLAZAR ESTE BLOQUE
+            tipo_error = type(e).__name__
+            self._registrar_log(f"Error al vincular Telegram ID de {username}: {tipo_error} | {e}", archivo="logs_errores_bot.txt")
+            
+            # Mantenemos el mensaje de {e} acá porque tu BaseDeDatos envía 
+            # avisos útiles al usuario como "Código incorrecto" o "Expirado"
             await update.message.reply_text(f"❌ {e}\nIntentá ingresarlo nuevamente o /cancelar.")
             return self.esperando_codigo
             
@@ -1831,6 +1881,11 @@ class RobotTelegram:
         except ValueError:
             await update.message.reply_text("❌ Formato incorrecto. Usá dd/mm/aaaa hh:mm")
             return self.esperando_editar_partido_fecha_final
+        except Exception as e: # 🌟 NUEVO BLOQUE DE CAPTURA
+            tipo_error = type(e).__name__
+            self._registrar_log(f"Error BD al editar partido: {tipo_error} | {e}", archivo="logs_errores_bot.txt")
+            await update.message.reply_text("❌ Ocurrió un error inesperado al intentar editar el partido en la base de datos.")
+            return self.esperando_editar_partido_fecha_final
 
     async def procesar_crear_partido_rival(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Paso 2: Valida rival y pide el torneo (edición)."""
@@ -1919,7 +1974,6 @@ class RobotTelegram:
     async def _guardar_nuevo_partido(self, update, context, g_cai, g_rival):
         """Función interna para insertar en BD y finalizar."""
         try:
-            # Se eliminó la etiqueta de texto que causaba el SyntaxError
             self.db.insertar_partido_manual(
                 context.user_data['nuevo_partido_edicion_id'],
                 context.user_data['nuevo_partido_rival']['id'],
@@ -1928,8 +1982,10 @@ class RobotTelegram:
                 g_cai, g_rival
             )
             await update.message.reply_text("✅ ¡Partido creado con éxito!")
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
+        except Exception as e: # 🌟 REEMPLAZAR ESTE BLOQUE
+            tipo_error = type(e).__name__
+            self._registrar_log(f"Error BD al crear nuevo partido: {tipo_error} | {e}", archivo="logs_errores_bot.txt")
+            await update.message.reply_text(f"❌ Ocurrió un error interno al guardar el partido.")
             
         return await self.iniciar_admin_partidos(update, context)
     
@@ -2007,7 +2063,6 @@ class RobotTelegram:
                         f"👉 *Resultado:* {goles_cai} - {goles_rival}"
                     )
                     try:
-                        # Mandar mensaje sin modificar el teclado (reply_markup) de Gabriel
                         await context.bot.send_message(
                             chat_id=admin_id, 
                             text=texto_alerta, 
@@ -2015,7 +2070,9 @@ class RobotTelegram:
                             disable_notification=True
                         )
                     except Exception as e:
-                        print(f"No se pudo notificar al admin: {e}")
+                        # 🌟 NUEVO: Captura de error para el log
+                        tipo_error = type(e).__name__
+                        self._registrar_log(f"Fallo al notificar pronóstico de {username} al admin. Tipo: {tipo_error} | Detalle: {e}", archivo="logs_errores_bot.txt")
             # ---------------------------------------------------------
 
             # Armamos el texto final respetando quién es local y quién visitante
@@ -2039,7 +2096,9 @@ class RobotTelegram:
             )
             return self.esperando_pronostico
         except Exception as e:
-            await update.message.reply_text(f"❌ Error en la base de datos: {e}\nIntentá de nuevo o /cancelar.")
+            tipo_error = type(e).__name__
+            self._registrar_log(f"Error BD en procesar_pronostico ({username}): {tipo_error} | {e}", archivo="logs_errores_bot.txt")
+            await update.message.reply_text("❌ Ocurrió un error al guardar en la base de datos. Se ha registrado el fallo.\nIntentá de nuevo o escribí /cancelar.")
             return self.esperando_pronostico
             
         await self.mostrar_menu(update, context)
@@ -2989,122 +3048,129 @@ class RobotTelegram:
     
     async def calcular_y_mostrar_grafico_perfil(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Paso 3: Lee la memoria, procesa los datos y dibuja los emojis."""
-        texto_usuario = update.message.text
+        try: # 🌟 NUEVO
+            texto_usuario = update.message.text
         
-        # Si eligió "Yo (Gabriel)", extraemos solo "Gabriel"
-        if texto_usuario.startswith("Yo ("):
-            usuario_seleccionado = texto_usuario[4:-1]
-        else:
-            usuario_seleccionado = texto_usuario
+            # Si eligió "Yo (Gabriel)", extraemos solo "Gabriel"
+            if texto_usuario.startswith("Yo ("):
+                usuario_seleccionado = texto_usuario[4:-1]
+            else:
+                usuario_seleccionado = texto_usuario
 
-        # Recuperamos los datos de la memoria
-        tipo_grafico = context.user_data.get('tipo_grafico_perfil')
-        edicion_id = context.user_data.get('perfil_edicion_id')
-        anio = context.user_data.get('perfil_anio')
+            # Recuperamos los datos de la memoria
+            tipo_grafico = context.user_data.get('tipo_grafico_perfil')
+            edicion_id = context.user_data.get('perfil_edicion_id')
+            anio = context.user_data.get('perfil_anio')
 
-        # --- LÓGICA ESPECÍFICA PARA "ESTILO DE PRONÓSTICO" ---
-        if tipo_grafico == "estilo_pronostico":
-            stats = self.db.obtener_estadisticas_estilo_pronostico(usuario_seleccionado, edicion_id, anio)
-            
-            if not stats or stats[0] == 0:
-                await update.message.reply_text("ℹ️ No hay datos suficientes para generar el reporte de este usuario.")
-                context.user_data.clear()
+            # --- LÓGICA ESPECÍFICA PARA "ESTILO DE PRONÓSTICO" ---
+            if tipo_grafico == "estilo_pronostico":
+                stats = self.db.obtener_estadisticas_estilo_pronostico(usuario_seleccionado, edicion_id, anio)
                 
-                # 🌟 MODIFICACIÓN: Si no hay datos, también vuelve al menú principal
-                await self.mostrar_menu(update, context)
-                return ConversationHandler.END
+                if not stats or stats[0] == 0:
+                    await update.message.reply_text("ℹ️ No hay datos suficientes para generar el reporte de este usuario.")
+                    context.user_data.clear()
+                    
+                    # 🌟 MODIFICACIÓN: Si no hay datos, también vuelve al menú principal
+                    await self.mostrar_menu(update, context)
+                    return ConversationHandler.END
 
-            total = stats[0]
-            sin_pron = stats[1]
-            victorias = stats[2]
-            empates = stats[3]
-            derrotas = stats[4]
+                total = stats[0]
+                sin_pron = stats[1]
+                victorias = stats[2]
+                empates = stats[3]
+                derrotas = stats[4]
 
-            def calc_pct(val): return (val / total) * 100 if total > 0 else 0
+                def calc_pct(val): return (val / total) * 100 if total > 0 else 0
 
-            # Armamos el "Gráfico de torta de texto"
-            mensaje = f"📊 *Estilo de pronóstico: {usuario_seleccionado}*\n"
-            mensaje += f"Partidos analizados: _{total}_\n\n"
+                # Armamos el "Gráfico de torta de texto"
+                mensaje = f"📊 *Estilo de pronóstico: {usuario_seleccionado}*\n"
+                mensaje += f"Partidos analizados: _{total}_\n\n"
+                
+                if victorias > 0: mensaje += f"🟢 *Victorias:* {calc_pct(victorias):.1f}% ({victorias})\n"
+                if empates > 0:   mensaje += f"🟡 *Empates:* {calc_pct(empates):.1f}% ({empates})\n"
+                if derrotas > 0:  mensaje += f"🔴 *Derrotas:* {calc_pct(derrotas):.1f}% ({derrotas})\n"
+                if sin_pron > 0:  mensaje += f"⚪ *Sin pronóstico:* {calc_pct(sin_pron):.1f}% ({sin_pron})\n"
+
+                await update.message.reply_text(mensaje, parse_mode="Markdown")
+
+            # --- LÓGICA ESPECÍFICA PARA "TENDENCIA DE PRONÓSTICO" ---
+            elif tipo_grafico == "tendencia_pronostico":
+                stats = self.db.obtener_estadisticas_tendencia_pronostico(usuario_seleccionado, edicion_id, anio)
+                
+                if not stats or stats[0] == 0:
+                    await update.message.reply_text("ℹ️ No hay datos suficientes para generar el reporte de este usuario.")
+                    context.user_data.clear()
+                    await self.mostrar_menu(update, context)
+                    return ConversationHandler.END
+
+                total = stats[0]
+                # Usamos "or 0" por seguridad en caso de que la BD retorne None
+                sin_pron = stats[1] or 0
+                muy_opt = stats[2] or 0
+                opt = stats[3] or 0
+                real = stats[4] or 0
+                pes = stats[5] or 0
+                muy_pes = stats[6] or 0
+
+                def calc_pct(val): return (val / total) * 100 if total > 0 else 0
+
+                mensaje = f"📈 *Tendencia de pronóstico: {usuario_seleccionado}*\n"
+                mensaje += f"Partidos analizados: _{total}_\n\n"
+                
+                if muy_opt > 0: mensaje += f"🔴 *Muy optimista:* {calc_pct(muy_opt):.1f}% ({muy_opt})\n"
+                if opt > 0:     mensaje += f"🟠 *Optimista:* {calc_pct(opt):.1f}% ({opt})\n"
+                if real > 0:    mensaje += f"🟢 *Neutral:* {calc_pct(real):.1f}% ({real})\n"
+                if pes > 0:     mensaje += f"🔵 *Pesimista:* {calc_pct(pes):.1f}% ({pes})\n"
+                if muy_pes > 0: mensaje += f"🟣 *Muy pesimista:* {calc_pct(muy_pes):.1f}% ({muy_pes})\n"
+                if sin_pron > 0: mensaje += f"⚪ *Sin pronóstico:* {calc_pct(sin_pron):.1f}% ({sin_pron})\n"
+
+                await update.message.reply_text(mensaje, parse_mode="Markdown")
+                
+            # --- LÓGICA ESPECÍFICA PARA "GRADO DE FIRMEZA" ---
+            elif tipo_grafico == "firmeza_pronostico":
+                stats = self.db.obtener_estadisticas_firmeza_pronostico(usuario_seleccionado, edicion_id, anio)
+                
+                if not stats or stats[0] == 0:
+                    await update.message.reply_text("ℹ️ No hay datos suficientes para generar el reporte de este usuario.")
+                    context.user_data.clear()
+                    await self.mostrar_menu(update, context)
+                    return ConversationHandler.END
+
+                total = stats[0]
+                sin_pron = stats[1] or 0
+                firme = stats[2] or 0
+                dudoso = stats[3] or 0
+                cambiante = stats[4] or 0
+
+                def calc_pct(val): return (val / total) * 100 if total > 0 else 0
+
+                mensaje = f"🧱 *Grado de firmeza: {usuario_seleccionado}*\n"
+                mensaje += f"Partidos analizados: _{total}_\n\n"
+                
+                if firme > 0:     mensaje += f"🟢 *Firme (1 intento):* {calc_pct(firme):.1f}% ({firme})\n"
+                if dudoso > 0:    mensaje += f"🟡 *Dudoso (2 intentos):* {calc_pct(dudoso):.1f}% ({dudoso})\n"
+                if cambiante > 0: mensaje += f"🔴 *Cambiante (3+ intentos):* {calc_pct(cambiante):.1f}% ({cambiante})\n"
+                if sin_pron > 0:  mensaje += f"⚪ *No participativo:* {calc_pct(sin_pron):.1f}% ({sin_pron})\n"
+
+                await update.message.reply_text(mensaje, parse_mode="Markdown")
+
+            botones = [
+                ["🔙 Atrás"],
+                ["🔙 Volver al menú principal"]
+            ]
             
-            if victorias > 0: mensaje += f"🟢 *Victorias:* {calc_pct(victorias):.1f}% ({victorias})\n"
-            if empates > 0:   mensaje += f"🟡 *Empates:* {calc_pct(empates):.1f}% ({empates})\n"
-            if derrotas > 0:  mensaje += f"🔴 *Derrotas:* {calc_pct(derrotas):.1f}% ({derrotas})\n"
-            if sin_pron > 0:  mensaje += f"⚪ *Sin pronóstico:* {calc_pct(sin_pron):.1f}% ({sin_pron})\n"
+            await update.message.reply_text(
+                "Elegí una opción para continuar:",
+                reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
+            )
 
-            await update.message.reply_text(mensaje, parse_mode="Markdown")
-
-        # --- LÓGICA ESPECÍFICA PARA "TENDENCIA DE PRONÓSTICO" ---
-        elif tipo_grafico == "tendencia_pronostico":
-            stats = self.db.obtener_estadisticas_tendencia_pronostico(usuario_seleccionado, edicion_id, anio)
-            
-            if not stats or stats[0] == 0:
-                await update.message.reply_text("ℹ️ No hay datos suficientes para generar el reporte de este usuario.")
-                context.user_data.clear()
-                await self.mostrar_menu(update, context)
-                return ConversationHandler.END
-
-            total = stats[0]
-            # Usamos "or 0" por seguridad en caso de que la BD retorne None
-            sin_pron = stats[1] or 0
-            muy_opt = stats[2] or 0
-            opt = stats[3] or 0
-            real = stats[4] or 0
-            pes = stats[5] or 0
-            muy_pes = stats[6] or 0
-
-            def calc_pct(val): return (val / total) * 100 if total > 0 else 0
-
-            mensaje = f"📈 *Tendencia de pronóstico: {usuario_seleccionado}*\n"
-            mensaje += f"Partidos analizados: _{total}_\n\n"
-            
-            if muy_opt > 0: mensaje += f"🔴 *Muy optimista:* {calc_pct(muy_opt):.1f}% ({muy_opt})\n"
-            if opt > 0:     mensaje += f"🟠 *Optimista:* {calc_pct(opt):.1f}% ({opt})\n"
-            if real > 0:    mensaje += f"🟢 *Neutral:* {calc_pct(real):.1f}% ({real})\n"
-            if pes > 0:     mensaje += f"🔵 *Pesimista:* {calc_pct(pes):.1f}% ({pes})\n"
-            if muy_pes > 0: mensaje += f"🟣 *Muy pesimista:* {calc_pct(muy_pes):.1f}% ({muy_pes})\n"
-            if sin_pron > 0: mensaje += f"⚪ *Sin pronóstico:* {calc_pct(sin_pron):.1f}% ({sin_pron})\n"
-
-            await update.message.reply_text(mensaje, parse_mode="Markdown")
-            
-        # --- LÓGICA ESPECÍFICA PARA "GRADO DE FIRMEZA" ---
-        elif tipo_grafico == "firmeza_pronostico":
-            stats = self.db.obtener_estadisticas_firmeza_pronostico(usuario_seleccionado, edicion_id, anio)
-            
-            if not stats or stats[0] == 0:
-                await update.message.reply_text("ℹ️ No hay datos suficientes para generar el reporte de este usuario.")
-                context.user_data.clear()
-                await self.mostrar_menu(update, context)
-                return ConversationHandler.END
-
-            total = stats[0]
-            sin_pron = stats[1] or 0
-            firme = stats[2] or 0
-            dudoso = stats[3] or 0
-            cambiante = stats[4] or 0
-
-            def calc_pct(val): return (val / total) * 100 if total > 0 else 0
-
-            mensaje = f"🧱 *Grado de firmeza: {usuario_seleccionado}*\n"
-            mensaje += f"Partidos analizados: _{total}_\n\n"
-            
-            if firme > 0:     mensaje += f"🟢 *Firme (1 intento):* {calc_pct(firme):.1f}% ({firme})\n"
-            if dudoso > 0:    mensaje += f"🟡 *Dudoso (2 intentos):* {calc_pct(dudoso):.1f}% ({dudoso})\n"
-            if cambiante > 0: mensaje += f"🔴 *Cambiante (3+ intentos):* {calc_pct(cambiante):.1f}% ({cambiante})\n"
-            if sin_pron > 0:  mensaje += f"⚪ *No participativo:* {calc_pct(sin_pron):.1f}% ({sin_pron})\n"
-
-            await update.message.reply_text(mensaje, parse_mode="Markdown")
-
-        botones = [
-            ["🔙 Atrás"],
-            ["🔙 Volver al menú principal"]
-        ]
+            return self.esperando_accion_perfil
         
-        await update.message.reply_text(
-            "Elegí una opción para continuar:",
-            reply_markup=ReplyKeyboardMarkup(botones, resize_keyboard=True)
-        )
-
-        return self.esperando_accion_perfil 
+        except Exception as e: # 🌟 NUEVO BLOQUE AL FINAL
+            tipo_error = type(e).__name__
+            self._registrar_log(f"Error calculando perfil estadístico. Tipo: {tipo_error} | Detalles: {e}", archivo="logs_errores_bot.txt")
+            await update.message.reply_text("❌ Ocurrió un error inesperado al calcular los porcentajes. El fallo ha sido registrado en los logs.", reply_markup=ReplyKeyboardRemove())
+            return await self.iniciar_menu_perfil(update, context) 
 
     async def iniciar_grafico_perfil_generico(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """PASO 1 Genérico: Identifica el gráfico elegido y pregunta si es Histórico o por Torneo."""
